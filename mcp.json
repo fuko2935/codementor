@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "mcp-ts-template": {
+    "gemini-mcp-local": {
       "command": "npx",
-      "args": ["mcp-ts-template"],
+      "args": ["gemini-mcp-local"],
       "env": {
         "MCP_LOG_LEVEL": "debug",
         "MCP_TRANSPORT_TYPE": "http",

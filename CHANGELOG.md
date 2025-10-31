@@ -2,18 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2025-07-19
+
+### Changed
+
+- Renamed the CLI package to `gemini-mcp-local` for `npx` usage and updated the published fileset to ship only built assets and consumer docs.
+- Removed Supabase, DuckDB, Smithery, and agent framework code along with their dependencies to streamline the local runtime footprint.
+- Refactored configuration loading to expose provider API keys (Google/Gemini, OpenAI, Anthropic, Perplexity, Mistral, Groq, OpenRouter, XAI, Azure OpenAI, Ollama) exclusively via environment variables.
+- Added a shared provider API key resolver in `simple-server.ts` that prioritizes request parameters before falling back to environment values while preserving Gemini backwards compatibility.
+- Refreshed documentation, sample configs, and MCP client settings to reflect the local-first workflow and new CLI name.
+
 ## [1.1.1] - 2025-07-18
 
 ### Fixed
+
 - **Build Failure**: Resolved a critical `tsc` build failure (TS2304) in `simple-server.ts` by adding missing imports for `RequestContext` and `requestContextService`.
 - **Tool Inconsistency**: Refactored the `project_orchestrator_create` tool to remove the redundant `projectPath` parameter. It now consistently analyzes the mounted `/workspace` directory, aligning its behavior with `gemini_codebase_analyzer` and simplifying the AI's interaction model.
 
 ## [1.0.1] - 2025-07-18
 
 ### Fixed
+
 - **Critical Path Resolution Bug**: Fixed a major bug in `normalizeProjectPath` where relative paths (like '.') were resolved from the script's location instead of the user's current working directory. Path resolution is now correctly anchored to `process.cwd()`, allowing the server to analyze any user-specified local project directory as intended.
 
 ### Changed
+
 - **Schema Descriptions**: Updated all Zod schemas containing a `projectPath` field with clearer descriptions to inform the AI that paths are resolved relative to the server's launch directory.
 - **Documentation**: Updated `README.md` and `.clinerules` to reflect the local execution model and correct path resolution behavior.
 - **Project Tree**: Regenerated `docs/tree.md` to ensure it reflects the current project structure.

@@ -1,155 +1,144 @@
-# 🚀 MCP TypeScript Template: Agent, Server & Client
+# Gemini MCP Local Tool
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-^5.8.3-blue.svg)](https://www.typescriptlang.org/)
-[![Model Context Protocol SDK](https://img.shields.io/badge/MCP%20SDK-^1.13.0-green.svg)](https://github.com/modelcontextprotocol/typescript-sdk)
-[![MCP Spec Version](https://img.shields.io/badge/MCP%20Spec-2025--03--26-lightgrey.svg)](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2025-03-26/changelog.mdx)
-[![Version](https://img.shields.io/badge/Version-1.6.2-blue.svg)](./CHANGELOG.md)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Status](https://img.shields.io/badge/Status-Stable-green.svg)](https://github.com/cyanheads/mcp-ts-template/issues)
-[![GitHub](https://img.shields.io/github/stars/cyanheads/mcp-ts-template?style=social)](https://github.com/cyanheads/mcp-ts-template)
+Gemini MCP Local is a lightweight Model Context Protocol (MCP) server that you can run directly on your machine or launch ad-hoc with `npx`. It exposes the same rich analysis workflow used in the original Smithery-compatible server without the Supabase, DuckDB, or agent dependencies. Bring your own API keys via environment variables, pick a transport (`stdio` by default, `http` when you need it), and you are ready to connect from Claude Desktop or any MCP-compliant client.
 
-**Jumpstart your [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) development with this comprehensive TypeScript Template for building autonomous agents, servers, and clients.**
-
-This template provides a solid, beginner-friendly foundation for building all components of the MCP ecosystem, adhering to the **MCP 2025-03-26 specification**. It includes a powerful agent framework, a fully-featured server, a robust client, production-ready utilities, and clear documentation to get you up and running quickly.
-
-## 🏛️ Three-Part Architecture
-
-This template is organized into three primary, interconnected components:
-
-1.  **🤖 Agent (`src/agent/`)**: An autonomous agent framework. The agent can connect to multiple MCP servers, discover their tools, and use them to accomplish complex tasks based on a user's prompt. Use this as a starting point for your agents.
-2.  **🔌 MCP Server (`src/mcp-server/`)**: An extensible MCP server that can host custom tools and resources, making them available to agents and other clients.
-3.  **💻 MCP Client (`src/mcp-client/`)**: A robust client for connecting to and interacting with any MCP-compliant server. The agent uses this client to communicate with the outside world.
-
-## ✨ Key Features
-
-| Feature Area                | Description                                                                                                                                         | Key Components / Location                                            |
-| :-------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------- |
-| **🤖 Agent Framework**      | Core `Agent` class and CLI for running autonomous agents that connect to MCP servers and use their tools to achieve goals.                          | `src/agent/`                                                         |
-| **🔌 MCP Server**           | Functional server with example tools that correctly interact with the local file system. Supports `stdio` and **Streamable HTTP** transports.     | `src/mcp-server/`                                                    |
-| **💻 MCP Client**           | Working client aligned with **MCP 2025-03-26 spec**. Connects via `mcp-config.json`. Includes detailed comments and isolated connection management. | `src/mcp-client/`                                                    |
-| **🚀 Production Utilities** | Logging, Error Handling, ID Generation, Rate Limiting, Request Context tracking, Input Sanitization.                                                | `src/utils/`                                                         |
-| **🔒 Type Safety/Security** | Strong type checking via TypeScript & Zod validation. Built-in security utilities (sanitization, auth middleware for HTTP).                         | Throughout, `src/utils/security/`, `src/mcp-server/transports/auth/` |
-| **⚙️ Error Handling**       | Consistent error categorization (`BaseErrorCode`), detailed logging, centralized handling (`ErrorHandler`).                                         | `src/utils/internal/errorHandler.ts`, `src/types-global/`            |
-| **📚 Documentation**        | Comprehensive `README.md`, structured JSDoc comments, API references.                                                                               | `README.md`, Codebase, `tsdoc.json`, `docs/api-references/`          |
-| **🕵️ Interaction Logging**  | Captures raw requests and responses for all external LLM provider interactions to a dedicated `interactions.log` file for full traceability.        | `src/utils/internal/logger.ts`                                       |
-| **🤖 Agent Ready**          | Includes a [.clinerules](.clinerules) developer cheatsheet tailored for LLM coding agents.                                                          | `.clinerules`                                                        |
-| **🛠️ Utility Scripts**      | Scripts for cleaning builds, setting executable permissions, generating directory trees, and fetching OpenAPI specs.                                | `scripts/`                                                           |
-| **Services**                | Reusable modules for LLM (OpenRouter) and data storage (DuckDB) integration, with examples.                                                         | `src/services/`, `src/storage/duckdbExample.ts`                      |
-
-## 🌟 Projects Using This Template
-
-This template is already powering several MCP servers, demonstrating its flexibility and robustness:
-
-| Project                                                                                       | Description                                                                                                                   |
-| :-------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------- |
-| [**clinicaltrialsgov-mcp-server**](https://github.com/cyanheads/clinicaltrialsgov-mcp-server) | Provides an LLM-friendly interface to the official ClinicalTrials.gov v2 API, enabling agents to analyze clinical study data. |
-| [**pubmed-mcp-server**](https://github.com/cyanheads/pubmed-mcp-server)                       | Enables AI agents to search, retrieve, and visualize biomedical literature from PubMed via NCBI E-utilities.                  |
-| [**git-mcp-server**](https://github.com/cyanheads/git-mcp-server)                             | Provides an enterprise-ready MCP interface for Git operations, allowing agents to manage repositories programmatically.       |
-| [**obsidian-mcp-server**](https://github.com/cyanheads/obsidian-mcp-server)                   | Allows AI agents to read, write, search, and manage notes in Obsidian via the Local REST API plugin.                          |
-| [**atlas-mcp-server**](https://github.com/cyanheads/atlas-mcp-server)                         | An advanced task and knowledge management system with a Neo4j backend for structured data organization.                       |
-| [**filesystem-mcp-server**](https://github.com/cyanheads/filesystem-mcp-server)               | Offers platform-agnostic file system capabilities for AI agents, including advanced search and directory traversal.           |
-| [**workflows-mcp-server**](https://github.com/cyanheads/workflows-mcp-server)                 | A declarative workflow engine that allows agents to execute complex, multi-step automations from simple YAML files.           |
-
-_Note: [**toolkit-mcp-server**](https://github.com/cyanheads/toolkit-mcp-server) was built on an older version of this template and is pending updates._
-
-You can also **see my [GitHub profile](https://github.com/cyanheads/)** for additional MCP servers I've created.
+---
 
 ## Quick Start
 
-This project is a powerful MCP server designed to be run via Smithery AI, allowing it to securely analyze your local project files.
-
-### 1. Initial Setup (One-time only)
-
-First, clone this repository, install its dependencies, and build the project.
+### Run instantly with `npx`
 
 ```bash
-git clone https://github.com/cyanheads/mcp-ts-template.git
-cd mcp-ts-template
+GOOGLE_API_KEY="your-google-or-gemini-key" npx gemini-mcp-local
+```
+
+The CLI starts on STDIO transport by default so it is immediately ready for Claude Desktop and other local MCP clients.
+
+### Install locally
+
+```bash
+git clone <repo-url>
+cd gemini-mcp-local
 npm install
 npm run build
+npm start
 ```
 
-### 2. Publish to Smithery
+Use `npm run start:local` during development if you want live TypeScript execution with `ts-node`.
 
-Publish your server to the Smithery platform. This makes it available in your toolkit and creates the necessary Docker image.
+---
 
-```bash
-smithery push
+## Configuration
+
+All behaviour is driven by environment variables. Only the provider keys you need should be set.
+
+### Core server settings
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `MCP_TRANSPORT_TYPE` | `stdio` or `http`. Controls how the MCP server communicates. | `stdio` |
+| `MCP_HTTP_PORT` | Port used when `MCP_TRANSPORT_TYPE=http`. | `3010` |
+| `MCP_HTTP_HOST` | Host interface for HTTP transport. | `127.0.0.1` |
+| `MCP_LOG_LEVEL` | Logging level (`debug`, `info`, `warning`, ...). | `debug` |
+| `LOGS_DIR` | Directory where `activity.log` and `error.log` are written. | `./logs` |
+
+### Provider API keys (all optional)
+
+Set whichever providers you plan to call; the shared resolver looks at request parameters first and then these environment variables.
+
+- `GOOGLE_API_KEY` / `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `PERPLEXITY_API_KEY`
+- `MISTRAL_API_KEY`
+- `GROQ_API_KEY`
+- `OPENROUTER_API_KEY`
+- `XAI_API_KEY`
+- `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`
+- `OLLAMA_API_KEY`, `OLLAMA_HOST`
+
+> Gemini tooling still honours `geminiApiKey` request parameters and the `GEMINI_API_KEY` environment variable for backwards compatibility.
+
+---
+
+## Transports
+
+- **STDIO (default):** Ideal for Claude Desktop or any local MCP orchestrator. Start with `npx gemini-mcp-local` or `npm start` and point your client at the binary.
+- **HTTP:** Set `MCP_TRANSPORT_TYPE=http` (and optionally `MCP_HTTP_PORT` / `MCP_HTTP_HOST`). The server exposes the MCP streamable HTTP endpoint at `http://<host>:<port>/mcp`.
+
+Logs for both transports land in `logs/activity.log` and `logs/error.log`. Delete the directory to reset.
+
+---
+
+## Tool Highlights
+
+The bundled `simple-server.ts` exposes the same analysis workflow that powers the previous Smithery build, including:
+
+- **Comprehensive project analysis** with expert persona selection and grouped summaries.
+- **Targeted code search** utilities for locating files, functions, or patterns inside large repositories.
+- **Knowledge capture tools** for usage guides, FAQ synthesis, and report generation.
+- **Token accounting** (Gemini-compatible) to plan safe response sizes.
+- **Project orchestration helpers** that break large codebases into manageable analysis batches.
+
+Each tool validates input with Zod schemas and automatically records structured logs that include the request context ID for easy tracing.
+
+---
+
+## Development Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm run build` | Compile TypeScript into `dist/`. |
+| `npm start` | Run the compiled CLI on STDIO. |
+| `npm run start:local` | Run the TypeScript entry directly with `ts-node` (honours `.env`). |
+| `npm run start:http` | Launch the compiled CLI but force HTTP transport. |
+| `npm run lint` / `npm run lint:fix` | Static analysis with ESLint. |
+| `npm run docs:generate` | Generate TypeDoc API docs. |
+
+---
+
+## Project Layout
+
+```
+src/
+├── config/            # Environment parsing & validation (now provider-key centric)
+├── mcp-server/        # Reusable MCP server scaffolding (stdio + HTTP transports)
+├── services/
+│   └── llm-providers/ # OpenRouter helper (kept for reference)
+├── simple-server.ts   # Local CLI entry with tool definitions & provider key resolver
+├── utils/             # Logger, error handler, metrics, parsing, security helpers
+└── index.ts           # Programmatic entry point for embedding the server
 ```
 
-### 3. How to Use
+Legacy agent, Supabase, DuckDB, and deployment artefacts have been removed. If you need them, check the Git history before the `2.0.0` release.
 
-Now, you can run the server to analyze **any project directory** on your machine.
+---
 
-1.  **Open the Smithery AI web dashboard.**
-2.  Find your `gemini-mcp-server` and click **Start**.
-3.  A configuration window will appear. You will see a field labeled **"IMPORTANT: The absolute path on your local machine to the project you want to analyze"**.
-4.  In this field, enter the **full, absolute path** to the project you want to analyze.
-    -   **Windows Example:** `C:\Users\YourName\Desktop\MyProject`
-    -   **macOS/Linux Example:** `/Users/YourName/Documents/MyProject`
-5.  Fill in your Gemini API key and click **Start**.
+## Connecting from Claude Desktop
 
-Smithery will now start the server in a container but will **mount your specified local directory** into the container at the `/workspace` path. When you use the `gemini_codebase_analyzer` tool via an AI agent, it will correctly analyze the files from the project you specified.
+Use the sample in [`claude_desktop_config.example.json`](./claude_desktop_config.example.json) or copy the block below and replace the values you need:
 
-## ⚙️ Configuration
-
-### Server Configuration (Environment Variables)
-
-Configure the MCP server's behavior using these environment variables:
-
-| Variable              | Description                                                                               | Default                                |
-| :-------------------- | :---------------------------------------------------------------------------------------- | :------------------------------------- |
-| `MCP_TRANSPORT_TYPE`  | Server transport: `stdio` or `http`.                                                      | `stdio`                                |
-| `MCP_HTTP_PORT`       | Port for the HTTP server (if `MCP_TRANSPORT_TYPE=http`).                                  | `3010`                                 |
-| `MCP_HTTP_HOST`       | Host address for the HTTP server (if `MCP_TRANSPORT_TYPE=http`).                          | `127.0.0.1`                            |
-| `MCP_ALLOWED_ORIGINS` | Comma-separated allowed origins for CORS (if `MCP_TRANSPORT_TYPE=http`).                  | (none)                                 |
-| `MCP_AUTH_MODE`       | Authentication mode for HTTP: `jwt` (default) or `oauth`.                                 | `jwt`                                  |
-| `MCP_AUTH_SECRET_KEY` | **Required for `jwt` mode.** Secret key (min 32 chars) for signing/verifying auth tokens. | (none - **MUST be set in production**) |
-| `OAUTH_ISSUER_URL`    | **Required for `oauth` mode.** The issuer URL of your authorization server.               | (none)                                 |
-| `OAUTH_AUDIENCE`      | **Required for `oauth` mode.** The audience identifier for this MCP server.               | (none)                                 |
-| `OPENROUTER_API_KEY`  | API key for OpenRouter.ai service. Required for the agent to function.                    | (none)                                 |
-
-### Client & Agent Configuration
-
-The agent uses the MCP client to connect to servers. This is configured in `src/mcp-client/client-config/mcp-config.json`. You must list all MCP servers the agent should connect to in this file.
-
-For a detailed guide, see the [Client Configuration README](src/mcp-client/client-config/README.md).
-
-## 🏗️ Project Structure
-
-- **`src/agent/`**: Contains the core agent framework, including the `Agent` class and a CLI for running the agent.
-- **`src/mcp-client/`**: Implements the MCP client logic for connecting to and interacting with external MCP servers.
-- **`src/mcp-server/`**: Contains the MCP server implementation, including example tools, resources, and transport handlers.
-- **`src/config/`**: Handles loading and validation of environment variables and application configuration.
-- **`src/services/`**: Provides reusable modules for integrating with external services (DuckDB, OpenRouter).
-- **`src/types-global/`**: Defines shared TypeScript interfaces and type definitions.
-- **`src/utils/`**: A collection of core utilities (logging, error handling, security, etc.).
-- **`src/index.ts`**: The main entry point for the application, responsible for initializing and starting the MCP server.
-
-**Explore the full structure yourself:**
-
-See the current file tree in [docs/tree.md](docs/tree.md) or generate it dynamically:
-
-```bash
-npm run tree
+```json
+{
+  "mcpServers": {
+    "gemini-mcp-local": {
+      "command": "npx",
+      "args": ["-y", "gemini-mcp-local"],
+      "env": {
+        "GOOGLE_API_KEY": "set-if-using-google-gemini"
+      }
+    }
+  }
+}
 ```
 
-## 🧩 Extending the System
+---
 
-### Adding Tools to the Server
+## Next Steps
 
-For detailed guidance on how to add your own custom Tools and Resources to the MCP server, please see the [Server Extension Guide](src/mcp-server/README.md).
+- Drop additional tools into `simple-server.ts` or migrate them into the modular `src/mcp-server` scaffolding if you need stronger type boundaries.
+- Extend the provider key resolver to cover new vendors by adding aliases in one place.
+- Rebuild documentation with `npm run docs:generate` after making API changes.
 
-### Modifying the Agent
+Enjoy the leaner setup!
 
-The agent's core logic is in `src/agent/agent-core/agent.ts`. You can modify its system prompt, the models it uses (`google/gemini-2.5-flash` by default), and its decision-making loop to change its behavior.
-
-## 🌍 Explore More MCP Resources
-
-Looking for more examples, guides, and pre-built MCP servers? Check out the companion repository:
-
-➡️ **[cyanheads/model-context-protocol-resources](https://github.com/cyanheads/model-context-protocol-resources)**
-
-## 📜 License
-
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.

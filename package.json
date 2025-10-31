@@ -1,15 +1,22 @@
 {
-  "name": "gemini-mcp-server",
-  "version": "1.0.0",
-  "description": "Gemini-powered MCP Server for comprehensive codebase analysis. Analyze any project with Gemini 2.0 Flash AI - get architecture insights, bug detection, code quality reviews, and answers to specific questions about your codebase.",
+  "name": "gemini-mcp-local",
+  "version": "2.0.0",
+  "description": "Local-first Gemini MCP tool for stdio or HTTP transports using environment-supplied provider credentials.",
   "main": "dist/simple-server.js",
-  "module": "./src/simple-server.ts",
+  "bin": {
+    "gemini-mcp-local": "dist/simple-server.js"
+  },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "claude_desktop_config.example.json"
   ],
-  "exports": "./dist/simple-server.js",
-  "types": "dist/simple-server.d.ts",
+  "exports": "./dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cyanheads/mcp-ts-template.git"
@@ -21,9 +28,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/simple-server.js",
+    "start:local": "ts-node -r dotenv/config src/simple-server.ts",
     "start:stdio": "node dist/simple-server.js",
     "start:http": "node dist/simple-server.js",
-    "start:agent": "MCP_LOG_LEVEL=debug node dist/agent/cli/boot.js",
     "rebuild": "ts-node --esm scripts/clean.ts && npm run build",
     "docs:generate": "typedoc --tsconfig ./tsconfig.typedoc.json",
     "depcheck": "npx depcheck",
@@ -33,14 +40,15 @@
     "fetch-spec": "ts-node --esm scripts/fetch-openapi-spec.ts",
     "format": "prettier --write \"**/*.{ts,js,json,md,html,css}\"",
     "inspector": "npx mcp-inspector --config mcp.json --server mcp-ts-template",
-    "db:duckdb-example": "MCP_LOG_LEVEL=debug tsc && node dist/storage/duckdbExample.js"
+    "validate:startup": "npm run build && node dist/validation/startupValidation.js",
+    "test:integration": "npm run build && node dist/validation/integrationTest.js",
+    "test:logger": "npm run validate:startup",
+    "test:all": "npm run test:logger && npm run test:integration"
   },
   "dependencies": {
-    "@duckdb/node-api": "^1.3.1-alpha.23",
     "@google/generative-ai": "^0.24.1",
     "@hono/node-server": "^1.15.0",
     "@modelcontextprotocol/sdk": "^1.15.0",
-    "@supabase/supabase-js": "^2.50.3",
     "@types/node": "^24.0.10",
     "@types/sanitize-html": "^2.16.0",
     "@types/validator": "13.15.2",
@@ -68,12 +76,8 @@
   },
   "keywords": [
     "typescript",
-    "template",
     "mcp",
     "model-context-protocol",
-    "agent",
-    "autonomous-agent",
-    "agent-framework",
     "architecture",
     "error-handling",
     "llm",
@@ -87,8 +91,9 @@
     "oauth",
     "jwt",
     "openrouter",
-    "duckdb",
-    "zod"
+    "zod",
+    "local",
+    "cli"
   ],
   "author": "cyanheads <casey@caseyjhand.com> (https://github.com/cyanheads/mcp-ts-template#readme)",
   "license": "Apache-2.0",

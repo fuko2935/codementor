@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "gemini-mcp-local": {
+      "command": "npx",
+      "args": ["-y", "gemini-mcp-local"],
+      "env": {
+        "GOOGLE_API_KEY": "set-if-using-google-gemini",
+        "GEMINI_API_KEY": "optional-backup-or-rotation-key",
+        "OPENAI_API_KEY": "optional",
+        "ANTHROPIC_API_KEY": "optional",
+        "MISTRAL_API_KEY": "optional"
+      }
+    }
+  }
+}

@@ -1,428 +1,95 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) when editing this repository.
 
-## Project Overview
+## Project Snapshot
 
-This is a production-ready TypeScript template for building Model Context Protocol (MCP) servers and clients following the **MCP 2025-03-26 specification**. It provides a comprehensive foundation with built-in utilities, authentication, error handling, and service integrations.
+- **Name:** `gemini-mcp-local`
+- **Purpose:** Local-first MCP server exposing a Gemini-driven analysis toolkit over STDIO or HTTP.
+- **Entry Points:**
+  - CLI: `src/simple-server.ts` → `dist/simple-server.js`
+  - Programmatic: `src/index.ts`
+- **Transports:** STDIO (default) and streamable HTTP (`/mcp`).
+- **Logging:** JSON logs to `logs/activity.log` & `logs/error.log` (managed by Winston).
 
-**Key Stats:**
+Legacy Supabase, DuckDB, Smithery, and agent packages were removed in release `2.0.0`. Focus on the lean local tool unless a task explicitly requests otherwise.
 
-- 57 TypeScript source files
-- 32 directories in src/
-- Supports both stdio and HTTP (SSE) transports
-- Built-in authentication (JWT/OAuth)
-- Comprehensive error handling and logging
-- Ready-to-use DuckDB and OpenRouter integrations
+## Daily Commands
 
-## Development Commands
+| Command | When to use |
+| --- | --- |
+| `npm run build` | Compile TypeScript into `dist/`. Always run before publishing. |
+| `npm start` | Launch compiled CLI on STDIO. |
+| `npm run start:local` | Run TypeScript entry with `ts-node` (uses `.env`). Ideal for rapid iteration. |
+| `npm run start:http` | Start compiled CLI with HTTP transport. |
+| `npm run lint` / `npm run lint:fix` | Lint the codebase. |
+| `npm run docs:generate` | Regenerate TypeDoc docs. |
 
-### Build & Run
+## Configuration Cheatsheet
 
-- `npm run build` - Build TypeScript and make executable
-- `npm run rebuild` - Clean build (removes node_modules, logs, dist)
-- `npm start` - Run the built server (stdio transport)
-- `npm run start:stdio` - Run server with stdio transport and debug logging
-- `npm run start:http` - Run server with HTTP transport and debug logging
+### Core runtime variables
 
-### Development Tools
+- `MCP_TRANSPORT_TYPE` (`stdio` | `http`)
+- `MCP_HTTP_PORT`, `MCP_HTTP_HOST`
+- `MCP_LOG_LEVEL`, `LOGS_DIR`
 
-- `npm run format` - Format code with Prettier
-- `npm run docs:generate` - Generate TypeDoc documentation
-- `npm run tree` - Generate project structure tree
-- `npm run inspector` - Launch MCP inspector for debugging
-- `npm run depcheck` - Check for unused dependencies
-- `npm run fetch-spec` - Fetch OpenAPI specification
-- `npm run db:duckdb-example` - Run DuckDB example with debug logging
+### Provider API keys (optional)
 
-### Testing & Quality
+Provide whichever vendors you need. The resolver checks request parameters → environment variables (via `config.providerApiKeys`) → raw `process.env` fallback.
 
-**Important**: No specific test framework is configured. Before adding tests:
+`GOOGLE_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `PERPLEXITY_API_KEY`, `MISTRAL_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `XAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `OLLAMA_API_KEY`, `OLLAMA_HOST`.
 
-1. Check README or search codebase for testing approach
-2. Ask user for preferred test framework if not found
-3. Always run linting after code changes
-
-## Project Architecture
-
-### Core Components
-
-**Entry Point (`src/index.ts`)**:
-
-- Main application entry with graceful shutdown handling
-- Initializes logger and configuration
-- Starts appropriate transport (stdio/HTTP)
-- Handles process signals and unhandled errors
-
-**Configuration (`src/config/index.ts`)**:
-
-- Environment variable validation with Zod schemas
-- Project root detection and directory creation
-- Comprehensive config object with defaults
-- Supports development and production environments
-
-**MCP Server (`src/mcp-server/`)**:
-
-- `server.ts` - Core server initialization and transport selection
-- `createMcpServerInstance()` - Factory for McpServer instances
-- Per-session instances for HTTP, singleton for stdio
-- Automatic tool and resource registration
-
-**MCP Client (`src/mcp-client/`)**:
-
-- Modular client implementation for connecting to external MCP servers
-- `core/clientManager.ts` - Connection lifecycle management
-- `client-config/configLoader.ts` - Configuration validation
-- Support for both stdio and HTTP transports
-- Connection caching and automatic reconnection
-
-### Transport Layer
-
-**Stdio Transport (`src/mcp-server/transports/stdioTransport.ts`)**:
-
-- Single server instance communicating via stdin/stdout
-- Simple process-based communication
-- No authentication required
-
-**HTTP Transport (`src/mcp-server/transports/httpTransport.ts`)**:
-
-- Hono-based web server with Server-Sent Events
-- Per-session MCP server instances
-- CORS support and port retry logic
-- Session management with in-memory store
-- Rate limiting and security headers
-
-**Authentication (`src/mcp-server/transports/auth/`)**:
-
-- JWT mode: Self-contained tokens for development
-- OAuth mode: External authorization server integration
-- Middleware-based authentication
-- Configurable auth strategies
-
-### Utilities Framework (`src/utils/`)
-
-**Error Handling (`src/utils/internal/errorHandler.ts`)**:
-
-- Centralized `ErrorHandler` class with pattern-based classification
-- Automatic error code determination
-- Consistent logging and context tracking
-- `tryCatch` helper for robust error handling
-- Support for custom error mappings
-
-**Logging (`src/utils/internal/logger.ts`)**:
-
-- Winston-based structured logging
-- File rotation and MCP notifications
-- Context-aware logging with request correlation
-- Multiple log levels and output formats
-
-**Request Context (`src/utils/internal/requestContext.ts`)**:
-
-- Request/operation tracking across the application
-- Correlation ID generation and management
-- Context inheritance and merging
-
-**Security (`src/utils/security/`)**:
-
-- Input sanitization and validation
-- Rate limiting with configurable limits
-- ID generation (UUIDs and prefixed IDs)
-- Log redaction for sensitive data
-
-**Parsing (`src/utils/parsing/`)**:
-
-- Natural language date parsing with chrono-node
-- Partial JSON parsing with error handling
-- Think block extraction from LLM responses
-
-**Metrics (`src/utils/metrics/`)**:
-
-- Token counting with tiktoken
-- Performance and usage tracking utilities
-
-**Network (`src/utils/network/`)**:
-
-- HTTP requests with timeout support
-- Fetch utilities with error handling
-
-### Services Layer (`src/services/`)
-
-**DuckDB Service (`src/services/duck-db/`)**:
-
-- Complete DuckDB integration with connection management
-- Query execution, streaming, and transaction support
-- Extension loading and prepared statements
-- Type-safe query interfaces
-
-**OpenRouter Provider (`src/services/llm-providers/openRouterProvider.ts`)**:
-
-- LLM integration via OpenRouter API
-- OpenAI SDK compatibility
-- Configurable models and parameters
-
-**Supabase Client (`src/services/supabase/supabaseClient.ts`)**:
-
-- Supabase integration with authentication
-- Database and storage access
-
-### Type System (`src/types-global/`)
-
-**Error Types (`src/types-global/errors.ts`)**:
-
-- `BaseErrorCode` enum for standardized error classification
-- `McpError` class extending native Error with additional context
-- Type-safe error handling patterns
-
-### Example Implementations
-
-**Tools (`src/mcp-server/tools/`)**:
-
-- `echoTool/` - Simple message formatting and repetition
-- `catFactFetcher/` - Async API fetching example
-- `imageTest/` - Image processing demonstration
-
-**Resources (`src/mcp-server/resources/`)**:
-
-- `echoResource/` - Basic resource implementation example
-
-### Project Structure
+## Source Layout
 
 ```
 src/
-├── config/                    # Environment and configuration management
-├── index.ts                   # Main application entry point
-├── mcp-client/               # MCP client implementation
-│   ├── client-config/        # Configuration loading and validation
-│   ├── core/                 # Core client logic and caching
-│   └── transports/           # Client transport implementations
-├── mcp-server/               # MCP server implementation
-│   ├── resources/            # MCP resources (data sources)
-│   ├── server.ts            # Server initialization and setup
-│   ├── tools/               # MCP tools (executable functions)
-│   └── transports/          # Server transport implementations
-├── services/                 # External service integrations
-│   ├── duck-db/             # DuckDB database service
-│   ├── llm-providers/       # LLM provider integrations
-│   └── supabase/            # Supabase service integration
-├── storage/                  # Data storage examples
-├── types-global/             # Shared TypeScript type definitions
-└── utils/                    # Utility functions and helpers
-    ├── internal/             # Core utilities (logging, errors, context)
-    ├── metrics/              # Performance and usage metrics
-    ├── network/              # Network and HTTP utilities
-    ├── parsing/              # Data parsing utilities
-    └── security/             # Security and validation utilities
+├── simple-server.ts        # CLI entry, tool definitions, provider key resolver
+├── config/                 # Zod-backed environment parsing
+├── mcp-server/             # Reusable MCP server scaffolding (stdio + HTTP)
+├── services/llm-providers/ # OpenRouter helper (still available)
+├── utils/                  # Logger, error handler, metrics, parsing, security
+└── index.ts                # Programmatic bootstrap for MCP servers
 ```
 
-## Key Architectural Patterns
+The CLI remains opinionated and self-contained. If you add reusable tools, consider porting them into `src/mcp-server` modules for cleaner separation.
 
-### Error Handling Strategy
+## Coding Conventions
 
-1. **Centralized Processing**: All errors flow through `ErrorHandler`
-2. **Pattern-Based Classification**: Automatic error code assignment
-3. **Context Preservation**: Request context tracking throughout
-4. **Structured Logging**: Consistent error logging with correlation IDs
-5. **Safe Execution**: `tryCatch` wrapper for robust error handling
+1. **Request Contexts Everywhere** – Create a `RequestContext` at the boundary of every handler and pass it into dependencies. Logs must include the context payload.
+2. **Logic Throws, Handlers Catch** – Business logic (typically helper functions inside `simple-server.ts`) should throw typed errors. Handlers catch and format them through the central `ErrorHandler` when applicable.
+3. **Zod for Validation** – Input schemas live next to the tool definitions. Annotate fields with `.describe()` so downstream LLMs get helpful metadata.
+4. **Shared Provider Credentials** – Always call `resolveProviderApiKeys` or `requireProviderApiKeys` from `simple-server.ts` when interacting with an external LLM. Do not reach for `process.env` directly.
+5. **Logging** – Use the Winston logger from `simple-server.ts` (or `utils/internal/logger`) and include contextual metadata. Do not `console.log` (except for the intentional HTTP startup notice).
 
-**Example Usage**:
+## Working on `simple-server.ts`
 
-```typescript
-return ErrorHandler.tryCatch(
-  async () => {
-    // Your logic here
-  },
-  {
-    operation: "operationName",
-    context,
-    errorCode: BaseErrorCode.VALIDATION_ERROR,
-    critical: true,
-  },
-);
-```
+- The file is long but deliberately flat. Add helper functions near related logic and keep the top-level tool registration readable.
+- When creating new tools:
+  1. Define a Zod schema for inputs.
+  2. Parse `request.params.arguments` with that schema.
+  3. Resolve provider credentials with the shared helper.
+  4. Wrap LLM calls in the existing retry + key rotation utilities if you need resilience.
+  5. Return `CallToolResult` objects with a single `type: "text"` entry unless binary content is required.
 
-### Configuration Management
+## HTTP Transport Notes
 
-1. **Environment-Driven**: All config from environment variables
-2. **Validation**: Zod schemas ensure type safety
-3. **Defaults**: Sensible defaults for development
-4. **Security**: Separate auth modes (JWT/OAuth)
-5. **Directory Management**: Automatic directory creation with validation
+- Authentication supports `jwt` (shared secret) and `oauth` (remote JWKS). See `src/mcp-server/transports/auth`.
+- CORS allowed origins are parsed from `MCP_ALLOWED_ORIGINS` (comma-separated).
+- Every HTTP request is wrapped with rate limiting (`utils/security/rateLimiter`) and sanitisation helpers.
 
-### Transport Abstraction
+## Documentation & Samples
 
-1. **Pluggable Design**: Easy to add new transport types
-2. **Per-Session State**: HTTP transport maintains session isolation
-3. **Authentication**: Middleware-based auth for HTTP
-4. **Error Handling**: Consistent error responses across transports
+- Root README: user-facing quick start, configuration, and tool highlights.
+- `claude_desktop_config.example.json`: Copy/paste config referencing the new CLI name and provider keys.
+- `docs/tree.md`: Directory overview (regenerate after structural changes).
+- `CHANGELOG.md`: Add a new section for any user-facing change.
 
-### Tool/Resource Development
+## QA Checklist Before Shipping
 
-1. **Schema-First**: Zod validation for all inputs
-2. **Modular Structure**: Separate logic, registration, and exports
-3. **Error Handling**: Integrated with centralized error system
-4. **Documentation**: JSDoc comments throughout
+1. `npm run build`
+2. `npm run lint`
+3. Launch the CLI with representative env vars (`GOOGLE_API_KEY` etc.) and run a smoke tool (e.g., quick code search) either via STDIO or HTTP.
+4. Update docs + changelog, then ensure `docs/tree.md` and `.env.example` stay in sync with config changes.
 
-## Core Architectural Principles
+Happy hacking! The project now optimises for fast local iteration—keep it lean.
 
-### 1. Logic Throws, Handlers Catch
-
-**CRITICAL PATTERN**: This is the cornerstone of the error-handling strategy.
-
-- **Core Logic (`logic.ts`)**: Contains pure business logic. Must throw structured `McpError` on failure. **Never** use `try...catch` blocks in logic files.
-- **Handlers (`registration.ts`, Transports)**: Wrap all logic calls in `try...catch`. Only place where errors are caught and formatted into responses.
-
-### 2. Structured, Traceable Operations
-
-Every operation must be traceable through structured logging and context propagation.
-
-- **`RequestContext`**: Create using `requestContextService.createRequestContext()` and pass through all function calls
-- **`Logger`**: All logging through centralized `logger` with `RequestContext`
-
-### 3. File Structure Patterns
-
-**Tools Structure**: `src/mcp-server/tools/toolName/`
-
-```
-toolName/
-├── index.ts          # Barrel file, exports only register function
-├── logic.ts          # Core business logic, schemas, types
-└── registration.ts   # MCP server registration and error handling
-```
-
-**Resources Structure**: `src/mcp-server/resources/resourceName/` (same pattern)
-
-## Development Guidelines
-
-### Mandatory Development Workflow
-
-**For Tools** (follow `echoTool` as canonical example):
-
-1. **Define Schema and Logic (`logic.ts`)**:
-
-   ```typescript
-   // 1. Export Zod schema with .describe() on all fields
-   export const ToolInputSchema = z.object({...});
-
-   // 2. Export TypeScript types
-   export type ToolInput = z.infer<typeof ToolInputSchema>;
-   export interface ToolResponse {...}
-
-   // 3. Export core logic function
-   export async function toolLogic(
-     params: ToolInput,
-     context: RequestContext
-   ): Promise<ToolResponse> {
-     // Pure business logic - throws on error
-   }
-   ```
-
-2. **Register Tool and Handle Errors (`registration.ts`)**:
-
-   ```typescript
-   export const registerTool = async (server: McpServer): Promise<void> => {
-     server.tool(toolName, description, schema.shape, async (params) => {
-       const context = requestContextService.createRequestContext({...});
-
-       try {
-         const result = await toolLogic(params, context);
-         return { content: [...], isError: false };
-       } catch (error) {
-         const handledError = ErrorHandler.handleError(error, {...});
-         return { content: [...], isError: true };
-       }
-     });
-   };
-   ```
-
-3. **Export from Barrel (`index.ts`)**:
-   ```typescript
-   export { registerTool } from "./registration.js";
-   ```
-
-### Environment Variables
-
-**Core Configuration**:
-
-- `MCP_TRANSPORT_TYPE` - "stdio" or "http" (default: stdio)
-- `MCP_HTTP_PORT` - HTTP server port (default: 3010)
-- `MCP_HTTP_HOST` - HTTP server host (default: 127.0.0.1)
-- `MCP_LOG_LEVEL` - Logging level (default: debug)
-- `NODE_ENV` - Environment (default: development)
-
-**Authentication (HTTP Transport)**:
-
-- `MCP_AUTH_SECRET_KEY` - JWT signing key (required for HTTP)
-- `MCP_AUTH_MODE` - "jwt" or "oauth" (default: jwt)
-- `OAUTH_ISSUER_URL` - OAuth issuer URL (for oauth mode)
-- `OAUTH_AUDIENCE` - OAuth audience (for oauth mode)
-
-**Service Integrations**:
-
-- `OPENROUTER_API_KEY` - OpenRouter API key
-- `LLM_DEFAULT_MODEL` - Default LLM model
-- `SUPABASE_URL` - Supabase project URL
-- `SUPABASE_ANON_KEY` - Supabase anonymous key
-
-### Adding New Tools
-
-1. **Create Tool Directory**: `src/mcp-server/tools/yourTool/`
-2. **Implement Logic**: Create `logic.ts` with Zod schemas
-3. **Add Registration**: Create `registration.ts` using SDK patterns
-4. **Export Module**: Create `index.ts` barrel file
-5. **Register in Server**: Add to `src/mcp-server/server.ts`
-
-**File Structure**:
-
-```
-src/mcp-server/tools/yourTool/
-├── index.ts          # Barrel exports
-├── logic.ts          # Core implementation with schemas
-└── registration.ts   # MCP server registration
-```
-
-### Adding New Resources
-
-Same pattern as tools but in `src/mcp-server/resources/yourResource/`
-
-### Error Handling Best Practices
-
-1. **Use ErrorHandler.tryCatch**: For all async operations
-2. **Provide Context**: Include operation name and relevant data
-3. **Choose Appropriate Error Codes**: Use `BaseErrorCode` enum
-4. **Log Appropriately**: Use structured logging with context
-5. **Handle Gracefully**: Always provide meaningful error messages
-
-### Security Considerations
-
-1. **Input Validation**: Always use Zod schemas for external input
-2. **Sanitization**: Use `sanitizeInputForLogging` for sensitive data
-3. **Authentication**: Required for HTTP transport in production
-4. **Rate Limiting**: Built-in rate limiting for HTTP endpoints
-5. **CORS**: Configure allowed origins for HTTP transport
-
-### Performance Optimization
-
-1. **Connection Caching**: Client connections are cached automatically
-2. **Session Management**: HTTP transport uses per-session servers
-3. **Logging**: Structured logging with appropriate levels
-4. **Error Handling**: Efficient error classification with patterns
-
-## Testing Strategy
-
-**Current State**: No testing framework is currently configured.
-
-**Before Adding Tests**:
-
-1. Check existing documentation for testing preferences
-2. Search codebase for any existing test files
-3. Confirm with user their preferred testing approach
-4. Common options: Jest, Vitest, Node.js built-in test runner
-
-**Recommended Test Structure**:
-
-```
-tests/
-├── unit/              # Unit tests for utilities and services
-├── integration/       # Integration tests for MCP operations
-└── e2e/              # End-to-end tests for full workflows
-```

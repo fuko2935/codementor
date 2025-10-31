@@ -18,7 +18,25 @@ import { glob } from "glob";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import winston from "winston";
+import { config } from "./config/index.js";
 import { RequestContext, requestContextService } from "./utils/index.js";
+import { countTokens } from "./utils/metrics/tokenCounter.js";
+import ignore from "ignore";
+
+// Gemini token counting function
+async function countTokensWithGemini(text: string, apiKey: string): Promise<number> {
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-thinking-exp-1219" });
+    
+    const result = await model.countTokens(text);
+    return result.totalTokens;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error("Gemini token counting failed", { error: errorMessage });
+    throw new Error(`Gemini token counting failed: ${errorMessage}`);
+  }
+}
 
 // Initialize logging system
 const logsDir = path.join(process.cwd(), "logs");
@@ -82,21 +100,6 @@ const DANGEROUS_PATHS = [
   "/var/lib",
 ];
 
-const projectRootPath = process.cwd().replace(/\\/g, "/"); // Windows yollarını normalleştir
-
-const ALLOWED_PATH_PATTERNS = [
-  /^\/mnt\/c\/(?:Users|Projects|Development|Dev|Code|Workspace)/i,
-  /^\/home\/[^\/]+\/(?:Projects|Development|Dev|Code|Workspace)/i,
-  /^\/mnt\/c\/Projects\/.*/i,
-  /^\/mnt\/c\/Users\/.*/i,
-  /^\/home\/[^\/]+\/(?:Projects|Development|Dev|Code|Workspace)\/.*/i,
-  /^\.{1,2}$/,
-  /^\.\//,
-  new RegExp(
-    `^${projectRootPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\/.*)?$`,
-    "i",
-  ),
-];
 
 // System prompts for different analysis modes
 const SYSTEM_PROMPTS = {
@@ -1331,80 +1334,244 @@ Execute flawlessly with JavaScript game development excellence.`,
 - Research funding and grant application support`,
 };
 
-// Helper function to resolve API keys from multiple sources
-function resolveApiKeys(params: any): string[] {
-  const keys: string[] = [];
+/**
+ * Normalizes and validates a given project path.
+ * Resolves relative paths (like '.') against the server's current working directory.
+ * Throws an error if the path points to a restricted system directory.
+ * @param inputPath - The path from the tool's input.
+ * @returns The resolved, absolute, and validated path.
+ */
+function normalizeProjectPath(inputPath: string): string {
+  // 1. Resolve the path to get an absolute path. This correctly handles '.' and '..'
+  const resolvedPath = path.resolve(process.cwd(), inputPath);
 
-  // Priority 1: geminiApiKeys string (comma-separated) or array
+  // 2. Security Check: Is the path in a dangerous location?
+  const isDangerous = DANGEROUS_PATHS.some(dangerousPath => 
+    resolvedPath.toLowerCase().startsWith(dangerousPath.toLowerCase())
+  );
+
+  if (isDangerous) {
+    throw new Error(`Access to restricted system path is denied: ${resolvedPath}`);
+  }
+  
+  return resolvedPath;
+}
+
+type SupportedProvider =
+  | "gemini"
+  | "google"
+  | "openai"
+  | "anthropic"
+  | "perplexity"
+  | "mistral"
+  | "groq"
+  | "openrouter"
+  | "xai"
+  | "azureOpenAI"
+  | "ollama";
+
+const PROVIDER_ENV_VAR_CANDIDATES: Record<SupportedProvider, string[]> = {
+  gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+  google: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+  openai: ["OPENAI_API_KEY"],
+  anthropic: ["ANTHROPIC_API_KEY"],
+  perplexity: ["PERPLEXITY_API_KEY"],
+  mistral: ["MISTRAL_API_KEY"],
+  groq: ["GROQ_API_KEY"],
+  openrouter: ["OPENROUTER_API_KEY"],
+  xai: ["XAI_API_KEY"],
+  azureOpenAI: ["AZURE_OPENAI_API_KEY"],
+  ollama: ["OLLAMA_API_KEY"],
+};
+
+const PROVIDER_PARAM_ALIASES: Record<SupportedProvider, string[]> = {
+  gemini: [
+    "geminiApiKeys",
+    "geminiApiKeysArray",
+    "geminiApiKey",
+    "apiKey",
+  ],
+  google: ["googleApiKey", "geminiApiKey", "apiKey"],
+  openai: ["openaiApiKey", "apiKey"],
+  anthropic: ["anthropicApiKey", "apiKey"],
+  perplexity: ["perplexityApiKey", "apiKey"],
+  mistral: ["mistralApiKey", "apiKey"],
+  groq: ["groqApiKey", "apiKey"],
+  openrouter: ["openrouterApiKey", "apiKey"],
+  xai: ["xaiApiKey", "apiKey"],
+  azureOpenAI: ["azureOpenAiApiKey", "azureOpenAIKey", "apiKey"],
+  ollama: ["ollamaApiKey", "apiKey"],
+};
+
+const splitCommaSeparated = (value: string): string[] =>
+  value
+    .split(",")
+    .map((key) => key.trim())
+    .filter((key) => key.length > 0);
+
+const toStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter((item) => item.length > 0);
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    return splitCommaSeparated(value);
+  }
+  return [];
+};
+
+const resolveGeminiKeysFromParams = (
+  params: Record<string, unknown>,
+): string[] => {
   if (params.geminiApiKeys) {
-    if (typeof params.geminiApiKeys === "string") {
-      // Check if geminiApiKeys contains comma-separated multiple keys
-      if (params.geminiApiKeys.includes(",")) {
-        const multipleKeys = params.geminiApiKeys
-          .split(",")
-          .map((key: string) => key.trim())
-          .filter((key: string) => key.length > 0);
-        return multipleKeys;
-      } else {
-        return [params.geminiApiKeys];
-      }
-    } else if (
-      Array.isArray(params.geminiApiKeys) &&
-      params.geminiApiKeys.length > 0
-    ) {
-      return params.geminiApiKeys;
+    const keys = toStringArray(params.geminiApiKeys);
+    if (keys.length > 0) {
+      return keys;
     }
   }
 
-  // Priority 1.5: geminiApiKeysArray (explicit array)
-  if (
-    params.geminiApiKeysArray &&
-    Array.isArray(params.geminiApiKeysArray) &&
-    params.geminiApiKeysArray.length > 0
+  if (params.geminiApiKeysArray) {
+    const keys = toStringArray(params.geminiApiKeysArray);
+    if (keys.length > 0) {
+      return keys;
+    }
+  }
+
+  const directKey = params.geminiApiKey;
+  if (typeof directKey === "string" && directKey.trim().length > 0) {
+    return splitCommaSeparated(directKey);
+  }
+
+  const numberedKeys: string[] = [];
+  for (let index = 2; index <= 100; index++) {
+    const keyName = `geminiApiKey${index}`;
+    const keyValue = params[keyName];
+    if (typeof keyValue === "string" && keyValue.trim().length > 0) {
+      numberedKeys.push(keyValue.trim());
+    }
+  }
+
+  return numberedKeys;
+};
+
+class ProviderApiKeyError extends Error {
+  constructor(
+    public readonly provider: SupportedProvider,
+    message: string,
   ) {
-    return params.geminiApiKeysArray;
+    super(message);
+    this.name = "ProviderApiKeyError";
   }
+}
 
-  // Priority 2: Backward compatibility - check old geminiApiKey field name
-  if (params.geminiApiKey) {
-    // Check if geminiApiKey contains comma-separated multiple keys
-    if (params.geminiApiKey.includes(",")) {
-      const multipleKeys = params.geminiApiKey
-        .split(",")
-        .map((key: string) => key.trim())
-        .filter((key: string) => key.length > 0);
-      keys.push(...multipleKeys);
-    } else {
-      keys.push(params.geminiApiKey);
+const formatProviderName = (provider: SupportedProvider): string => {
+  switch (provider) {
+    case "azureOpenAI":
+      return "Azure OpenAI";
+    case "ollama":
+      return "Ollama";
+    case "openrouter":
+      return "OpenRouter";
+    case "xai":
+      return "xAI";
+    case "gemini":
+      return "Gemini";
+    default:
+      return provider.charAt(0).toUpperCase() + provider.slice(1);
+  }
+};
+
+const getConfiguredProviderValue = (
+  provider: SupportedProvider,
+): string | undefined => {
+  const configuredValue = config.providerApiKeys?.[provider];
+  if (configuredValue && configuredValue.trim().length > 0) {
+    return configuredValue;
+  }
+  return undefined;
+};
+
+export const resolveProviderApiKeys = (
+  provider: SupportedProvider,
+  params: Record<string, unknown> = {},
+): string[] => {
+  if (provider === "gemini" || provider === "google") {
+    const keysFromParams = resolveGeminiKeysFromParams(params);
+    if (keysFromParams.length > 0) {
+      return keysFromParams;
+    }
+
+    const configuredCandidates = [
+      provider === "google"
+        ? getConfiguredProviderValue("google")
+        : getConfiguredProviderValue("gemini"),
+      provider === "google"
+        ? getConfiguredProviderValue("gemini")
+        : getConfiguredProviderValue("google"),
+    ];
+
+    for (const candidate of configuredCandidates) {
+      if (candidate) {
+        return splitCommaSeparated(candidate);
+      }
+    }
+  } else {
+    const paramCandidates = PROVIDER_PARAM_ALIASES[provider] ?? [];
+    for (const key of paramCandidates) {
+      const candidate = params[key];
+      if (typeof candidate === "string" && candidate.trim().length > 0) {
+        return [candidate.trim()];
+      }
+      if (Array.isArray(candidate)) {
+        const values = toStringArray(candidate);
+        if (values.length > 0) {
+          return values;
+        }
+      }
+    }
+
+    const configuredValue = getConfiguredProviderValue(provider);
+    if (configuredValue) {
+      return splitCommaSeparated(configuredValue);
     }
   }
 
-  // Priority 3: Collect all numbered API keys (geminiApiKey2 through geminiApiKey100)
-  for (let i = 2; i <= 100; i++) {
-    const keyField = `geminiApiKey${i}`;
-    if (params[keyField]) {
-      keys.push(params[keyField]);
+  const fallbacks = PROVIDER_ENV_VAR_CANDIDATES[provider] ?? [];
+  for (const envVar of fallbacks) {
+    const envValue = process.env[envVar];
+    if (typeof envValue === "string" && envValue.trim().length > 0) {
+      return splitCommaSeparated(envValue);
     }
-  }
-
-  if (keys.length > 0) {
-    return keys;
-  }
-
-  // Priority 4: Environment variable
-  if (process.env.GEMINI_API_KEY) {
-    const envKeys = process.env.GEMINI_API_KEY;
-    if (envKeys.includes(",")) {
-      return envKeys
-        .split(",")
-        .map((key: string) => key.trim())
-        .filter((key: string) => key.length > 0);
-    }
-    return [envKeys];
   }
 
   return [];
-}
+};
+
+export const requireProviderApiKeys = (
+  provider: SupportedProvider,
+  params: Record<string, unknown> = {},
+): string[] => {
+  const keys = resolveProviderApiKeys(provider, params);
+  if (keys.length === 0) {
+    const envHints = PROVIDER_ENV_VAR_CANDIDATES[provider] ?? [];
+    const paramHint = PROVIDER_PARAM_ALIASES[provider]?.[0] ?? `${provider}ApiKey`;
+    const envMessage = envHints.length > 0 ? envHints.join(" or ") : "an environment variable";
+    throw new ProviderApiKeyError(
+      provider,
+      `Missing API key for ${formatProviderName(provider)}. Provide the \`${paramHint}\` parameter or set ${envMessage}.`,
+    );
+  }
+  return keys;
+};
+
+export const requireProviderApiKey = (
+  provider: SupportedProvider,
+  params: Record<string, unknown> = {},
+): string => {
+  const [primaryKey] = requireProviderApiKeys(provider, params);
+  return primaryKey;
+};
 
 // Retry utility for handling Gemini API rate limits
 // API Key Rotation System with Infinite Retry for 4 Minutes
@@ -1557,8 +1724,9 @@ async function retryWithBackoff<T>(
         const remainingTime = Math.ceil(
           ((maxRetries - attempt) * delayMs) / 1000,
         );
-        console.log(
-          `🔄 Gemini API rate limit hit (attempt ${attempt}/${maxRetries}). Retrying in ${delayMs / 1000}s... (${remainingTime}s remaining)`,
+        // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
+        process.stderr.write(
+          `🔄 Gemini API rate limit hit (attempt ${attempt}/${maxRetries}). Retrying in ${delayMs / 1000}s... (${remainingTime}s remaining)\n`,
         );
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
@@ -1649,8 +1817,9 @@ function validateTokenLimit(
   }
 
   // Log token usage for monitoring
-  console.log(
-    `📊 Token usage: ${totalTokens.toLocaleString()}/${GEMINI_25_PRO_TOKEN_LIMIT.toLocaleString()} (${Math.round((totalTokens / GEMINI_25_PRO_TOKEN_LIMIT) * 100)}%)`,
+  // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
+  process.stderr.write(
+    `📊 Token usage: ${totalTokens.toLocaleString()}/${GEMINI_25_PRO_TOKEN_LIMIT.toLocaleString()} (${Math.round((totalTokens / GEMINI_25_PRO_TOKEN_LIMIT) * 100)}%)\n`,
   );
 }
 
@@ -1700,12 +1869,18 @@ const ApiKeyStatusSchema = z.object({
 
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
+  projectPath: z
+    .string()
+    .min(1)
+    .describe(
+      "📂 PROJECT PATH: The absolute or relative path to the project directory to analyze. Provide the full path to your project (e.g., 'C:/Users/YourName/MyProject' on Windows or '/Users/YourName/MyProject' on macOS/Linux). Use '.' only if you configured 'cwd' in Claude Desktop config to point to your project directory."
+    ),
   question: z
     .string()
     .min(1)
     .max(2000)
     .describe(
-      "❓ YOUR QUESTION: Ask anything about the codebase. The analysis will run on the project directory you provided when starting the server.",
+      "❓ YOUR QUESTION: Ask anything about the codebase in the specified projectPath.",
     ),
   temporaryIgnore: z
     .array(z.string())
@@ -1761,6 +1936,12 @@ const GeminiCodebaseAnalyzerSchema = z.object({
 
 // Gemini Code Search Schema - for targeted, fast searches
 const GeminiCodeSearchSchema = z.object({
+  projectPath: z
+    .string()
+    .min(1)
+    .describe(
+      "📂 PROJECT PATH: The absolute or relative path to the project directory to search. Use '.' to search the current working directory of the server."
+    ),
   temporaryIgnore: z
     .array(z.string())
     .optional()
@@ -1820,6 +2001,12 @@ const UsageGuideSchema = z.object({
 
 // Dynamic Expert Mode Step 1: Create Custom Expert Schema
 const DynamicExpertCreateSchema = z.object({
+  projectPath: z
+    .string()
+    .min(1)
+    .describe(
+      "📂 PROJECT PATH: The absolute or relative path to the project directory to analyze. Provide the full path to your project (e.g., 'C:/Users/YourName/MyProject' on Windows or '/Users/YourName/MyProject' on macOS/Linux). Use '.' only if you configured 'cwd' in Claude Desktop config to point to your project directory."
+    ),
   temporaryIgnore: z
     .array(z.string())
     .optional()
@@ -1871,8 +2058,55 @@ const ReadLogFileSchema = z.object({
     ),
 });
 
+// Token Calculator Schema  
+const TokenCalculatorSchema = z.object({
+  projectPath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("📂 PROJECT PATH (optional): The absolute or relative path to the project directory to analyze. Required for project analysis mode. Provide the full path to your project (e.g., 'C:/Users/YourName/MyProject' on Windows or '/Users/YourName/MyProject' on macOS/Linux). Use '.' only if you configured 'cwd' in Claude Desktop config to point to your project directory."),
+  textToAnalyze: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("🔤 DIRECT TEXT (optional): If provided, will calculate tokens for this text instead of analyzing project files. Use this for quick token calculations of specific text. Either projectPath or textToAnalyze must be provided."),
+  temporaryIgnore: z
+    .array(z.string())
+    .optional()
+    .describe("🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. Examples: ['build/**', 'src/legacy/**', '*.test.js']"),
+  fileExtensions: z
+    .array(z.string())
+    .optional()
+    .describe("📁 FILE EXTENSIONS (optional): Only analyze files with these extensions. Examples: ['.js', '.ts', '.tsx', '.py', '.java']. If not provided, all text-based files will be analyzed."),
+  maxFileSize: z
+    .number()
+    .optional()
+    .default(1000000)
+    .describe("📏 MAX FILE SIZE (optional): Maximum file size in bytes to analyze. Default: 1MB. Files larger than this will be skipped."),
+  tokenizerModel: z
+    .enum(["gemini-2.0-flash", "gpt-4o"])
+    .optional()
+    .default("gemini-2.0-flash")
+    .describe("🤖 TOKENIZER MODEL (optional): Which model's tokenizer to use. 'gemini-2.0-flash' uses Google's tokenizer (compatible with all Gemini models including 2.0 Flash), 'gpt-4o' uses OpenAI's tiktoken. Default: gemini-2.0-flash"),
+  geminiApiKey: z
+    .string()
+    .optional()
+    .default(
+      config.providerApiKeys.gemini ??
+        config.providerApiKeys.google ??
+        "",
+    )
+    .describe("🔑 GEMINI API KEY (optional): Required when using Gemini tokenizer. Will use GEMINI_API_KEY environment variable if not provided. Get yours at: https://makersuite.google.com/app/apikey"),
+});
+
 // Project Orchestrator Step 1: Create Groups and Analysis Plan Schema
 const ProjectOrchestratorCreateSchema = z.object({
+  projectPath: z
+    .string()
+    .min(1)
+    .describe(
+      "📂 PROJECT PATH: The absolute or relative path to the project directory to analyze. Provide the full path to your project (e.g., 'C:/Users/YourName/MyProject' on Windows or '/Users/YourName/MyProject' on macOS/Linux). Use '.' only if you configured 'cwd' in Claude Desktop config to point to your project directory."
+    ),
   temporaryIgnore: z
     .array(z.string())
     .optional()
@@ -2014,8 +2248,8 @@ const ProjectOrchestratorAnalyzeSchema = z.object({
 // Create the server
 const server = new Server(
   {
-    name: "gemini-mcp-server",
-    version: "1.0.0",
+    name: config.mcpServerName,
+    version: config.mcpServerVersion,
     description:
       "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 36 specialized analysis modes! 💡 START HERE: Use 'get_usage_guide' tool to learn all capabilities.",
   },
@@ -2071,6 +2305,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description:
           "📄 READ LOG FILE - Read the contents of a server log file ('activity.log' or 'error.log'). Useful for debugging the server itself, monitoring API key rotation, and troubleshooting issues.",
         inputSchema: zodToJsonSchema(ReadLogFileSchema),
+      },
+      {
+        name: "calculate_token_count",
+        description:
+          "🔢 CALCULATE TOKEN COUNT - Calculate tokens for entire projects or specific text using Gemini or GPT-4o tokenizers. Defaults to Gemini tokenizer (compatible with all Gemini models). Analyze project files with filtering options or quick text calculations.",
+        inputSchema: zodToJsonSchema(TokenCalculatorSchema),
       },
       {
         name: "project_orchestrator_create",
@@ -2563,10 +2803,15 @@ Use \`get_usage_guide\` with topic "overview" to get started.`,
         const params = ApiKeyStatusSchema.parse(request.params.arguments);
 
         // Resolve API keys from all sources
-        const apiKeys = resolveApiKeys(params);
+        const apiKeys = resolveProviderApiKeys("google", params);
 
         // Environment variable check
-        const envApiKey = process.env.GEMINI_API_KEY;
+        const envApiKey =
+          config.providerApiKeys.gemini ??
+          config.providerApiKeys.google ??
+          process.env.GEMINI_API_KEY ??
+          process.env.GOOGLE_API_KEY ??
+          "";
 
         // Count different key sources
         let commaKeys = 0;
@@ -2716,15 +2961,15 @@ ${
           request.params.arguments,
         );
 
-        // Use fixed workspace path for Docker environment
-        const normalizedPath = "/workspace";
+        // Yeni güvenlik fonksiyonunu kullanarak yolu doğrula ve çözümle
+        const normalizedPath = normalizeProjectPath(params.projectPath);
 
         // Resolve API keys from multiple sources
-        const apiKeys = resolveApiKeys(params);
+        const apiKeys = resolveProviderApiKeys("google", params);
 
         if (apiKeys.length === 0) {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -2888,11 +3133,11 @@ This custom expert is now ready to provide highly specialized analysis tailored 
         const normalizedPath = "/workspace";
 
         // Resolve API keys from multiple sources
-        const apiKeys = resolveApiKeys(params);
+        const apiKeys = resolveProviderApiKeys("google", params);
 
         if (apiKeys.length === 0) {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -3029,22 +3274,24 @@ ${analysis}
           request.params.arguments,
         );
 
-        const projectPath = "/workspace"; // Analiz edilecek yol artık sabit ve güvenilir.
+        // Yolu parametreden al
+        const projectPath = params.projectPath; 
         const toolContext: RequestContext =
           requestContextService.createRequestContext({
             operation: "GeminiCodebaseAnalysis",
-            projectPath: projectPath,
+            projectPath: projectPath, // Loglama için gelen yolu kullan
             questionLength: params.question.length,
           });
-
-        const normalizedPath = projectPath;
+        
+        // Yeni güvenlik fonksiyonunu kullanarak yolu doğrula ve çözümle
+        const normalizedPath = normalizeProjectPath(projectPath);
 
         // Resolve API keys from multiple sources
-        const apiKeys = resolveApiKeys(params);
+        const apiKeys = resolveProviderApiKeys("google", params);
 
         if (apiKeys.length === 0) {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -3211,15 +3458,15 @@ ${troubleshootingTips.join("\n")}
       try {
         const params = GeminiCodeSearchSchema.parse(request.params.arguments);
 
-        // Use fixed workspace path for Docker environment
-        const normalizedPath = "/workspace";
+        // Yeni güvenlik fonksiyonunu kullanarak yolu doğrula ve çözümle
+        const normalizedPath = normalizeProjectPath(params.projectPath);
 
         // Resolve API keys from multiple sources
-        const apiKeys = resolveApiKeys(params);
+        const apiKeys = resolveProviderApiKeys("google", params);
 
         if (apiKeys.length === 0) {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -3491,27 +3738,288 @@ ${logContent}
         };
       }
 
+    case "calculate_token_count":
+      try {
+        logger.info("Received request to calculate token count", {
+          hasText: !!request.params.arguments?.textToAnalyze,
+          hasProjectPath: !!request.params.arguments?.projectPath,
+        });
+
+        const params = TokenCalculatorSchema.parse(request.params.arguments);
+        
+        // Validate that either projectPath or textToAnalyze is provided
+        if (!params.projectPath && !params.textToAnalyze) {
+          throw new Error("Either projectPath or textToAnalyze must be provided");
+        }
+        
+        // Resolve API keys from multiple sources (same as other tools)
+        const apiKeys = resolveProviderApiKeys("google", params);
+        if (apiKeys.length === 0 && params.tokenizerModel === "gemini-2.0-flash") {
+          throw new Error(
+            "At least one Gemini API key is required when using Gemini tokenizer. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+          );
+        }
+        
+        const toolContext: RequestContext =
+          requestContextService.createRequestContext({
+            operation: "CalculateTokenCount",
+            projectPath: params.projectPath || "direct_text",
+          });
+
+        // If direct text is provided, calculate tokens for that text only
+        if (params.textToAnalyze) {
+          let tokenCount: number;
+          let modelUsed: string;
+
+          if (params.tokenizerModel === "gemini-2.0-flash") {
+            // Use the first available API key (same pattern as other tools)
+            const apiKey = apiKeys[0];
+            tokenCount = await countTokensWithGemini(params.textToAnalyze, apiKey);
+            modelUsed = "gemini-2.0-flash";
+          } else {
+            tokenCount = await countTokens(params.textToAnalyze, toolContext);
+            modelUsed = "gpt-4o";
+          }
+
+          const response = {
+            mode: "direct_text",
+            tokenCount: tokenCount,
+            characterCount: params.textToAnalyze.length,
+            modelUsedForTokenization: modelUsed,
+          };
+
+          logger.info("Direct text token calculation completed", response);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(response, null, 2),
+              },
+            ],
+            isError: false,
+          };
+        }
+
+        // Project analysis mode
+        if (!params.projectPath) {
+          throw new Error("projectPath is required for project analysis mode");
+        }
+        
+        const normalizedPath = normalizeProjectPath(params.projectPath);
+        logger.info("Starting project token analysis", { projectPath: normalizedPath });
+
+        // Set up ignore patterns
+        const ig = ignore();
+        
+        // Add default ignore patterns
+        ig.add([
+          'node_modules/**',
+          '.git/**',
+          'dist/**',
+          'build/**',
+          '*.log',
+          '.DS_Store',
+          'Thumbs.db',
+          '*.tmp',
+          '*.temp',
+          '.env*',
+          '*.key',
+          '*.pem',
+          '*.p12',
+          '*.pfx',
+          '*.jks',
+        ]);
+
+        // Add temporary ignore patterns if provided
+        if (params.temporaryIgnore) {
+          ig.add(params.temporaryIgnore);
+        }
+
+        // Try to read .gitignore
+        try {
+          const gitignorePath = path.join(normalizedPath, '.gitignore');
+          const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8');
+          ig.add(gitignoreContent);
+          logger.debug("Loaded .gitignore patterns");
+        } catch (error) {
+          logger.debug("No .gitignore found or couldn't read it");
+        }
+
+        // Find all files
+        const globPattern = (params.fileExtensions && Array.isArray(params.fileExtensions) && params.fileExtensions.length > 0)
+          ? `**/*@(${params.fileExtensions.join('|')})`
+          : '**/*';
+          
+        logger.debug("File search debug", {
+          globPattern,
+          normalizedPath,
+          hasFileExtensions: !!(params.fileExtensions && Array.isArray(params.fileExtensions)),
+          fileExtensionsCount: params.fileExtensions?.length || 0,
+          fileExtensions: params.fileExtensions,
+          apiKeysCount: apiKeys.length,
+          hasApiKeys: apiKeys.length > 0
+        });
+          
+        const allFiles = await glob(globPattern, {
+          cwd: normalizedPath,
+          nodir: true,
+          dot: false,
+        });
+        
+        logger.debug("Glob results", {
+          allFilesCount: allFiles.length,
+          firstFewFiles: allFiles.slice(0, 5)
+        });
+
+        // Filter files
+        const filteredFiles = allFiles.filter(file => !ig.ignores(file));
+        
+        logger.info(`Found ${filteredFiles.length} files to analyze (${allFiles.length} total, ${allFiles.length - filteredFiles.length} ignored)`);
+
+        let totalTokens = 0;
+        let totalCharacters = 0;
+        let analyzedFiles = 0;
+        let skippedFiles = 0;
+        const fileBreakdown: Array<{file: string, tokens: number, characters: number}> = [];
+
+        // Determine which tokenizer to use for the entire analysis
+        const useGeminiTokenizer = params.tokenizerModel === "gemini-2.0-flash";
+        const modelUsed = useGeminiTokenizer ? "gemini-2.0-flash" : "gpt-4o";
+        
+        if (useGeminiTokenizer && !params.geminiApiKey) {
+          throw new Error("Gemini API key is required when using Gemini tokenizer");
+        }
+
+        for (const file of filteredFiles) {
+          try {
+            const filePath = path.join(normalizedPath, file);
+            const stats = await fs.stat(filePath);
+            
+            // Skip files that are too large
+            if (stats.size > params.maxFileSize!) {
+              skippedFiles++;
+              logger.debug(`Skipped large file: ${file} (${stats.size} bytes)`);
+              continue;
+            }
+
+            // Skip binary files (basic check)
+            if (stats.size === 0) continue;
+
+            const content = await fs.readFile(filePath, 'utf-8');
+            
+            // Skip if content appears to be binary
+            if (content.includes('\0')) {
+              skippedFiles++;
+              continue;
+            }
+
+            let fileTokens: number;
+            if (useGeminiTokenizer) {
+              // Use the first available API key (same pattern as other tools)
+              const apiKey = apiKeys[0];
+              fileTokens = await countTokensWithGemini(content, apiKey);
+            } else {
+              fileTokens = await countTokens(content, toolContext);
+            }
+            
+            const fileCharacters = content.length;
+            
+            totalTokens += fileTokens;
+            totalCharacters += fileCharacters;
+            analyzedFiles++;
+            
+            fileBreakdown.push({
+              file,
+              tokens: fileTokens,
+              characters: fileCharacters
+            });
+
+          } catch (error) {
+            skippedFiles++;
+            logger.debug(`Error reading file ${file}:`, error);
+          }
+        }
+
+        // Sort by token count (highest first) for the breakdown
+        fileBreakdown.sort((a, b) => b.tokens - a.tokens);
+
+        const response = {
+          mode: "project_analysis",
+          projectPath: normalizedPath,
+          summary: {
+            totalTokens,
+            totalCharacters,
+            analyzedFiles,
+            skippedFiles,
+            totalFiles: filteredFiles.length,
+          },
+          modelUsedForTokenization: modelUsed,
+          topFiles: fileBreakdown.slice(0, 10), // Top 10 files by token count
+          filters: {
+            temporaryIgnore: params.temporaryIgnore || [],
+            fileExtensions: params.fileExtensions || "all",
+            maxFileSize: params.maxFileSize,
+          }
+        };
+
+        logger.info("Project token analysis completed", {
+          totalTokens,
+          analyzedFiles,
+          skippedFiles,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(response, null, 2),
+            },
+          ],
+          isError: false,
+        };
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error("Error in calculate_token_count tool", { error: errorMessage });
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                error: {
+                  message: "Token hesaplanırken bir hata oluştu",
+                  details: errorMessage,
+                },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+
     case "project_orchestrator_create":
       try {
         const params = ProjectOrchestratorCreateSchema.parse(
           request.params.arguments,
         );
 
-        const projectPath = "/workspace"; // Analiz edilecek yol artık sabit ve güvenilir.
+        // Yolu parametreden al
+        const projectPath = params.projectPath;
         const toolContext: RequestContext =
           requestContextService.createRequestContext({
             operation: "ProjectOrchestratorCreate",
-            projectPath: projectPath,
+            projectPath: projectPath, // Loglama için gelen yolu kullan
           });
-
-        const normalizedPath = projectPath;
+        
+        // Yeni güvenlik fonksiyonunu kullanarak yolu doğrula ve çözümle
+        const normalizedPath = normalizeProjectPath(projectPath);
 
         // Resolve API keys from multiple sources
-        const apiKeys = resolveApiKeys(params);
+        const apiKeys = resolveProviderApiKeys("google", params);
 
         if (apiKeys.length === 0) {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -3712,11 +4220,11 @@ ${groupsData}
         const normalizedPath = "/workspace";
 
         // Resolve API keys from multiple sources
-        const apiKeys = resolveApiKeys(params);
+        const apiKeys = resolveProviderApiKeys("google", params);
 
         if (apiKeys.length === 0) {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -4532,9 +5040,9 @@ Based on the analysis of all ${groupResults.length} groups, here are the key fin
 (async () => {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  logger.info("Gemini MCP Server running on stdio", {
-    serverName: "gemini-mcp-server",
-    version: "1.0.0",
+  logger.info("Gemini MCP Local running on stdio", {
+    serverName: config.mcpServerName,
+    version: config.mcpServerVersion,
     transport: "stdio",
     logsDirectory: logsDir,
   });

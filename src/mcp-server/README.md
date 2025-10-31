@@ -107,10 +107,9 @@ In addition to creating self-contained Tools and Resources, you will often need 
 2.  **Singleton Pattern**: For services that maintain a persistent connection or state (like a database client), use a singleton pattern to ensure a single instance is shared across the application.
 3.  **Clear Error Handling**: Service providers should implement the "Logic Throws, Handlers Catch" pattern internally. The core API-calling logic should throw structured `McpError`s, and the public-facing methods should wrap these calls in `ErrorHandler.tryCatch` blocks.
 
-**Example Service Providers:**
+**Example Service Provider:**
 
-- **OpenRouter Provider (`src/services/llm-providers/openRouterProvider.ts`)**: Demonstrates how to create a handler class that manages an API client, including state, rate limiting, and wrapping core logic that throws structured errors.
-- **Supabase Client (`src/services/supabase/supabaseClient.ts`)**: Shows a straightforward singleton initialization pattern for a database client. It throws an error if the client is accessed before it has been properly configured and initialized.
+- **OpenRouter Provider (`src/services/llm-providers/openRouterProvider.ts`)**: Demonstrates how to wrap an external LLM vendor with a dedicated helper that manages configuration, retries, and structured error propagation.
 
 When building a new Tool that needs to interact with an external service, you should import the service's singleton instance and call its methods from within your tool's `logic.ts` file.
 

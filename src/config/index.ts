@@ -55,12 +55,12 @@ try {
   projectRoot = findProjectRoot(currentModuleDir);
 } catch (error: unknown) {
   const errorMessage = error instanceof Error ? error.message : String(error);
-  console.error(`FATAL: Error determining project root: ${errorMessage}`);
+  process.stderr.write(`FATAL: Error determining project root: ${errorMessage}\n`);
   // Fallback to process.cwd() if project root cannot be determined.
   // This might happen in unusual execution environments.
   projectRoot = process.cwd();
-  console.warn(
-    `Warning: Using process.cwd() (${projectRoot}) as fallback project root.`,
+  process.stderr.write(
+    `Warning: Using process.cwd() (${projectRoot}) as fallback project root.\n`,
   );
 }
 // --- End Determine Project Root ---
@@ -71,10 +71,10 @@ let pkg = { name: "mcp-ts-template", version: "0.0.0" };
 try {
   pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 } catch (error) {
+  // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
   if (process.stdout.isTTY) {
-    console.error(
-      "Warning: Could not read package.json for default config values. Using hardcoded defaults.",
-      error,
+    process.stderr.write(
+      `Warning: Could not read package.json for default config values. Using hardcoded defaults. Error: ${error}\n`,
     );
   }
 }
@@ -90,7 +90,7 @@ const EnvSchema = z.object({
   /** Optional. The version of the MCP server. Defaults to `package.json` version. */
   MCP_SERVER_VERSION: z.string().optional(),
   /** Minimum logging level. See `McpLogLevel` in logger utility. Default: "debug". */
-  MCP_LOG_LEVEL: z.string().default("debug"),
+  MCP_LOG_LEVEL: z.enum(["debug", "info", "notice", "warning", "error", "crit", "alert", "emerg"]).default("debug"),
   /** Directory for log files. Defaults to "logs" in project root. */
   LOGS_DIR: z.string().default(path.join(projectRoot, "logs")),
   /** Runtime environment (e.g., "development", "production"). Default: "development". */
@@ -146,55 +146,69 @@ const EnvSchema = z.object({
   /** Optional. Default LLM min_p (0.0-1.0). */
   LLM_DEFAULT_MIN_P: z.coerce.number().min(0).max(1).optional(),
 
-  /** Optional. OAuth provider authorization endpoint URL. */
-  OAUTH_PROXY_AUTHORIZATION_URL: z
-    .string()
-    .url("OAUTH_PROXY_AUTHORIZATION_URL must be a valid URL.")
-    .optional(),
-  /** Optional. OAuth provider token endpoint URL. */
-  OAUTH_PROXY_TOKEN_URL: z
-    .string()
-    .url("OAUTH_PROXY_TOKEN_URL must be a valid URL.")
-    .optional(),
-  /** Optional. OAuth provider revocation endpoint URL. */
-  OAUTH_PROXY_REVOCATION_URL: z
-    .string()
-    .url("OAUTH_PROXY_REVOCATION_URL must be a valid URL.")
-    .optional(),
-  /** Optional. OAuth provider issuer URL. */
-  OAUTH_PROXY_ISSUER_URL: z
-    .string()
-    .url("OAUTH_PROXY_ISSUER_URL must be a valid URL.")
-    .optional(),
-  /** Optional. OAuth service documentation URL. */
-  OAUTH_PROXY_SERVICE_DOCUMENTATION_URL: z
-    .string()
-    .url("OAUTH_PROXY_SERVICE_DOCUMENTATION_URL must be a valid URL.")
-    .optional(),
-  /** Optional. Comma-separated default OAuth client redirect URIs. */
-  OAUTH_PROXY_DEFAULT_CLIENT_REDIRECT_URIS: z.string().optional(),
-
-  /** Supabase Project URL. From `SUPABASE_URL`. */
-  SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL.").optional(),
-  /** Supabase Anon Key (public). From `SUPABASE_ANON_KEY`. */
-  SUPABASE_ANON_KEY: z.string().optional(),
-  /** Supabase Service Role Key (secret). From `SUPABASE_SERVICE_ROLE_KEY`. */
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  /** Optional. Google AI Studio API key. */
+  GOOGLE_API_KEY: z.string().optional(),
+  /** Optional. OpenAI API key. */
+  OPENAI_API_KEY: z.string().optional(),
+  /** Optional. Anthropic API key. */
+  ANTHROPIC_API_KEY: z.string().optional(),
+  /** Optional. Perplexity API key. */
+  PERPLEXITY_API_KEY: z.string().optional(),
+  /** Optional. Mistral API key. */
+  MISTRAL_API_KEY: z.string().optional(),
+  /** Optional. Groq API key. */
+  GROQ_API_KEY: z.string().optional(),
+  /** Optional. XAI API key. */
+  XAI_API_KEY: z.string().optional(),
+  /** Optional. Azure OpenAI API key. */
+  AZURE_OPENAI_API_KEY: z.string().optional(),
+  /** Optional. Azure OpenAI endpoint. */
+  AZURE_OPENAI_ENDPOINT: z.string().optional(),
+  /** Optional. Azure OpenAI deployment name. */
+  AZURE_OPENAI_DEPLOYMENT: z.string().optional(),
+  /** Optional. Ollama API key for remote usage. */
+  OLLAMA_API_KEY: z.string().optional(),
+  /** Optional. Ollama host when targeting remote instances. */
+  OLLAMA_HOST: z.string().optional(),
 });
 
 const parsedEnv = EnvSchema.safeParse(process.env);
 
 if (!parsedEnv.success) {
+  // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
   if (process.stdout.isTTY) {
-    console.error(
-      "❌ Invalid environment variables found:",
-      parsedEnv.error.flatten().fieldErrors,
+    process.stderr.write(
+      `❌ Invalid environment variables found: ${JSON.stringify(parsedEnv.error.flatten().fieldErrors)}\n`,
     );
   }
   // Consider throwing an error in production for critical misconfigurations.
 }
 
 const env = parsedEnv.success ? parsedEnv.data : EnvSchema.parse({});
+
+const providerApiKeys = {
+  google: env.GOOGLE_API_KEY || env.GEMINI_API_KEY,
+  gemini: env.GEMINI_API_KEY,
+  openai: env.OPENAI_API_KEY,
+  anthropic: env.ANTHROPIC_API_KEY,
+  perplexity: env.PERPLEXITY_API_KEY,
+  mistral: env.MISTRAL_API_KEY,
+  groq: env.GROQ_API_KEY,
+  openrouter: env.OPENROUTER_API_KEY,
+  xai: env.XAI_API_KEY,
+  azureOpenAI: env.AZURE_OPENAI_API_KEY,
+  ollama: env.OLLAMA_API_KEY,
+};
+
+const providerOptions = {
+  azureOpenAI: {
+    endpoint: env.AZURE_OPENAI_ENDPOINT,
+    deployment: env.AZURE_OPENAI_DEPLOYMENT,
+  },
+  ollama: {
+    host: env.OLLAMA_HOST,
+  },
+};
 
 // --- Directory Ensurance Function ---
 /**
@@ -218,9 +232,10 @@ const ensureDirectory = (
     !resolvedDirPath.startsWith(rootDir + path.sep) &&
     resolvedDirPath !== rootDir
   ) {
+    // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
     if (process.stdout.isTTY) {
-      console.error(
-        `Error: ${dirName} path "${dirPath}" resolves to "${resolvedDirPath}", which is outside the project boundary "${rootDir}".`,
+      process.stderr.write(
+        `Error: ${dirName} path "${dirPath}" resolves to "${resolvedDirPath}", which is outside the project boundary "${rootDir}".\n`,
       );
     }
     return null;
@@ -234,9 +249,10 @@ const ensureDirectory = (
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
+      // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
       if (process.stdout.isTTY) {
-        console.error(
-          `Error creating ${dirName} directory at ${resolvedDirPath}: ${errorMessage}`,
+        process.stderr.write(
+          `Error creating ${dirName} directory at ${resolvedDirPath}: ${errorMessage}\n`,
         );
       }
       return null;
@@ -245,19 +261,21 @@ const ensureDirectory = (
     try {
       const stats = statSync(resolvedDirPath);
       if (!stats.isDirectory()) {
+        // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
         if (process.stdout.isTTY) {
-          console.error(
-            `Error: ${dirName} path ${resolvedDirPath} exists but is not a directory.`,
+          process.stderr.write(
+            `Error: ${dirName} path ${resolvedDirPath} exists but is not a directory.\n`,
           );
         }
         return null;
       }
     } catch (statError: unknown) {
+      // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
       if (process.stdout.isTTY) {
         const statErrorMessage =
           statError instanceof Error ? statError.message : String(statError);
-        console.error(
-          `Error accessing ${dirName} path ${resolvedDirPath}: ${statErrorMessage}`,
+        process.stderr.write(
+          `Error accessing ${dirName} path ${resolvedDirPath}: ${statErrorMessage}\n`,
         );
       }
       return null;
@@ -275,9 +293,10 @@ let validatedLogsPath: string | null = ensureDirectory(
 );
 
 if (!validatedLogsPath) {
+  // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
   if (process.stdout.isTTY) {
-    console.warn(
-      `Warning: Custom logs directory ('${env.LOGS_DIR}') is invalid or outside the project boundary. Falling back to default.`,
+    process.stderr.write(
+      `Warning: Custom logs directory ('${env.LOGS_DIR}') is invalid or outside the project boundary. Falling back to default.\n`,
     );
   }
   // Try again with the absolute default path
@@ -285,10 +304,11 @@ if (!validatedLogsPath) {
   validatedLogsPath = ensureDirectory(defaultLogsDir, projectRoot, "logs");
 
   if (!validatedLogsPath) {
+    // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
     if (process.stdout.isTTY) {
       // This is just a warning now, not fatal.
-      console.warn(
-        "Warning: Default logs directory could not be created. File logging will be disabled.",
+      process.stderr.write(
+        "Warning: Default logs directory could not be created. File logging will be disabled.\n",
       );
     }
     // Do not exit. validatedLogsPath remains null, and the logger will handle it.
@@ -337,10 +357,38 @@ export const config = {
   openrouterAppUrl: env.OPENROUTER_APP_URL || "http://localhost:3000",
   /** OpenRouter App Name. From `OPENROUTER_APP_NAME`. Defaults to `mcpServerName`. */
   openrouterAppName: env.OPENROUTER_APP_NAME || pkg.name || "MCP TS App",
+  /** Provider API key map resolved from environment variables. */
+  providerApiKeys,
+  /** Provider-specific optional configuration (non-key values). */
+  providerOptions,
   /** OpenRouter API Key. From `OPENROUTER_API_KEY`. */
-  openrouterApiKey: env.OPENROUTER_API_KEY,
+  openrouterApiKey: providerApiKeys.openrouter,
   /** Gemini API Key. From `GEMINI_API_KEY`. */
-  geminiApiKey: env.GEMINI_API_KEY,
+  geminiApiKey: providerApiKeys.gemini,
+  /** Google API Key. From `GOOGLE_API_KEY` or `GEMINI_API_KEY`. */
+  googleApiKey: providerApiKeys.google,
+  /** OpenAI API Key. From `OPENAI_API_KEY`. */
+  openaiApiKey: providerApiKeys.openai,
+  /** Anthropic API Key. From `ANTHROPIC_API_KEY`. */
+  anthropicApiKey: providerApiKeys.anthropic,
+  /** Perplexity API Key. From `PERPLEXITY_API_KEY`. */
+  perplexityApiKey: providerApiKeys.perplexity,
+  /** Mistral API Key. From `MISTRAL_API_KEY`. */
+  mistralApiKey: providerApiKeys.mistral,
+  /** Groq API Key. From `GROQ_API_KEY`. */
+  groqApiKey: providerApiKeys.groq,
+  /** XAI API Key. From `XAI_API_KEY`. */
+  xaiApiKey: providerApiKeys.xai,
+  /** Azure OpenAI API Key. From `AZURE_OPENAI_API_KEY`. */
+  azureOpenAiApiKey: providerApiKeys.azureOpenAI,
+  /** Azure OpenAI endpoint. From `AZURE_OPENAI_ENDPOINT`. */
+  azureOpenAiEndpoint: providerOptions.azureOpenAI.endpoint,
+  /** Azure OpenAI deployment name. From `AZURE_OPENAI_DEPLOYMENT`. */
+  azureOpenAiDeployment: providerOptions.azureOpenAI.deployment,
+  /** Ollama API Key. From `OLLAMA_API_KEY`. */
+  ollamaApiKey: providerApiKeys.ollama,
+  /** Ollama host override. From `OLLAMA_HOST`. */
+  ollamaHost: providerOptions.ollama.host,
   /** Default LLM model. From `LLM_DEFAULT_MODEL`. */
   llmDefaultModel: env.LLM_DEFAULT_MODEL,
   /** Default LLM temperature. From `LLM_DEFAULT_TEMPERATURE`. */
@@ -353,37 +401,6 @@ export const config = {
   llmDefaultTopK: env.LLM_DEFAULT_TOP_K,
   /** Default LLM min_p. From `LLM_DEFAULT_MIN_P`. */
   llmDefaultMinP: env.LLM_DEFAULT_MIN_P,
-
-  /** OAuth Proxy configurations. Undefined if no related env vars are set. */
-  oauthProxy:
-    env.OAUTH_PROXY_AUTHORIZATION_URL ||
-    env.OAUTH_PROXY_TOKEN_URL ||
-    env.OAUTH_PROXY_REVOCATION_URL ||
-    env.OAUTH_PROXY_ISSUER_URL ||
-    env.OAUTH_PROXY_SERVICE_DOCUMENTATION_URL ||
-    env.OAUTH_PROXY_DEFAULT_CLIENT_REDIRECT_URIS
-      ? {
-          authorizationUrl: env.OAUTH_PROXY_AUTHORIZATION_URL,
-          tokenUrl: env.OAUTH_PROXY_TOKEN_URL,
-          revocationUrl: env.OAUTH_PROXY_REVOCATION_URL,
-          issuerUrl: env.OAUTH_PROXY_ISSUER_URL,
-          serviceDocumentationUrl: env.OAUTH_PROXY_SERVICE_DOCUMENTATION_URL,
-          defaultClientRedirectUris:
-            env.OAUTH_PROXY_DEFAULT_CLIENT_REDIRECT_URIS?.split(",")
-              .map((uri) => uri.trim())
-              .filter(Boolean),
-        }
-      : undefined,
-
-  /** Supabase configuration. Undefined if no related env vars are set. */
-  supabase:
-    env.SUPABASE_URL && env.SUPABASE_ANON_KEY
-      ? {
-          url: env.SUPABASE_URL,
-          anonKey: env.SUPABASE_ANON_KEY,
-          serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
-        }
-      : undefined,
 };
 
 /**
@@ -397,3 +414,50 @@ export const logLevel: string = config.logLevel;
  * Exported for convenience.
  */
 export const environment: string = config.environment;
+
+/**
+ * Validates logger-specific configuration and provides warnings for potential issues.
+ * @returns Object containing validation results and any warnings.
+ */
+export const validateLoggerConfig = (): {
+  isValid: boolean;
+  warnings: string[];
+  recommendations: string[];
+} => {
+  const warnings: string[] = [];
+  const recommendations: string[] = [];
+  let isValid = true;
+
+  // Check if logs directory is accessible
+  if (!config.logsPath) {
+    warnings.push("Logs directory is not configured or inaccessible. File logging will be disabled.");
+    recommendations.push("Ensure LOGS_DIR environment variable points to a writable directory.");
+  }
+
+  // Check transport and environment compatibility
+  if (config.mcpTransportType === 'stdio' && config.environment === 'development' && config.logLevel === 'debug') {
+    recommendations.push("Consider using HTTP transport in development for better debugging experience with console logs.");
+  }
+
+  // Check production readiness
+  if (config.environment === 'production') {
+    if (config.logLevel === 'debug') {
+      warnings.push("Debug logging is enabled in production. This may impact performance and expose sensitive information.");
+      recommendations.push("Consider setting MCP_LOG_LEVEL to 'info' or higher in production.");
+    }
+    
+    if (config.mcpTransportType === 'http' && !config.mcpAuthSecretKey) {
+      warnings.push("HTTP transport in production without authentication secret key is insecure.");
+      recommendations.push("Set MCP_AUTH_SECRET_KEY environment variable for production HTTP transport.");
+      isValid = false;
+    }
+  }
+
+  // Check log level appropriateness
+  if (config.logLevel === 'emerg' || config.logLevel === 'alert') {
+    warnings.push(`Log level '${config.logLevel}' is very restrictive and may hide important information.`);
+    recommendations.push("Consider using 'error' or 'warning' level for normal operation.");
+  }
+
+  return { isValid, warnings, recommendations };
+};
