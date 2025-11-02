@@ -22,6 +22,7 @@ import { config } from "./config/index.js";
 import { RequestContext, requestContextService } from "./utils/index.js";
 import { countTokens } from "./utils/metrics/tokenCounter.js";
 import ignore from "ignore";
+import { createGeminiCliModel } from "./services/llm-providers/geminiCliProvider.js";
 
 // Gemini token counting function
 async function countTokensWithGemini(text: string, apiKey: string): Promise<number> {
@@ -1360,6 +1361,7 @@ function normalizeProjectPath(inputPath: string): string {
 type SupportedProvider =
   | "gemini"
   | "google"
+  | "gemini-cli"
   | "openai"
   | "anthropic"
   | "perplexity"
@@ -1373,6 +1375,7 @@ type SupportedProvider =
 const PROVIDER_ENV_VAR_CANDIDATES: Record<SupportedProvider, string[]> = {
   gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
   google: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+  "gemini-cli": [], // Uses OAuth via gemini CLI tool, no API key required
   openai: ["OPENAI_API_KEY"],
   anthropic: ["ANTHROPIC_API_KEY"],
   perplexity: ["PERPLEXITY_API_KEY"],
@@ -1392,6 +1395,7 @@ const PROVIDER_PARAM_ALIASES: Record<SupportedProvider, string[]> = {
     "apiKey",
   ],
   google: ["googleApiKey", "geminiApiKey", "apiKey"],
+  "gemini-cli": [], // Uses OAuth, no API key parameters
   openai: ["openaiApiKey", "apiKey"],
   anthropic: ["anthropicApiKey", "apiKey"],
   perplexity: ["perplexityApiKey", "apiKey"],
@@ -1477,6 +1481,8 @@ const formatProviderName = (provider: SupportedProvider): string => {
       return "xAI";
     case "gemini":
       return "Gemini";
+    case "gemini-cli":
+      return "Gemini CLI";
     default:
       return provider.charAt(0).toUpperCase() + provider.slice(1);
   }
@@ -1581,6 +1587,23 @@ async function retryWithApiKeyRotation<T>(
   apiKeys: string[],
   maxDurationMs: number = 4 * 60 * 1000, // 4 minutes total timeout
 ): Promise<T> {
+  const provider = config.llmDefaultProvider as SupportedProvider;
+  
+  // Gemini CLI provider doesn't use API keys, so skip rotation logic but still honor overrides
+  if (provider === "gemini-cli") {
+    try {
+      const model = createModelFn(apiKeys[0] ?? "");
+      return await requestFn(model);
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error("Gemini CLI API request failed", {
+        error: errorMessage,
+      });
+      throw error;
+    }
+  }
+  
+  // Original API key rotation logic for other providers
   const startTime = Date.now();
   let currentKeyIndex = 0;
   let lastError: Error | undefined;
@@ -1746,6 +1769,35 @@ async function retryWithBackoff<T>(
 
   // This should never be reached, but just in case
   throw lastError || new Error("Unknown error occurred");
+}
+
+/**
+ * Creates a model instance based on the configured provider
+ * Supports both GoogleGenerativeAI SDK and Gemini CLI provider
+ */
+function createModelByProvider(
+  modelId: string,
+  generationConfig?: {
+    maxOutputTokens?: number;
+    temperature?: number;
+    topK?: number;
+    topP?: number;
+  },
+  apiKey?: string,
+): any {
+  const provider = config.llmDefaultProvider as SupportedProvider;
+
+  if (provider === "gemini-cli") {
+    // Use Gemini CLI provider with OAuth
+    return createGeminiCliModel(modelId, {}, generationConfig);
+  } else {
+    // Use standard GoogleGenerativeAI SDK
+    const genAI = new GoogleGenerativeAI(apiKey || "");
+    return genAI.getGenerativeModel({
+      model: modelId,
+      generationConfig: generationConfig || {},
+    });
+  }
 }
 
 // Gemini 2.5 Pro Token Calculator
@@ -2964,10 +3016,13 @@ ${
         // Yeni güvenlik fonksiyonunu kullanarak yolu doğrula ve çözümle
         const normalizedPath = normalizeProjectPath(params.projectPath);
 
-        // Resolve API keys from multiple sources
-        const apiKeys = resolveProviderApiKeys("google", params);
+        // Resolve API keys from multiple sources (only for non-gemini-cli providers)
+        const defaultProvider = config.llmDefaultProvider as SupportedProvider;
+        const apiKeys = defaultProvider === "gemini-cli" 
+          ? [] 
+          : resolveProviderApiKeys(defaultProvider === "gemini" ? "gemini" : "google", params);
 
-        if (apiKeys.length === 0) {
+        if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
             "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
@@ -3029,16 +3084,16 @@ Make the expert persona highly specific to this project's stack, patterns, and d
 
         // Generate the custom expert mode using API key rotation
         const createModelFn = (apiKey: string) => {
-          const genAI = new GoogleGenerativeAI(apiKey);
-          return genAI.getGenerativeModel({
-            model: "gemini-2.5-pro",
-            generationConfig: {
+          return createModelByProvider(
+            config.llmDefaultModel,
+            {
               maxOutputTokens: 4096,
               temperature: 0.3, // Lower temperature for more consistent expert generation
               topK: 40,
               topP: 0.95,
             },
-          });
+            apiKey,
+          );
         };
 
         const expertResult = (await retryWithApiKeyRotation(
@@ -3132,10 +3187,13 @@ This custom expert is now ready to provide highly specialized analysis tailored 
         // Use fixed workspace path for Docker environment
         const normalizedPath = "/workspace";
 
-        // Resolve API keys from multiple sources
-        const apiKeys = resolveProviderApiKeys("google", params);
+        // Resolve API keys from multiple sources (only for non-gemini-cli providers)
+        const defaultProvider = config.llmDefaultProvider as SupportedProvider;
+        const apiKeys = defaultProvider === "gemini-cli" 
+          ? [] 
+          : resolveProviderApiKeys(defaultProvider === "gemini" ? "gemini" : "google", params);
 
-        if (apiKeys.length === 0) {
+        if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
             "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
@@ -3185,16 +3243,16 @@ ${params.question}`;
 
         // Send to Gemini AI with API key rotation for rate limits
         const createModelFn = (apiKey: string) => {
-          const genAI = new GoogleGenerativeAI(apiKey);
-          return genAI.getGenerativeModel({
-            model: "gemini-2.5-pro",
-            generationConfig: {
+          return createModelByProvider(
+            config.llmDefaultModel,
+            {
               maxOutputTokens: 65536,
               temperature: 0.5,
               topK: 40,
               topP: 0.95,
             },
-          });
+            apiKey,
+          );
         };
 
         const result = (await retryWithApiKeyRotation(
@@ -3286,10 +3344,13 @@ ${analysis}
         // Yeni güvenlik fonksiyonunu kullanarak yolu doğrula ve çözümle
         const normalizedPath = normalizeProjectPath(projectPath);
 
-        // Resolve API keys from multiple sources
-        const apiKeys = resolveProviderApiKeys("google", params);
+        // Resolve API keys from multiple sources (only for non-gemini-cli providers)
+        const defaultProvider = config.llmDefaultProvider as SupportedProvider;
+        const apiKeys = defaultProvider === "gemini-cli" 
+          ? [] 
+          : resolveProviderApiKeys(defaultProvider === "gemini" ? "gemini" : "google", params);
 
-        if (apiKeys.length === 0) {
+        if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
             "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
@@ -3341,16 +3402,16 @@ ${params.question}`;
 
         // Send to Gemini AI with API key rotation for rate limits
         const createModelFn = (apiKey: string) => {
-          const genAI = new GoogleGenerativeAI(apiKey);
-          return genAI.getGenerativeModel({
-            model: "gemini-2.5-pro",
-            generationConfig: {
+          return createModelByProvider(
+            config.llmDefaultModel,
+            {
               maxOutputTokens: 65536,
               temperature: 0.5,
               topK: 40,
               topP: 0.95,
             },
-          });
+            apiKey,
+          );
         };
 
         const result = (await retryWithApiKeyRotation(
@@ -3461,10 +3522,13 @@ ${troubleshootingTips.join("\n")}
         // Yeni güvenlik fonksiyonunu kullanarak yolu doğrula ve çözümle
         const normalizedPath = normalizeProjectPath(params.projectPath);
 
-        // Resolve API keys from multiple sources
-        const apiKeys = resolveProviderApiKeys("google", params);
+        // Resolve API keys from multiple sources (only for non-gemini-cli providers)
+        const defaultProvider = config.llmDefaultProvider as SupportedProvider;
+        const apiKeys = defaultProvider === "gemini-cli" 
+          ? [] 
+          : resolveProviderApiKeys(defaultProvider === "gemini" ? "gemini" : "google", params);
 
-        if (apiKeys.length === 0) {
+        if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
             "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
@@ -3558,16 +3622,16 @@ RESPONSE FORMAT:
 
         // Send to Gemini AI with API key rotation for rate limits
         const createModelFn = (apiKey: string) => {
-          const genAI = new GoogleGenerativeAI(apiKey);
-          return genAI.getGenerativeModel({
-            model: "gemini-2.5-pro",
-            generationConfig: {
+          return createModelByProvider(
+            config.llmDefaultModel,
+            {
               maxOutputTokens: 65536,
               temperature: 0.5,
               topK: 40,
               topP: 0.95,
             },
-          });
+            apiKey,
+          );
         };
 
         const result = (await retryWithApiKeyRotation(
@@ -4014,10 +4078,13 @@ ${logContent}
         // Yeni güvenlik fonksiyonunu kullanarak yolu doğrula ve çözümle
         const normalizedPath = normalizeProjectPath(projectPath);
 
-        // Resolve API keys from multiple sources
-        const apiKeys = resolveProviderApiKeys("google", params);
+        // Resolve API keys from multiple sources (only for non-gemini-cli providers)
+        const defaultProvider = config.llmDefaultProvider as SupportedProvider;
+        const apiKeys = defaultProvider === "gemini-cli" 
+          ? [] 
+          : resolveProviderApiKeys(defaultProvider === "gemini" ? "gemini" : "google", params);
 
-        if (apiKeys.length === 0) {
+        if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
             "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
@@ -4219,10 +4286,13 @@ ${groupsData}
         // Use fixed workspace path for Docker environment
         const normalizedPath = "/workspace";
 
-        // Resolve API keys from multiple sources
-        const apiKeys = resolveProviderApiKeys("google", params);
+        // Resolve API keys from multiple sources (only for non-gemini-cli providers)
+        const defaultProvider = config.llmDefaultProvider as SupportedProvider;
+        const apiKeys = defaultProvider === "gemini-cli" 
+          ? [] 
+          : resolveProviderApiKeys(defaultProvider === "gemini" ? "gemini" : "google", params);
 
-        if (apiKeys.length === 0) {
+        if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
             "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
@@ -4332,9 +4402,11 @@ Please analyze this subset of the project in the context of the user's question.
 
             const groupResult = await retryWithApiKeyRotation(
               (apiKey: string) =>
-                new GoogleGenerativeAI(apiKey).getGenerativeModel({
-                  model: "gemini-2.5-pro",
-                }),
+                createModelByProvider(
+                  config.llmDefaultModel,
+                  undefined,
+                  apiKey,
+                ),
               async (model) => model.generateContent(groupPrompt),
               apiKeys,
             );
@@ -4808,9 +4880,11 @@ Respond with JSON only, no additional text.`;
 
     const groupingResult = await retryWithApiKeyRotation(
       (apiKey: string) =>
-        new GoogleGenerativeAI(apiKey).getGenerativeModel({
-          model: "gemini-2.0-flash-exp",
-        }),
+        createModelByProvider(
+          "gemini-2.0-flash-exp",
+          undefined,
+          apiKey,
+        ),
       async (model) => model.generateContent(groupingPrompt),
       apiKeys,
     );

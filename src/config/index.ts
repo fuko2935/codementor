@@ -131,10 +131,27 @@ const EnvSchema = z.object({
   OPENROUTER_API_KEY: z.string().optional(),
   /** Optional. API key for Google Gemini services. */
   GEMINI_API_KEY: z.string().optional(),
-  /** Default LLM model. Default: "google/gemini-2.5-flash-preview-05-20". */
+  /** Default LLM provider. Default: "gemini-cli". */
+  LLM_DEFAULT_PROVIDER: z
+    .enum([
+      "gemini",
+      "google",
+      "gemini-cli",
+      "openai",
+      "anthropic",
+      "perplexity",
+      "mistral",
+      "groq",
+      "openrouter",
+      "xai",
+      "azureOpenAI",
+      "ollama",
+    ])
+    .default("gemini-cli"),
+  /** Default LLM model. Default: "gemini-2.5-pro". */
   LLM_DEFAULT_MODEL: z
     .string()
-    .default("google/gemini-2.5-flash-preview-05-20"),
+    .default("gemini-2.5-pro"),
   /** Optional. Default LLM temperature (0.0-2.0). */
   LLM_DEFAULT_TEMPERATURE: z.coerce.number().min(0).max(2).optional(),
   /** Optional. Default LLM top_p (0.0-1.0). */
@@ -189,6 +206,7 @@ const env = parsedEnv.success ? parsedEnv.data : EnvSchema.parse({});
 const providerApiKeys = {
   google: env.GOOGLE_API_KEY || env.GEMINI_API_KEY,
   gemini: env.GEMINI_API_KEY,
+  "gemini-cli": undefined, // Uses OAuth, no API key
   openai: env.OPENAI_API_KEY,
   anthropic: env.ANTHROPIC_API_KEY,
   perplexity: env.PERPLEXITY_API_KEY,
@@ -389,6 +407,8 @@ export const config = {
   ollamaApiKey: providerApiKeys.ollama,
   /** Ollama host override. From `OLLAMA_HOST`. */
   ollamaHost: providerOptions.ollama.host,
+  /** Default LLM provider. From `LLM_DEFAULT_PROVIDER`. */
+  llmDefaultProvider: env.LLM_DEFAULT_PROVIDER,
   /** Default LLM model. From `LLM_DEFAULT_MODEL`. */
   llmDefaultModel: env.LLM_DEFAULT_MODEL,
   /** Default LLM temperature. From `LLM_DEFAULT_TEMPERATURE`. */

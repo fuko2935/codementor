@@ -9,7 +9,9 @@
   "files": [
     "dist",
     "README.md",
-    "claude_desktop_config.example.json"
+    "CURSOR_SETUP.md",
+    "claude_desktop_config.example.json",
+    "cursor_mcp_config.json"
   ],
   "exports": "./dist/index.js",
   "types": "dist/index.d.ts",
@@ -49,6 +51,8 @@
     "@google/generative-ai": "^0.24.1",
     "@hono/node-server": "^1.15.0",
     "@modelcontextprotocol/sdk": "^1.15.0",
+    "ai": "^5.0.51",
+    "ai-sdk-provider-gemini-cli": "^1.1.1",
     "@types/node": "^24.0.10",
     "@types/sanitize-html": "^2.16.0",
     "@types/validator": "13.15.2",
@@ -93,7 +97,12 @@
     "openrouter",
     "zod",
     "local",
-    "cli"
+    "cli",
+    "gemini",
+    "gemini-cli",
+    "cursor",
+    "cursor-ai",
+    "ai-assistant"
   ],
   "author": "cyanheads <casey@caseyjhand.com> (https://github.com/cyanheads/mcp-ts-template#readme)",
   "license": "Apache-2.0",

@@ -8,8 +8,19 @@ Gemini MCP Local is a lightweight Model Context Protocol (MCP) server that you c
 
 ### Run instantly with `npx`
 
+**With Gemini CLI Provider (Default - OAuth):**
 ```bash
-GOOGLE_API_KEY="your-google-or-gemini-key" npx gemini-mcp-local
+# Make sure gemini CLI is installed and authenticated
+npm install -g @google/gemini-cli
+gemini  # Then select "Login with Google"
+
+# Run the server
+npx gemini-mcp-local
+```
+
+**With API Key:**
+```bash
+GOOGLE_API_KEY="your-google-or-gemini-key" LLM_DEFAULT_PROVIDER=gemini npx gemini-mcp-local
 ```
 
 The CLI starts on STDIO transport by default so it is immediately ready for Claude Desktop and other local MCP clients.
@@ -32,6 +43,17 @@ Use `npm run start:local` during development if you want live TypeScript executi
 
 All behaviour is driven by environment variables. Only the provider keys you need should be set.
 
+### Default Provider
+
+By default, the server uses the **Gemini CLI provider** (`gemini-cli`) with OAuth authentication via the `gemini` CLI tool. This allows you to use your existing Gemini Code Assist subscription without managing API keys.
+
+To use the Gemini CLI provider:
+1. Install the Gemini CLI globally: `npm install -g @google/gemini-cli`
+2. Authenticate: `gemini` (then select "Login with Google" for OAuth)
+3. The server will automatically use your OAuth credentials
+
+To switch back to API key-based authentication, set `LLM_DEFAULT_PROVIDER=gemini` or `LLM_DEFAULT_PROVIDER=google`.
+
 ### Core server settings
 
 | Variable | Description | Default |
@@ -41,9 +63,18 @@ All behaviour is driven by environment variables. Only the provider keys you nee
 | `MCP_HTTP_HOST` | Host interface for HTTP transport. | `127.0.0.1` |
 | `MCP_LOG_LEVEL` | Logging level (`debug`, `info`, `warning`, ...). | `debug` |
 | `LOGS_DIR` | Directory where `activity.log` and `error.log` are written. | `./logs` |
+| `LLM_DEFAULT_PROVIDER` | Default LLM provider (`gemini-cli`, `gemini`, `google`, etc.). | `gemini-cli` |
+| `LLM_DEFAULT_MODEL` | Default LLM model. | `gemini-2.5-pro` |
 
 ### Provider API keys (all optional)
 
+**Gemini CLI Provider (Default):**
+- Uses OAuth authentication via `gemini` CLI tool
+- No API keys required
+- Requires `@google/gemini-cli` installed globally
+- Supports `gemini-2.5-pro` and `gemini-2.5-flash` models
+
+**Standard API Key Providers:**
 Set whichever providers you plan to call; the shared resolver looks at request parameters first and then these environment variables.
 
 - `GOOGLE_API_KEY` / `GEMINI_API_KEY`
@@ -57,7 +88,7 @@ Set whichever providers you plan to call; the shared resolver looks at request p
 - `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`
 - `OLLAMA_API_KEY`, `OLLAMA_HOST`
 
-> Gemini tooling still honours `geminiApiKey` request parameters and the `GEMINI_API_KEY` environment variable for backwards compatibility.
+> Gemini tooling still honours `geminiApiKey` request parameters and the `GEMINI_API_KEY` environment variable for backwards compatibility when using `gemini` or `google` providers.
 
 ---
 
@@ -114,6 +145,22 @@ Legacy agent, Supabase, DuckDB, and deployment artefacts have been removed. If y
 
 ---
 
+## Connecting from Cursor
+
+Cursor'da MCP kullanmak için detaylı kurulum talimatları için [`CURSOR_SETUP.md`](./CURSOR_SETUP.md) dosyasına bakın.
+
+**Hızlı Kurulum:**
+
+1. Gemini CLI'yi yükleyin ve authenticate olun:
+```bash
+npm install -g @google/gemini-cli
+gemini  # "Login with Google" seçeneğini seçin
+```
+
+2. Cursor MCP config dosyasını oluşturun ve `cursor_mcp_config.json` içeriğini ekleyin.
+
+3. Cursor'u yeniden başlatın.
+
 ## Connecting from Claude Desktop
 
 Use the sample in [`claude_desktop_config.example.json`](./claude_desktop_config.example.json) or copy the block below and replace the values you need:
@@ -125,6 +172,22 @@ Use the sample in [`claude_desktop_config.example.json`](./claude_desktop_config
       "command": "npx",
       "args": ["-y", "gemini-mcp-local"],
       "env": {
+        "LLM_DEFAULT_PROVIDER": "gemini-cli"
+      }
+    }
+  }
+}
+```
+
+Or with API key authentication:
+```json
+{
+  "mcpServers": {
+    "gemini-mcp-local": {
+      "command": "npx",
+      "args": ["-y", "gemini-mcp-local"],
+      "env": {
+        "LLM_DEFAULT_PROVIDER": "gemini",
         "GOOGLE_API_KEY": "set-if-using-google-gemini"
       }
     }

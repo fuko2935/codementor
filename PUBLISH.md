@@ -28,8 +28,13 @@ npm publish
 
 ## After Publishing
 
-Users can now use your MCP server with:
+### Cursor Kullanıcıları İçin
 
+Kullanıcılar artık Cursor'da MCP server'ınızı şu şekilde kullanabilir:
+
+**Cursor MCP Config:** `cursor_mcp_config.json` dosyasını kullanarak Cursor'a ekleyin. Detaylar için `CURSOR_SETUP.md` dosyasına bakın.
+
+**Gemini CLI Provider ile (Önerilen):**
 ```json
 {
   "mcpServers": {
@@ -37,6 +42,22 @@ Users can now use your MCP server with:
       "command": "npx",
       "args": ["-y", "gemini-mcp-local"],
       "env": {
+        "LLM_DEFAULT_PROVIDER": "gemini-cli"
+      }
+    }
+  }
+}
+```
+
+**API Key ile:**
+```json
+{
+  "mcpServers": {
+    "gemini-mcp-local": {
+      "command": "npx",
+      "args": ["-y", "gemini-mcp-local"],
+      "env": {
+        "LLM_DEFAULT_PROVIDER": "gemini",
         "GOOGLE_API_KEY": "their-api-key"
       }
     }
