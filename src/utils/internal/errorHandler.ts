@@ -89,7 +89,7 @@ export interface ErrorHandlerOptions {
 
 /**
  * Defines a basic rule for mapping errors based on patterns.
- * Used internally by `COMMON_ERROR_PATTERNS` and as a base for `ErrorMapping`.
+ * Used internally by `COMMON_ERROR_PATTERNS`.
  */
 export interface BaseErrorMapping {
   /**
@@ -109,29 +109,6 @@ export interface BaseErrorMapping {
    * which focuses on `errorCode`. It's more relevant for custom mapping logic.)
    */
   messageTemplate?: string;
-}
-
-/**
- * Extends `BaseErrorMapping` to include a factory function for creating
- * specific error instances and additional context for the mapping.
- * Used by `ErrorHandler.mapError`.
- * @template T The type of `Error` this mapping will produce, defaults to `Error`.
- */
-export interface ErrorMapping<T extends Error = Error>
-  extends BaseErrorMapping {
-  /**
-   * A factory function that creates and returns an instance of the mapped error type `T`.
-   * @param error - The original error that occurred.
-   * @param context - Optional additional context provided in the mapping rule.
-   * @returns The newly created error instance.
-   */
-  factory: (error: unknown, context?: Record<string, unknown>) => T;
-
-  /**
-   * Additional static context to be merged or passed to the `factory` function
-   * when this mapping rule is applied.
-   */
-  additionalContext?: Record<string, unknown>;
 }
 
 /**
@@ -425,36 +402,6 @@ export class ErrorHandler {
       throw finalError;
     }
     return finalError;
-  }
-
-  /**
-   * Maps an error to a specific error type `T` based on `ErrorMapping` rules.
-   * Returns original/default error if no mapping matches.
-   * @template T The target error type, extending `Error`.
-   * @param error - The error instance or value to map.
-   * @param mappings - An array of mapping rules to apply.
-   * @param defaultFactory - Optional factory for a default error if no mapping matches.
-   * @returns The mapped error of type `T`, or the original/defaulted error.
-   */
-  public static mapError<T extends Error>(
-    error: unknown,
-    mappings: ReadonlyArray<ErrorMapping<T>>,
-    defaultFactory?: (error: unknown, context?: Record<string, unknown>) => T,
-  ): T | Error {
-    const errorMessage = getErrorMessage(error);
-    const errorName = getErrorName(error);
-
-    for (const mapping of mappings) {
-      const regex = createSafeRegex(mapping.pattern);
-      if (regex.test(errorMessage) || regex.test(errorName)) {
-        return mapping.factory(error, mapping.additionalContext);
-      }
-    }
-
-    if (defaultFactory) {
-      return defaultFactory(error);
-    }
-    return error instanceof Error ? error : new Error(String(error));
   }
 
   /**

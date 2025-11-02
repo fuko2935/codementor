@@ -5,7 +5,6 @@
  * @module src/validation/startupValidation
  */
 
-import { config } from "../config/index.js";
 import { logger } from "../utils/internal/logger.js";
 import { requestContextService } from "../utils/index.js";
 

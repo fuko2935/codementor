@@ -1532,8 +1532,8 @@ export const requireProviderApiKey = (
   return primaryKey;
 };
 
-// Retry utility for handling Gemini API rate limits
-async function retryWithApiKeyRotation<T>(
+// Retry utility for handling Gemini API rate limits with backoff
+async function retryWithBackoff<T>(
   createModelFn: (apiKey: string) => any,
   requestFn: (model: any) => Promise<T>,
   apiKeys: string[],
@@ -1653,57 +1653,6 @@ async function retryWithApiKeyRotation<T>(
   throw new Error(
     `Gemini API requests failed after 4 minutes with ${attemptCount} attempts. Last error: ${lastError?.message || "Unknown error"}`,
   );
-}
-
-// Backward compatibility wrapper for single API key
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 24, // 24 attempts = 2 minutes (5 seconds * 24 = 120 seconds)
-  delayMs: number = 5000, // 5 seconds between retries
-): Promise<T> {
-  let lastError: Error | undefined;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      lastError = error;
-
-      // Check if it's a rate limit error
-      const isRateLimit =
-        error.message &&
-        (error.message.includes("429") ||
-          error.message.includes("Too Many Requests") ||
-          error.message.includes("quota") ||
-          error.message.includes("rate limit") ||
-          error.message.includes("exceeded your current quota"));
-
-      if (isRateLimit && attempt < maxRetries) {
-        const remainingTime = Math.ceil(
-          ((maxRetries - attempt) * delayMs) / 1000,
-        );
-        // Use stderr to avoid interfering with STDIO transport JSON-RPC on stdout
-        process.stderr.write(
-          `🔄 Gemini API rate limit hit (attempt ${attempt}/${maxRetries}). Retrying in ${delayMs / 1000}s... (${remainingTime}s remaining)\n`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-        continue;
-      }
-
-      // If not a rate limit error, or we've exhausted retries, throw enhanced error
-      if (isRateLimit) {
-        throw new Error(
-          `Gemini API rate limit exceeded after ${maxRetries} attempts over 2 minutes. Please try again later or consider upgrading your API plan. Original error: ${error.message}`,
-        );
-      }
-
-      // For other errors, throw immediately
-      throw error;
-    }
-  }
-
-  // This should never be reached, but just in case
-  throw lastError || new Error("Unknown error occurred");
 }
 
 /**
@@ -2360,7 +2309,7 @@ Make the expert persona highly specific to this project's stack, patterns, and d
           );
         };
 
-        const expertResult = (await retryWithApiKeyRotation(
+        const expertResult = (await retryWithBackoff(
           createModelFn,
           (model) => model.generateContent(expertGenerationPrompt),
           apiKeys,
@@ -2519,7 +2468,7 @@ ${params.question}`;
           );
         };
 
-        const result = (await retryWithApiKeyRotation(
+        const result = (await retryWithBackoff(
           createModelFn,
           (model) => model.generateContent(megaPrompt),
           apiKeys,
@@ -2678,7 +2627,7 @@ ${params.question}`;
           );
         };
 
-        const result = (await retryWithApiKeyRotation(
+        const result = (await retryWithBackoff(
           createModelFn,
           (model) => model.generateContent(megaPrompt),
           apiKeys,
@@ -2898,7 +2847,7 @@ RESPONSE FORMAT:
           );
         };
 
-        const result = (await retryWithApiKeyRotation(
+        const result = (await retryWithBackoff(
           createModelFn,
           (model) => model.generateContent(searchPrompt),
           apiKeys,
@@ -3624,7 +3573,7 @@ ${params.question}
 
 Please analyze this subset of the project in the context of the user's question. ${group.name ? `Focus on the "${group.name}" aspect as this group was specifically created for that purpose.` : `Remember this is part ${index + 1} of ${groups.length} total parts.`}`;
 
-            const groupResult = await retryWithApiKeyRotation(
+            const groupResult = await retryWithBackoff(
               (apiKey: string) =>
                 createModelByProvider(
                   config.llmDefaultModel,
@@ -4079,7 +4028,7 @@ For each group, you MUST create a specialized "customPrompt" that:
 
 Respond with JSON only, no additional text.`;
 
-    const groupingResult = await retryWithApiKeyRotation(
+    const groupingResult = await retryWithBackoff(
       (apiKey: string) =>
         createModelByProvider(
           "gemini-2.0-flash-exp",

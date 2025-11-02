@@ -308,21 +308,4 @@ export class McpClientManager {
     return allTools;
   }
 
-  /**
-   * Finds the server name for a given tool from the cached tool map.
-   * This is a synchronous method and relies on `getAllTools` having been called first.
-   * @param toolName - The name of the tool to find.
-   * @param allTools - The map of all available tools.
-   * @returns The server name, or null if the tool is not found.
-   */
-  public getServerForTool(
-    toolName: string,
-    allTools: Map<string, unknown>,
-  ): string | null {
-    const tool = allTools.get(toolName);
-    if (tool && typeof tool === "object" && "server" in tool) {
-      return (tool as { server: string }).server;
-    }
-    return null;
-  }
 }

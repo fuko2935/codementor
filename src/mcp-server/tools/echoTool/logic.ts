@@ -11,7 +11,7 @@ import { logger, type RequestContext } from "../../../utils/index.js";
 /**
  * Defines the valid formatting modes for the echo tool operation.
  */
-export const ECHO_MODES = ["standard", "uppercase", "lowercase"] as const;
+const ECHO_MODES = ["standard", "uppercase", "lowercase"] as const;
 
 /**
  * Zod schema defining the input parameters for the `echo_message` tool.
