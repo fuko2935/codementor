@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - 2025-01-01
+
+### Fixed
+
+- **STDIO Transport Logging**: Fixed issue where Winston console logger with ANSI color codes was writing to stdout, breaking JSON-RPC protocol. Console transport is now only enabled when stdout is a TTY (interactive terminal), not when using STDIO transport. This prevents "Unexpected token" JSON parse errors in MCP clients.
+
+## [2.0.1] - 2025-01-01
+
+### Fixed
+
+- **Path Resolution in Analyze Tools**: Fixed hardcoded `/workspace` path in `gemini_dynamic_expert_analyze` and `project_orchestrator_analyze` tools. Both tools now properly use `normalizeProjectPath(params.projectPath)` to support Windows, macOS, and Linux paths. Added `projectPath` parameter to both analyze schemas.
+
 ## [2.0.0] - 2025-07-19
 
 ### Changed

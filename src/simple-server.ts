@@ -53,6 +53,10 @@ const initializeLogsDirectory = async () => {
 
 await initializeLogsDirectory();
 
+// Detect if we're using STDIO transport (stdout is not a TTY)
+// In STDIO mode, stdout is used for JSON-RPC, so we must not log to console
+const isStdioTransport = !process.stdout.isTTY;
+
 const logger = winston.createLogger({
   level: "debug",
   format: winston.format.combine(
@@ -70,7 +74,9 @@ const logger = winston.createLogger({
   ],
 });
 
-if (process.env.NODE_ENV !== "production") {
+// Only add console transport if we're NOT using STDIO transport
+// STDIO transport uses stdout for JSON-RPC, so any console output breaks the protocol
+if (process.env.NODE_ENV !== "production" && !isStdioTransport) {
   logger.add(
     new winston.transports.Console({
       format: winston.format.combine(
@@ -2078,6 +2084,12 @@ const DynamicExpertCreateSchema = z.object({
 
 // Dynamic Expert Mode Step 2: Analyze with Custom Expert Schema
 const DynamicExpertAnalyzeSchema = z.object({
+  projectPath: z
+    .string()
+    .min(1)
+    .describe(
+      "📂 PROJECT PATH: The absolute or relative path to the project directory to analyze. Provide the full path to your project (e.g., 'C:/Users/YourName/MyProject' on Windows or '/Users/YourName/MyProject' on macOS/Linux). Use '.' only if you configured 'cwd' in Claude Desktop config to point to your project directory.",
+    ),
   temporaryIgnore: z
     .array(z.string())
     .optional()
@@ -2222,6 +2234,12 @@ const ProjectOrchestratorCreateSchema = z.object({
 
 // Project Orchestrator Step 2: Analyze with Groups Schema
 const ProjectOrchestratorAnalyzeSchema = z.object({
+  projectPath: z
+    .string()
+    .min(1)
+    .describe(
+      "📂 PROJECT PATH: The absolute or relative path to the project directory to analyze. Provide the full path to your project (e.g., 'C:/Users/YourName/MyProject' on Windows or '/Users/YourName/MyProject' on macOS/Linux). Use '.' only if you configured 'cwd' in Claude Desktop config to point to your project directory.",
+    ),
   temporaryIgnore: z
     .array(z.string())
     .optional()
@@ -3112,7 +3130,7 @@ Make the expert persona highly specific to this project's stack, patterns, and d
               type: "text",
               text: `# Dynamic Expert Created Successfully! 
 
-## Project: /workspace
+## Project: ${normalizedPath}
 *Normalized Path:* ${normalizedPath}
 
 **Expert Generated For:** ${params.expertiseHint || "Auto-detected expertise"}  
@@ -3133,7 +3151,7 @@ ${customExpertPrompt}
 
 1. **Copy the expert prompt above** (the entire content between the backticks)
 2. **Use the 'gemini_dynamic_expert_analyze' tool** with:
-   - Same project path: \`/workspace\`
+   - Same project path: \`${normalizedPath}\`
    - Your specific question
    - The expert prompt you just copied
    - Same temporary ignore patterns (if any)
@@ -3184,8 +3202,8 @@ This custom expert is now ready to provide highly specialized analysis tailored 
           request.params.arguments,
         );
 
-        // Use fixed workspace path for Docker environment
-        const normalizedPath = "/workspace";
+        // Normalize and validate project path
+        const normalizedPath = normalizeProjectPath(params.projectPath);
 
         // Resolve API keys from multiple sources (only for non-gemini-cli providers)
         const defaultProvider = config.llmDefaultProvider as SupportedProvider;
@@ -3271,7 +3289,7 @@ ${params.question}`;
               type: "text",
               text: `# Dynamic Expert Analysis Results
 
-## Project: /workspace
+## Project: ${normalizedPath}
 *Normalized Path:* ${normalizedPath}
 
 **Question:** ${params.question}
@@ -3430,7 +3448,7 @@ ${params.question}`;
               type: "text",
               text: `# Gemini Codebase Analysis Results
 
-## Project: /workspace
+## Project: ${normalizedPath}
 *Normalized Path:* ${normalizedPath}
 
 **Question:** ${params.question}
@@ -4192,7 +4210,7 @@ ${logContent}
               type: "text",
               text: `# Project Orchestrator Groups Created Successfully!
 
-## Project: /workspace
+## Project: ${normalizedPath}
 *Normalized Path:* ${normalizedPath}
 
 **Total Files:** ${fileTokenInfos.length}  
@@ -4227,7 +4245,7 @@ ${group.files.map((f) => `  - ${f.filePath} (${f.tokens} tokens)`).join("\n")}
 
 1. **Copy the groups data below** (the entire JSON between the backticks)
 2. **Use the 'project_orchestrator_analyze' tool** with:
-   - Same project path: \`/workspace\`
+   - Same project path: \`${normalizedPath}\`
    - Your specific question
    - Same analysis mode: \`${params.analysisMode}\`
    - The groups data you just copied
@@ -4283,8 +4301,8 @@ ${groupsData}
           request.params.arguments,
         );
 
-        // Use fixed workspace path for Docker environment
-        const normalizedPath = "/workspace";
+        // Normalize and validate project path
+        const normalizedPath = normalizeProjectPath(params.projectPath);
 
         // Resolve API keys from multiple sources (only for non-gemini-cli providers)
         const defaultProvider = config.llmDefaultProvider as SupportedProvider;
@@ -4450,7 +4468,7 @@ Please analyze this subset of the project in the context of the user's question.
               type: "text",
               text: `# Project Orchestrator Analysis Results
 
-## Project: /workspace
+## Project: ${normalizedPath}
 *Normalized Path:* ${normalizedPath}
 
 **Question:** ${params.question}
