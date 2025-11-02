@@ -4,7 +4,7 @@
       "command": "npx",
       "args": ["-y", "gemini-mcp-local"],
       "env": {
-        "LLM_DEFAULT_PROVIDER": "gemini-cli"
+        "GEMINI_API_KEY": "your-gemini-api-key-here"
       }
     }
   }

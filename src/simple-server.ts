@@ -1394,12 +1394,7 @@ const PROVIDER_ENV_VAR_CANDIDATES: Record<SupportedProvider, string[]> = {
 };
 
 const PROVIDER_PARAM_ALIASES: Record<SupportedProvider, string[]> = {
-  gemini: [
-    "geminiApiKeys",
-    "geminiApiKeysArray",
-    "geminiApiKey",
-    "apiKey",
-  ],
+  gemini: ["geminiApiKey", "apiKey"],
   google: ["googleApiKey", "geminiApiKey", "apiKey"],
   "gemini-cli": [], // Uses OAuth, no API key parameters
   openai: ["openaiApiKey", "apiKey"],
@@ -1413,56 +1408,14 @@ const PROVIDER_PARAM_ALIASES: Record<SupportedProvider, string[]> = {
   ollama: ["ollamaApiKey", "apiKey"],
 };
 
-const splitCommaSeparated = (value: string): string[] =>
-  value
-    .split(",")
-    .map((key) => key.trim())
-    .filter((key) => key.length > 0);
-
-const toStringArray = (value: unknown): string[] => {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
-      .filter((item) => item.length > 0);
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    return splitCommaSeparated(value);
-  }
-  return [];
-};
-
 const resolveGeminiKeysFromParams = (
   params: Record<string, unknown>,
 ): string[] => {
-  if (params.geminiApiKeys) {
-    const keys = toStringArray(params.geminiApiKeys);
-    if (keys.length > 0) {
-      return keys;
-    }
-  }
-
-  if (params.geminiApiKeysArray) {
-    const keys = toStringArray(params.geminiApiKeysArray);
-    if (keys.length > 0) {
-      return keys;
-    }
-  }
-
   const directKey = params.geminiApiKey;
   if (typeof directKey === "string" && directKey.trim().length > 0) {
-    return splitCommaSeparated(directKey);
+    return [directKey.trim()];
   }
-
-  const numberedKeys: string[] = [];
-  for (let index = 2; index <= 100; index++) {
-    const keyName = `geminiApiKey${index}`;
-    const keyValue = params[keyName];
-    if (typeof keyValue === "string" && keyValue.trim().length > 0) {
-      numberedKeys.push(keyValue.trim());
-    }
-  }
-
-  return numberedKeys;
+  return [];
 };
 
 class ProviderApiKeyError extends Error {
@@ -1525,7 +1478,7 @@ export const resolveProviderApiKeys = (
 
     for (const candidate of configuredCandidates) {
       if (candidate) {
-        return splitCommaSeparated(candidate);
+        return [candidate];
       }
     }
   } else {
@@ -1535,17 +1488,11 @@ export const resolveProviderApiKeys = (
       if (typeof candidate === "string" && candidate.trim().length > 0) {
         return [candidate.trim()];
       }
-      if (Array.isArray(candidate)) {
-        const values = toStringArray(candidate);
-        if (values.length > 0) {
-          return values;
-        }
-      }
     }
 
     const configuredValue = getConfiguredProviderValue(provider);
     if (configuredValue) {
-      return splitCommaSeparated(configuredValue);
+      return [configuredValue];
     }
   }
 
@@ -1553,7 +1500,7 @@ export const resolveProviderApiKeys = (
   for (const envVar of fallbacks) {
     const envValue = process.env[envVar];
     if (typeof envValue === "string" && envValue.trim().length > 0) {
-      return splitCommaSeparated(envValue);
+      return [envValue.trim()];
     }
   }
 
@@ -1586,7 +1533,6 @@ export const requireProviderApiKey = (
 };
 
 // Retry utility for handling Gemini API rate limits
-// API Key Rotation System with Infinite Retry for 4 Minutes
 async function retryWithApiKeyRotation<T>(
   createModelFn: (apiKey: string) => any,
   requestFn: (model: any) => Promise<T>,
@@ -1595,10 +1541,10 @@ async function retryWithApiKeyRotation<T>(
 ): Promise<T> {
   const provider = config.llmDefaultProvider as SupportedProvider;
   
-  // Gemini CLI provider doesn't use API keys, so skip rotation logic but still honor overrides
+  // Gemini CLI provider doesn't use API keys
   if (provider === "gemini-cli") {
     try {
-      const model = createModelFn(apiKeys[0] ?? "");
+      const model = createModelFn("");
       return await requestFn(model);
     } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1609,43 +1555,39 @@ async function retryWithApiKeyRotation<T>(
     }
   }
   
-  // Original API key rotation logic for other providers
+  // Single API key retry logic
   const startTime = Date.now();
-  let currentKeyIndex = 0;
   let lastError: Error | undefined;
   let attemptCount = 0;
+  const apiKey = apiKeys[0] || "";
 
-  logger.info("Starting API request with key rotation.", {
-    totalKeys: apiKeys.length,
+  if (!apiKey) {
+    throw new Error("API key is required");
+  }
+
+  logger.info("Starting API request with retry logic.", {
     maxDurationMs: maxDurationMs,
   });
 
   while (Date.now() - startTime < maxDurationMs) {
     attemptCount++;
-    const currentApiKey = apiKeys[currentKeyIndex];
 
     logger.debug("Attempting API request", {
       attempt: attemptCount,
-      keyIndex: currentKeyIndex + 1,
-      totalKeys: apiKeys.length,
       remainingTimeMs: maxDurationMs - (Date.now() - startTime),
     });
 
     try {
-      const model = createModelFn(currentApiKey);
+      const model = createModelFn(apiKey);
       const result = await requestFn(model);
 
       if (attemptCount > 1) {
         logger.info(`API request successful after ${attemptCount} attempts.`, {
-          succeededWithKeyIndex: currentKeyIndex + 1,
           totalAttempts: attemptCount,
-          totalKeys: apiKeys.length,
           durationMs: Date.now() - startTime,
         });
       } else {
-        logger.debug("API request successful on first attempt", {
-          keyIndex: currentKeyIndex + 1,
-        });
+        logger.debug("API request successful on first attempt");
       }
 
       return result;
@@ -1654,75 +1596,62 @@ async function retryWithApiKeyRotation<T>(
 
       logger.warn("API request failed", {
         attempt: attemptCount,
-        keyIndex: currentKeyIndex + 1,
         error: error.message,
         errorCode: error.code || "unknown",
       });
 
       // Check if it's a rate limit, quota, overload or invalid key error
-      const isRotatableError =
+      const isRetryableError =
         error.message &&
         (error.message.includes("429") ||
           error.message.includes("Too Many Requests") ||
           error.message.includes("quota") ||
           error.message.includes("rate limit") ||
           error.message.includes("exceeded your current quota") ||
-          error.message.includes("API key not valid") ||
           error.message.includes("503") ||
           error.message.includes("Service Unavailable") ||
           error.message.includes("overloaded") ||
           error.message.includes("Please try again later"));
 
-      if (isRotatableError) {
-        // Rotate to next API key
-        const previousKeyIndex = currentKeyIndex + 1;
-        currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+      if (isRetryableError) {
         const remainingTime = Math.ceil(
           (maxDurationMs - (Date.now() - startTime)) / 1000,
         );
-        const errorType = error.message.includes("API key not valid")
-          ? "Invalid API key"
-          : error.message.includes("503") ||
+
+        logger.warn(`Retrying API request`, {
+          attempt: attemptCount,
+          remainingTimeSeconds: remainingTime,
+          errorType: error.message.includes("503") ||
               error.message.includes("overloaded")
             ? "Service overloaded"
-            : "Rate limit hit";
-
-        logger.warn(`API Key Rotation Triggered: ${errorType}`, {
-          attempt: attemptCount,
-          failedKeyIndex: previousKeyIndex,
-          nextKeyIndex: currentKeyIndex + 1,
-          totalKeys: apiKeys.length,
-          remainingTimeSeconds: remainingTime,
-          errorType: errorType,
+            : "Rate limit hit",
           originalError: error.message,
         });
 
-        // Small delay before trying next key
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        // Small delay before retrying
+        await new Promise((resolve) => setTimeout(resolve, 5000));
         continue;
       }
 
-      // For non-rate-limit errors, throw immediately
-      logger.error("Non-rotatable API error encountered.", {
+      // For non-retryable errors, throw immediately
+      logger.error("Non-retryable API error encountered.", {
         error: error.message,
         attempt: attemptCount,
-        keyIndex: currentKeyIndex + 1,
-        errorType: "non-rotatable",
+        errorType: "non-retryable",
       });
       throw error;
     }
   }
 
   // 4 minutes expired
-  logger.error("API request failed after timeout with all keys.", {
+  logger.error("API request failed after timeout.", {
     totalAttempts: attemptCount,
-    totalKeys: apiKeys.length,
     durationMs: Date.now() - startTime,
     lastError: lastError?.message,
     status: "timeout",
   });
   throw new Error(
-    `Gemini API requests failed after 4 minutes with ${attemptCount} attempts across ${apiKeys.length} API keys. All keys hit rate limits. Last error: ${lastError?.message || "Unknown error"}`,
+    `Gemini API requests failed after 4 minutes with ${attemptCount} attempts. Last error: ${lastError?.message || "Unknown error"}`,
   );
 }
 
@@ -1881,49 +1810,6 @@ function validateTokenLimit(
   );
 }
 
-// Helper function to generate API key schema fields dynamically
-function generateApiKeyFields() {
-  const fields: any = {
-    geminiApiKeys: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        "🔑 GEMINI API KEYS: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey",
-      ),
-    geminiApiKeysArray: z
-      .array(z.string().min(1))
-      .optional()
-      .describe(
-        "🔑 GEMINI API KEYS ARRAY: Multiple API keys array (alternative to comma-separated). When provided, the system will automatically rotate between keys to avoid rate limits. Example: ['key1', 'key2', 'key3']",
-      ),
-  };
-
-  // Add numbered API key fields (geminiApiKey2 through geminiApiKey100)
-  for (let i = 2; i <= 100; i++) {
-    fields[`geminiApiKey${i}`] = z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        `🔑 GEMINI API KEY ${i}: Optional additional API key for rate limit rotation`,
-      );
-  }
-
-  return fields;
-}
-
-// API Key Status Checker Schema
-const ApiKeyStatusSchema = z.object({
-  geminiApiKeys: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      "🔑 GEMINI API KEYS: Optional if set in environment variables. MULTI-KEY SUPPORT: You can enter multiple keys separated by commas for automatic rotation (e.g., 'key1,key2,key3'). Get yours at: https://makersuite.google.com/app/apikey",
-    ),
-  ...generateApiKeyFields(),
-});
 
 // Gemini Codebase Analyzer Schema
 const GeminiCodebaseAnalyzerSchema = z.object({
@@ -1989,7 +1875,12 @@ const GeminiCodebaseAnalyzerSchema = z.object({
     .describe(
       `🎯 ANALYSIS MODE: Choose an expert persona for the analysis. Default is 'general'.`,
     ),
-  ...generateApiKeyFields(),
+  geminiApiKey: z
+    .string()
+    .min(1)
+    .describe(
+      "🔑 GEMINI API KEY: Required. Set GEMINI_API_KEY environment variable or provide here. Get yours at: https://makersuite.google.com/app/apikey",
+    ),
 });
 
 // Gemini Code Search Schema - for targeted, fast searches
@@ -2007,7 +1898,7 @@ const GeminiCodeSearchSchema = z.object({
       "🚫 TEMPORARY IGNORE: One-time file exclusions (in addition to .gitignore). Use glob patterns like 'dist/**', '*.log', 'node_modules/**', 'temp-file.js'. This won't modify .gitignore, just exclude files for this analysis only. Examples: ['build/**', 'src/legacy/**', '*.test.js']",
     ),
   searchQuery: z.string().min(1).max(500)
-    .describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. 🌍 TIP: Use English for best AI performance! 💡 NEW USER? Use 'get_usage_guide' with 'search-tips' topic first! Examples:
+    .describe(`🔍 SEARCH QUERY: What specific code pattern, function, or feature to find. 🌍 TIP: Use English for best AI performance! Examples:
 • 'authentication logic' - Find login/auth code
 • 'error handling' - Find try-catch blocks
 • 'database connection' - Find DB setup
@@ -2032,30 +1923,14 @@ const GeminiCodeSearchSchema = z.object({
     .describe(
       "🎯 MAX RESULTS: Maximum number of relevant code snippets to analyze (default: 5, max: 20). Higher numbers = more comprehensive but slower analysis.",
     ),
-  ...generateApiKeyFields(),
+  geminiApiKey: z
+    .string()
+    .min(1)
+    .describe(
+      "🔑 GEMINI API KEY: Required. Set GEMINI_API_KEY environment variable or provide here. Get yours at: https://makersuite.google.com/app/apikey",
+    ),
 });
 
-// Usage Guide Schema - helps users understand how to use this MCP server
-const UsageGuideSchema = z.object({
-  topic: z
-    .enum([
-      "overview",
-      "getting-started",
-      "analysis-modes",
-      "search-tips",
-      "examples",
-      "troubleshooting",
-    ])
-    .optional().describe(`📖 HELP TOPIC (choose what you need help with):
-• overview - What this MCP server does and its capabilities
-• getting-started - First steps and basic usage
-• analysis-modes - Detailed guide to all 26 analysis modes
-• search-tips - How to write effective search queries
-• examples - Real-world usage examples and workflows
-• troubleshooting - Common issues and solutions
-
-💡 TIP: Start with 'overview' if you're new to this MCP server!`),
-});
 
 // Dynamic Expert Mode Step 1: Create Custom Expert Schema
 const DynamicExpertCreateSchema = z.object({
@@ -2079,7 +1954,12 @@ const DynamicExpertCreateSchema = z.object({
     .describe(
       "🎯 EXPERTISE HINT (optional): Suggest what kind of expert you need. Examples: 'React performance expert', 'Database architect', 'Security auditor', 'DevOps specialist'. Leave empty for automatic expert selection based on your project.",
     ),
-  ...generateApiKeyFields(),
+  geminiApiKey: z
+    .string()
+    .min(1)
+    .describe(
+      "🔑 GEMINI API KEY: Required. Set GEMINI_API_KEY environment variable or provide here. Get yours at: https://makersuite.google.com/app/apikey",
+    ),
 });
 
 // Dynamic Expert Mode Step 2: Analyze with Custom Expert Schema
@@ -2110,17 +1990,14 @@ const DynamicExpertAnalyzeSchema = z.object({
     .describe(
       "🎯 EXPERT PROMPT: The custom expert system prompt generated by 'gemini_dynamic_expert_create' tool. Copy the entire expert prompt from the previous step.",
     ),
-  ...generateApiKeyFields(),
-});
-
-// Schema for reading log files
-const ReadLogFileSchema = z.object({
-  filename: z
-    .enum(["activity.log", "error.log"])
+  geminiApiKey: z
+    .string()
+    .min(1)
     .describe(
-      "📄 LOG FILE NAME: Choose which log file to read. 'activity.log' contains all operations and debug info. 'error.log' contains only errors and critical issues.",
+      "🔑 GEMINI API KEY: Required. Set GEMINI_API_KEY environment variable or provide here. Get yours at: https://makersuite.google.com/app/apikey",
     ),
 });
+
 
 // Token Calculator Schema  
 const TokenCalculatorSchema = z.object({
@@ -2154,13 +2031,8 @@ const TokenCalculatorSchema = z.object({
     .describe("🤖 TOKENIZER MODEL (optional): Which model's tokenizer to use. 'gemini-2.0-flash' uses Google's tokenizer (compatible with all Gemini models including 2.0 Flash), 'gpt-4o' uses OpenAI's tiktoken. Default: gemini-2.0-flash"),
   geminiApiKey: z
     .string()
-    .optional()
-    .default(
-      config.providerApiKeys.gemini ??
-        config.providerApiKeys.google ??
-        "",
-    )
-    .describe("🔑 GEMINI API KEY (optional): Required when using Gemini tokenizer. Will use GEMINI_API_KEY environment variable if not provided. Get yours at: https://makersuite.google.com/app/apikey"),
+    .min(1)
+    .describe("🔑 GEMINI API KEY: Required. Set GEMINI_API_KEY environment variable or provide here. Get yours at: https://makersuite.google.com/app/apikey"),
 });
 
 // Project Orchestrator Step 1: Create Groups and Analysis Plan Schema
@@ -2229,7 +2101,12 @@ const ProjectOrchestratorCreateSchema = z.object({
     .describe(
       "🔢 MAX TOKENS PER GROUP: Maximum tokens per file group (default: 900K, max: 950K). Lower values create smaller groups for more detailed analysis. Higher values allow larger chunks but may hit API limits.",
     ),
-  ...generateApiKeyFields(),
+  geminiApiKey: z
+    .string()
+    .min(1)
+    .describe(
+      "🔑 GEMINI API KEY: Required. Set GEMINI_API_KEY environment variable or provide here. Get yours at: https://makersuite.google.com/app/apikey",
+    ),
 });
 
 // Project Orchestrator Step 2: Analyze with Groups Schema
@@ -2312,7 +2189,12 @@ const ProjectOrchestratorAnalyzeSchema = z.object({
     .describe(
       "🔢 MAX TOKENS PER GROUP: Maximum tokens per file group (default: 900K, max: 950K). Must match the value used in step 1.",
     ),
-  ...generateApiKeyFields(),
+  geminiApiKey: z
+    .string()
+    .min(1)
+    .describe(
+      "🔑 GEMINI API KEY: Required. Set GEMINI_API_KEY environment variable or provide here. Get yours at: https://makersuite.google.com/app/apikey",
+    ),
 });
 
 // Create the server
@@ -2321,7 +2203,7 @@ const server = new Server(
     name: config.mcpServerName,
     version: config.mcpServerVersion,
     description:
-      "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 36 specialized analysis modes! 💡 START HERE: Use 'get_usage_guide' tool to learn all capabilities.",
+      "🚀 GEMINI AI CODEBASE ASSISTANT - Your expert coding companion with 36 specialized analysis modes!",
   },
   {
     capabilities: {
@@ -2334,18 +2216,6 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
-      {
-        name: "get_usage_guide",
-        description:
-          "📖 GET USAGE GUIDE - **START HERE!** Learn how to use this MCP server effectively. Essential for understanding all capabilities, analysis modes, and workflows. Use this first if you're new to the server.",
-        inputSchema: zodToJsonSchema(UsageGuideSchema),
-      },
-      {
-        name: "check_api_key_status",
-        description:
-          "🔑 CHECK API KEY STATUS - Monitor your Gemini API keys configuration. Shows how many keys are configured, validates them, and provides rate limit protection status. Perfect for debugging API key issues.",
-        inputSchema: zodToJsonSchema(ApiKeyStatusSchema),
-      },
       {
         name: "gemini_dynamic_expert_create",
         description:
@@ -2369,12 +2239,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description:
           "⚡ FAST TARGETED SEARCH - Quickly find specific code patterns, functions, or features. Use when you know what you're looking for but need to locate it fast. Perfect for finding specific implementations.",
         inputSchema: zodToJsonSchema(GeminiCodeSearchSchema),
-      },
-      {
-        name: "read_log_file",
-        description:
-          "📄 READ LOG FILE - Read the contents of a server log file ('activity.log' or 'error.log'). Useful for debugging the server itself, monitoring API key rotation, and troubleshooting issues.",
-        inputSchema: zodToJsonSchema(ReadLogFileSchema),
       },
       {
         name: "calculate_token_count",
@@ -2407,624 +2271,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   });
 
   switch (request.params.name) {
-    case "get_usage_guide":
-      try {
-        const params = UsageGuideSchema.parse(request.params.arguments);
-        const topic = params.topic || "overview";
-
-        const guides = {
-          overview: `# 🚀 Gemini AI Codebase Assistant - Overview
-
-## What This MCP Server Does
-This is your expert coding companion with **26 specialized analysis modes** and **2 powerful tools**:
-
-### 🔍 **gemini_codebase_analyzer** - Deep Analysis
-- Comprehensive codebase analysis with expert system prompts
-- 26 specialized modes: frontend, backend, security, devops, etc.
-- Perfect for understanding architecture, code reviews, explanations
-- Processes entire project context for thorough insights
-
-### ⚡ **gemini_code_search** - Fast Search  
-- Targeted search for specific code patterns or functions
-- RAG-like approach for quick location of specific implementations
-- Ideal when you know what you're looking for
-
-### 📖 **get_usage_guide** - This Help System
-- Learn how to use all features effectively
-- Get examples, tips, and troubleshooting help
-
-## 🎯 Quick Start Workflow
-1. **New to project?** → Use \`gemini_codebase_analyzer\` with \`onboarding\` mode
-2. **Building feature?** → Use \`implementation\` mode  
-3. **Finding bugs?** → Use \`debugging\` mode
-4. **Quick search?** → Use \`gemini_code_search\` tool
-5. **Need help?** → Use \`get_usage_guide\` with specific topics
-
-## 💡 Pro Tips
-- Always use \`.\` for current directory (most common)
-- Choose the right analysis mode for your expertise level
-- Use search first for specific code, analyzer for broad understanding
-- All tools work with any programming language and framework`,
-
-          "getting-started": `# 🎯 Getting Started with Gemini AI Codebase Assistant
-
-## Step 1: Choose Your Tool
-- **New to codebase?** → Start with \`gemini_codebase_analyzer\` 
-- **Looking for specific code?** → Use \`gemini_code_search\`
-- **Need help?** → Use \`get_usage_guide\`
-
-## Step 2: Set Project Path
-- **Most common**: Use \`.\` for current directory
-- **Full path**: \`/home/user/project\` or \`C:\\Users\\Name\\Project\`
-- **Security**: Only workspace directories allowed
-
-## Step 3: Choose Analysis Mode (for analyzer)
-**Beginner-friendly modes:**
-- \`onboarding\` - Perfect for new developers
-- \`explanation\` - Educational explanations
-- \`general\` - Balanced analysis (default)
-
-**Expert modes:**
-- \`security\` - Vulnerability assessment
-- \`performance\` - Optimization focus
-- \`devops\` - CI/CD and infrastructure
-
-## Step 4: Ask Great Questions
-🌍 **IMPORTANT: Use English for best AI performance!**
-All AI models (including Gemini) perform significantly better with English prompts. The AI understands other languages but gives more accurate, detailed, and faster responses in English.
-
-**Good questions (in English):**
-- "How does authentication work in this project?"
-- "What are the main components and their relationships?"
-- "Find all API endpoints and their purposes"
-- "Explain the database schema and relationships"
-- "What are the security vulnerabilities in this code?"
-- "How can I optimize the performance of this application?"
-
-**Search examples (in English):**
-- "authentication logic"
-- "API routes"
-- "database models"
-- "error handling"
-- "validation functions"
-- "configuration files"
-
-## Step 5: Get Your API Key
-- Visit: https://makersuite.google.com/app/apikey
-- Or set in environment: \`GEMINI_API_KEY=your_key\``,
-
-          "analysis-modes": `# 🎯 Complete Guide to 36 Analysis Modes
-
-## 📋 GENERAL MODES (Perfect for beginners)
-- **\`general\`** - Balanced analysis for any question
-- **\`explanation\`** - Educational explanations for learning
-- **\`onboarding\`** - New developer guidance and getting started  
-- **\`review\`** - Code review and quality assessment
-- **\`audit\`** - Comprehensive codebase examination
-
-## 🔧 DEVELOPMENT MODES (For building features)
-- **\`implementation\`** - Building new features step-by-step
-- **\`refactoring\`** - Code improvement and restructuring
-- **\`debugging\`** - Bug hunting and troubleshooting
-- **\`testing\`** - Test strategy and quality assurance
-- **\`documentation\`** - Technical writing and API docs
-- **\`migration\`** - Legacy modernization and upgrades
-
-## 🎨 SPECIALIZATION MODES (Technology-specific)
-- **\`frontend\`** - React/Vue/Angular, modern web UI/UX
-- **\`backend\`** - Node.js/Python, APIs, microservices
-- **\`mobile\`** - React Native/Flutter, native apps
-- **\`database\`** - SQL/NoSQL, optimization, schema design
-- **\`devops\`** - CI/CD, infrastructure, deployment
-- **\`security\`** - Vulnerability assessment, secure coding
-
-## 🚀 ADVANCED MODES (Expert-level)
-- **\`api\`** - API design and developer experience
-- **\`apex\`** - Production-ready implementation (zero defects)
-- **\`gamedev\`** - JavaScript game development optimization
-- **\`aiml\`** - Machine learning, AI systems, MLOps
-- **\`startup\`** - MVP development, rapid prototyping
-- **\`enterprise\`** - Large-scale systems, corporate integration
-- **\`blockchain\`** - Web3, smart contracts, DeFi
-- **\`embedded\`** - IoT, hardware programming, edge computing
-
-## 🏗️ ARCHITECTURE & INFRASTRUCTURE MODES (System-level)
-- **\`architecture\`** - System design, patterns, microservices vs monolith
-- **\`cloud\`** - AWS/GCP/Azure, serverless, cloud-native architectures
-- **\`data\`** - Data pipelines, ETL, analytics, data engineering
-- **\`monitoring\`** - Observability, alerts, SLA/SLO, incident response
-- **\`infrastructure\`** - IaC, Kubernetes, platform engineering
-
-## 🏢 BUSINESS & GOVERNANCE MODES (Professional-level)
-- **\`compliance\`** - GDPR, SOX, HIPAA, regulatory frameworks
-- **\`opensource\`** - Community building, licensing, maintainer guidance
-- **\`freelancer\`** - Client management, contracts, business practices
-- **\`education\`** - Curriculum design, tutorials, learning content
-- **\`research\`** - Innovation, prototyping, academic collaboration
-
-## 💡 Mode Selection Tips
-- **Learning?** → \`explanation\` or \`onboarding\`
-- **Building?** → \`implementation\` or technology-specific mode
-- **Debugging?** → \`debugging\` or \`security\`
-- **Optimizing?** → \`performance\` or \`refactoring\`
-- **Deploying?** → \`devops\` or \`enterprise\``,
-
-          "search-tips": `# 🔍 Master Search Queries for Best Results
-
-## 🎯 Effective Search Patterns
-
-### Code Structure Searches
-- "class definitions" - Find all class declarations
-- "function exports" - Find exported functions  
-- "import statements" - Find all imports
-- "interface definitions" - Find TypeScript interfaces
-
-### Feature-Specific Searches
-- "authentication logic" - Find login/auth code
-- "API endpoints" - Find route definitions
-- "database queries" - Find SQL/DB operations
-- "error handling" - Find try-catch blocks
-- "validation logic" - Find input validation
-
-### Framework-Specific Searches
-- "React components" - Find React/JSX components
-- "Vue components" - Find Vue.js components
-- "Express routes" - Find Express.js routes
-- "Django models" - Find Django model definitions
-- "Spring controllers" - Find Spring Boot controllers
-
-### Technology Searches
-- "async functions" - Find async/await patterns
-- "Promise chains" - Find promise-based code
-- "event listeners" - Find event handling
-- "HTTP requests" - Find API calls
-- "configuration files" - Find config/settings
-
-## 📄 File Type Filtering Examples
-
-### Web Development
-- \`['.js', '.ts']\` - JavaScript/TypeScript
-- \`['.jsx', '.tsx']\` - React components
-- \`['.vue']\` - Vue.js components
-- \`['.html', '.css']\` - Frontend markup/styles
-
-### Backend Development  
-- \`['.py']\` - Python code
-- \`['.java']\` - Java code
-- \`['.go']\` - Go code
-- \`['.rs']\` - Rust code
-
-### Configuration
-- \`['.json', '.yaml', '.yml']\` - Config files
-- \`['.env']\` - Environment variables
-- \`['.dockerfile']\` - Docker files
-
-## 🚀 Pro Search Tips
-🌍 **LANGUAGE TIP: Always use English for search queries!**
-AI models perform significantly better with English terms. Even for non-English codebases, use English search terms for better results.
-
-1. **Be specific**: "user authentication middleware" vs "auth"
-2. **Use quotes**: "exact function name" for precise matches
-3. **Combine terms**: "database connection pool setup"
-4. **Filter smartly**: Limit file types to relevant extensions
-5. **Start broad**: Begin with general terms, then get specific
-6. **Use English**: "error handling" not "hata yönetimi", "database" not "veritabanı"`,
-
-          examples: `# 💡 Real-World Usage Examples & Workflows
-
-## 🎯 Common Workflows
-
-### 1. **New Developer Onboarding**
-\`\`\`
-Tool: gemini_codebase_analyzer
-Path: .
-Mode: onboarding
-Question: "I'm new to this project. Can you explain the architecture, main components, and how to get started?"
-\`\`\`
-
-### 2. **Feature Implementation**
-\`\`\`
-Tool: gemini_codebase_analyzer  
-Path: .
-Mode: implementation
-Question: "I need to add user authentication. Show me the current auth system and how to extend it."
-\`\`\`
-
-### 3. **Bug Investigation**
-\`\`\`
-Tool: gemini_code_search
-Path: .
-Query: "error handling user login"
-FileTypes: ['.js', '.ts']
-\`\`\`
-Then:
-\`\`\`
-Tool: gemini_codebase_analyzer
-Path: .
-Mode: debugging  
-Question: "Users can't login. I found the auth code - can you help debug this issue?"
-\`\`\`
-
-### 4. **Security Review**
-\`\`\`
-Tool: gemini_codebase_analyzer
-Path: .
-Mode: security
-Question: "Perform a security audit. Find potential vulnerabilities in authentication, input validation, and data handling."
-\`\`\`
-
-### 5. **Performance Optimization**
-\`\`\`
-Tool: gemini_codebase_analyzer
-Path: .
-Mode: performance
-Question: "The app is slow. Analyze for performance bottlenecks and suggest optimizations."
-\`\`\`
-
-## 🔍 Search-First Workflows
-
-### Finding Specific Code
-\`\`\`
-Tool: gemini_code_search
-Path: .
-Query: "API route definitions"
-FileTypes: ['.js', '.ts']
-MaxResults: 10
-\`\`\`
-
-### Database Operations
-\`\`\`
-Tool: gemini_code_search
-Path: .
-Query: "SQL queries database operations"
-FileTypes: ['.py', '.js', '.java']
-MaxResults: 15
-\`\`\`
-
-## 🎨 Technology-Specific Examples
-
-### React Project Analysis
-\`\`\`
-Tool: gemini_codebase_analyzer
-Path: .
-Mode: frontend
-Question: "Analyze this React app's component structure, state management, and suggest improvements."
-\`\`\`
-
-### DevOps Pipeline Review
-\`\`\`
-Tool: gemini_codebase_analyzer
-Path: .
-Mode: devops
-Question: "Review the CI/CD pipeline and suggest optimizations for faster deployments."
-\`\`\`
-
-### Database Schema Review
-\`\`\`
-Tool: gemini_codebase_analyzer
-Path: .
-Mode: database
-Question: "Analyze the database schema, relationships, and suggest optimizations."
-\`\`\`
-
-## 🚀 Advanced Workflows
-
-### Code Review Process
-1. **Overview**: Use \`review\` mode for general assessment
-2. **Deep dive**: Use \`security\` mode for vulnerabilities  
-3. **Performance**: Use \`performance\` mode for optimization
-4. **Documentation**: Use \`documentation\` mode for docs review
-
-### Architecture Analysis
-1. **Start**: Use \`general\` mode for overview
-2. **Specific**: Use technology-specific modes (frontend/backend)
-3. **Scale**: Use \`enterprise\` mode for large systems
-4. **Deploy**: Use \`devops\` mode for deployment strategy`,
-
-          troubleshooting: `# 🔧 Troubleshooting Common Issues
-
-## ❌ Common Problems & Solutions
-
-### "Path Not Found" Error
-**Problem**: \`ENOENT: no such file or directory\`
-**Solutions**:
-- Use \`.\` for current directory (most common)
-- Check if you're in the right directory
-- Verify path exists and is accessible
-- For Windows: Use forward slashes or escape backslashes
-
-### "Access Denied" Error  
-**Problem**: \`Path is not in allowed workspace directory\`
-**Solutions**:
-- Use \`.\` for current directory
-- Ensure path is under allowed directories (Projects, Users, etc.)
-- Avoid system directories (Windows, Program Files, etc.)
-
-### "API Key Required" Error
-**Problem**: \`Gemini API key is required\`
-**Solutions**:
-- Get key from: https://makersuite.google.com/app/apikey
-- Set in environment: \`GEMINI_API_KEY=your_key\`
-- Or pass in tool parameters
-
-### "Too Many Requests" Error
-**Problem**: \`429 Too Many Requests\` or \`exceeded your current quota\`
-**Good News**: This server has automatic retry! 🔄
-**What Happens**:
-- System automatically retries every 5 seconds for 2 minutes
-- Rate limits usually reset within 1 minute
-- You'll see retry progress in logs
-- After 2 minutes, you'll get a clear error message
-
-**Manual Solutions**:
-- Wait 1-2 minutes and try again
-- Use smaller projects or more specific questions
-- Consider upgrading your Gemini API plan
-- Break large questions into smaller parts
-
-### "Token Limit Exceeded" Error
-**Problem**: \`Token limit exceeded! Gemini 2.5 Pro limit: 1,000,000 tokens\`
-**What it means**: Your project + question is too large for Gemini's context window
-**Solutions**:
-- Use \`gemini_code_search\` for specific code location first
-- Focus on specific directories or file types
-- Ask more targeted questions instead of broad analysis
-- Break large questions into smaller, focused parts
-- Analyze subdirectories separately
-- Use file type filtering to reduce context size
-
-**Token breakdown helps you understand:**
-- How much space your project content takes
-- How much your question contributes
-- Exactly how much you need to reduce
-
-### "Transport is Closed" Error
-**Problem**: MCP connection lost
-**Solutions**:
-- Reconnect to the MCP server
-- Check if server is still running
-- Try refreshing your MCP client connection
-
-## 🎯 Best Practices for Success
-
-### Project Path Tips
-- ✅ Use \`.\` for current directory
-- ✅ Use absolute paths when needed
-- ❌ Don't use system directories  
-- ❌ Don't use relative paths like \`../\`
-
-### Question Writing Tips
-- ✅ **Write in English** for best AI performance
-- ✅ Be specific and clear
-- ✅ Ask one main question at a time
-- ✅ Provide context when helpful
-- ❌ Don't ask vague questions like "fix this"
-- ❌ Don't use non-English terms (use "authentication" not "kimlik doğrulama")
-
-### Analysis Mode Selection
-- ✅ Choose mode that matches your expertise
-- ✅ Use \`onboarding\` if new to project
-- ✅ Use specific modes for focused analysis
-- ❌ Don't always use \`general\` mode
-
-### Search Query Tips
-- ✅ Use specific terms and patterns
-- ✅ Filter by relevant file types
-- ✅ Start with 5-10 results, increase if needed
-- ❌ Don't use overly broad search terms
-
-## 🚀 Performance Tips
-
-### For Large Projects
-- Use \`gemini_code_search\` for specific code location
-- Use focused analysis modes rather than \`general\`
-- Ask specific questions rather than broad ones
-- Consider breaking large questions into smaller ones
-
-### For Better Results
-- Provide context in your questions
-- Choose the right analysis mode for your needs
-- Use appropriate file type filtering
-- Be patient - comprehensive analysis takes time
-
-## 📞 Getting Help
-1. **Start with**: \`get_usage_guide\` with \`overview\` topic
-2. **Learn modes**: Use \`analysis-modes\` topic
-3. **Search help**: Use \`search-tips\` topic
-4. **Still stuck?** Try \`examples\` topic for workflows`,
-        };
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: guides[topic as keyof typeof guides],
-            },
-          ],
-          isError: false,
-        };
-      } catch (error: any) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `# Usage Guide Error
-
-**Error:** ${error.message}
-
-### Available Topics:
-- overview - What this MCP server does
-- getting-started - First steps and basic usage  
-- analysis-modes - Guide to all 26 modes
-- search-tips - Effective search strategies
-- examples - Real-world workflows
-- troubleshooting - Common issues and solutions
-
-**Example usage:**
-Use \`get_usage_guide\` with topic "overview" to get started.`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
-    case "check_api_key_status":
-      try {
-        const params = ApiKeyStatusSchema.parse(request.params.arguments);
-
-        // Resolve API keys from all sources
-        const apiKeys = resolveProviderApiKeys("google", params);
-
-        // Environment variable check
-        const envApiKey =
-          config.providerApiKeys.gemini ??
-          config.providerApiKeys.google ??
-          process.env.GEMINI_API_KEY ??
-          process.env.GOOGLE_API_KEY ??
-          "";
-
-        // Count different key sources
-        let commaKeys = 0;
-        let individualKeys = 0;
-        let arrayKeys = 0;
-
-        if (params.geminiApiKeys) {
-          if (params.geminiApiKeys.includes(",")) {
-            commaKeys = params.geminiApiKeys
-              .split(",")
-              .map((k: string) => k.trim())
-              .filter((k: string) => k.length > 0).length;
-          } else {
-            commaKeys = 1;
-          }
-        }
-
-        if (
-          params.geminiApiKeysArray &&
-          Array.isArray(params.geminiApiKeysArray)
-        ) {
-          arrayKeys = params.geminiApiKeysArray.length;
-        }
-
-        // Count individual numbered keys
-        for (let i = 2; i <= 100; i++) {
-          if (params[`geminiApiKey${i}`]) {
-            individualKeys++;
-          }
-        }
-
-        // Generate rotation schedule preview
-        const rotationPreview = apiKeys
-          .slice(0, 10)
-          .map((key, index) => {
-            const maskedKey =
-              key.substring(0, 8) + "..." + key.substring(key.length - 4);
-            return `${index + 1}. ${maskedKey}`;
-          })
-          .join("\n");
-
-        const totalKeys = apiKeys.length;
-        const rotationTime = totalKeys > 0 ? Math.ceil(240 / totalKeys) : 0; // 4 minutes / keys
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `# 🔑 Gemini API Key Status Report
-
-## 📊 Configuration Summary
-- **Total Active Keys**: ${totalKeys}
-- **Environment Variable**: ${envApiKey ? "✅ Set" : "❌ Not set"}
-- **Rotation Available**: ${totalKeys > 1 ? "✅ Yes" : "❌ Single key only"}
-- **Rate Limit Protection**: ${totalKeys > 1 ? "🛡️ Active" : "⚠️ Limited"}
-
-## 📈 Key Sources Breakdown
-- **Comma-separated keys**: ${commaKeys} ${commaKeys > 0 ? "(geminiApiKeys field)" : ""}
-- **Individual numbered keys**: ${individualKeys} ${individualKeys > 0 ? "(geminiApiKey2-100)" : ""}
-- **Array format keys**: ${arrayKeys} ${arrayKeys > 0 ? "(geminiApiKeysArray)" : ""}
-
-## 🔄 Rotation Strategy
-${
-  totalKeys > 1
-    ? `
-**Rotation Schedule**: ${rotationTime} seconds per key
-**Maximum uptime**: 4 minutes continuous rotation
-**Fallback protection**: Automatic key switching on rate limits
-
-**Key Rotation Preview** (first 10 keys):
-${rotationPreview}
-${totalKeys > 10 ? `\n... and ${totalKeys - 10} more keys` : ""}
-`
-    : `
-**Single Key Mode**: No rotation available
-**Recommendation**: Add more keys for better rate limit protection
-**How to add**: Use comma-separated format in geminiApiKeys field
-`
-}
-
-## 🎯 Performance Optimization
-- **Recommended keys**: 5-10 for optimal performance
-- **Maximum supported**: 100 keys
-- **Current efficiency**: ${Math.min(100, (totalKeys / 10) * 100).toFixed(1)}%
-
-## 🚀 Usage Tips
-${
-  totalKeys === 0
-    ? `
-❌ **No API keys configured!**
-- Add keys to geminiApiKeys field: "key1,key2,key3"
-- Or set environment variable: GEMINI_API_KEY
-- Get keys from: https://makersuite.google.com/app/apikey
-`
-    : totalKeys === 1
-      ? `
-⚠️ **Single key detected**
-- Consider adding more keys for better rate limit protection
-- Use comma-separated format: "key1,key2,key3"
-- Or individual fields: geminiApiKey2, geminiApiKey3, etc.
-`
-      : `
-✅ **Multi-key configuration active**
-- Rate limit protection is active
-- Automatic failover enabled
-- Optimal performance achieved
-`
-}
-
-## 🔧 Troubleshooting
-- **Rate limits**: With ${totalKeys} keys, you can handle ${totalKeys}x more requests
-- **Error recovery**: Automatic retry with next key on failures
-- **Monitoring**: This tool helps track your key configuration
-
----
-
-*Status checked at ${new Date().toISOString()}*
-*Next rotation cycle: ${totalKeys > 1 ? `${rotationTime}s per key` : "No rotation"}*`,
-            },
-          ],
-          isError: false,
-        };
-      } catch (error: any) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `# 🔑 API Key Status Check - Error
-
-**Error**: ${error.message}
-
-### Troubleshooting Guide
-- Check your API key format
-- Ensure keys are valid Gemini API keys
-- Verify environment variables are set correctly
-
-**Get API keys from**: https://makersuite.google.com/app/apikey`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
     case "gemini_dynamic_expert_create":
       try {
         const params = DynamicExpertCreateSchema.parse(
@@ -3042,7 +2288,7 @@ ${
 
         if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "Gemini API key is required. Provide geminiApiKey parameter or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -3213,7 +2459,7 @@ This custom expert is now ready to provide highly specialized analysis tailored 
 
         if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "Gemini API key is required. Provide geminiApiKey parameter or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -3370,7 +2616,7 @@ ${analysis}
 
         if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "Gemini API key is required. Provide geminiApiKey parameter or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -3548,7 +2794,7 @@ ${troubleshootingTips.join("\n")}
 
         if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "Gemini API key is required. Provide geminiApiKey parameter or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -3756,70 +3002,6 @@ ${troubleshootingTips.join("\n")}
         };
       }
 
-    case "read_log_file":
-      try {
-        logger.info("Received request to read log file", {
-          filename: request.params.arguments?.filename,
-        });
-
-        const params = ReadLogFileSchema.parse(request.params.arguments);
-        const logContent = await readLogFileLogic(params.filename);
-
-        logger.info("Log file read successfully", {
-          filename: params.filename,
-          contentLength: logContent.length,
-        });
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: `# Log file: ${params.filename}
-
-## Log Content
-
-\`\`\`
-${logContent}
-\`\`\`
-
----
-
-**Log file location:** \`logs/${params.filename}\`  
-**Last updated:** ${new Date().toISOString()}
-
-### Available log files:
-- **activity.log**: All operations, API calls, and debug information
-- **error.log**: Only errors and critical issues
-
-*Use this tool to monitor API key rotation, debug issues, and track server operations.*`,
-            },
-          ],
-          isError: false,
-        };
-      } catch (error: any) {
-        logger.error("Error in read_log_file tool", { error: error.message });
-        return {
-          content: [
-            {
-              type: "text",
-              text: `# Error reading log file
-
-**Error:** ${error.message}
-
-### Troubleshooting:
-- Check if the log file exists in the \`logs/\` directory
-- Ensure the server has read permissions
-- Try reading the other log file (\`activity.log\` or \`error.log\`)
-
-### Available log files:
-- **activity.log**: All operations and debug info
-- **error.log**: Only errors and critical issues`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
     case "calculate_token_count":
       try {
         logger.info("Received request to calculate token count", {
@@ -3838,7 +3020,7 @@ ${logContent}
         const apiKeys = resolveProviderApiKeys("google", params);
         if (apiKeys.length === 0 && params.tokenizerModel === "gemini-2.0-flash") {
           throw new Error(
-            "At least one Gemini API key is required when using Gemini tokenizer. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "Gemini API key is required when using Gemini tokenizer. Provide geminiApiKey parameter or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
         
@@ -3958,19 +3140,13 @@ ${logContent}
         
         logger.info(`Found ${filteredFiles.length} files to analyze (${allFiles.length} total, ${allFiles.length - filteredFiles.length} ignored)`);
 
-        let totalTokens = 0;
-        let totalCharacters = 0;
-        let analyzedFiles = 0;
-        let skippedFiles = 0;
-        const fileBreakdown: Array<{file: string, tokens: number, characters: number}> = [];
-
         // Determine which tokenizer to use for the entire analysis
         const useGeminiTokenizer = params.tokenizerModel === "gemini-2.0-flash";
         const modelUsed = useGeminiTokenizer ? "gemini-2.0-flash" : "gpt-4o";
-        
-        if (useGeminiTokenizer && !params.geminiApiKey) {
-          throw new Error("Gemini API key is required when using Gemini tokenizer");
-        }
+
+        // First, read all files and prepare content
+        const fileContents: Array<{file: string, content: string, characters: number}> = [];
+        let skippedFiles = 0;
 
         for (const file of filteredFiles) {
           try {
@@ -3995,25 +3171,10 @@ ${logContent}
               continue;
             }
 
-            let fileTokens: number;
-            if (useGeminiTokenizer) {
-              // Use the first available API key (same pattern as other tools)
-              const apiKey = apiKeys[0];
-              fileTokens = await countTokensWithGemini(content, apiKey);
-            } else {
-              fileTokens = await countTokens(content, toolContext);
-            }
-            
-            const fileCharacters = content.length;
-            
-            totalTokens += fileTokens;
-            totalCharacters += fileCharacters;
-            analyzedFiles++;
-            
-            fileBreakdown.push({
+            fileContents.push({
               file,
-              tokens: fileTokens,
-              characters: fileCharacters
+              content,
+              characters: content.length
             });
 
           } catch (error) {
@@ -4021,6 +3182,51 @@ ${logContent}
             logger.debug(`Error reading file ${file}:`, error);
           }
         }
+
+        logger.info(`Read ${fileContents.length} files, preparing token count...`);
+
+        let totalTokens = 0;
+        let totalCharacters = 0;
+        const fileBreakdown: Array<{file: string, tokens: number, characters: number}> = [];
+
+        if (useGeminiTokenizer && fileContents.length > 0) {
+          // Combine all file contents with file markers for accurate token counting
+          const combinedContent = fileContents.map(f => `=== FILE: ${f.file} ===\n${f.content}`).join('\n\n');
+          
+          // Single API call for all files
+          const apiKey = apiKeys[0];
+          totalTokens = await countTokensWithGemini(combinedContent, apiKey);
+          totalCharacters = fileContents.reduce((sum, f) => sum + f.characters, 0);
+          
+          // Calculate individual file tokens proportionally based on character count
+          // This gives approximate token counts per file
+          const totalChars = fileContents.reduce((sum, f) => sum + f.characters, 0);
+          if (totalChars > 0) {
+            for (const fileContent of fileContents) {
+              const ratio = fileContent.characters / totalChars;
+              const estimatedTokens = Math.round(totalTokens * ratio);
+              fileBreakdown.push({
+                file: fileContent.file,
+                tokens: estimatedTokens,
+                characters: fileContent.characters
+              });
+            }
+          }
+        } else {
+          // Use local tokenizer for gpt-4o or when no files
+          for (const fileContent of fileContents) {
+            const fileTokens = await countTokens(fileContent.content, toolContext);
+            totalTokens += fileTokens;
+            totalCharacters += fileContent.characters;
+            fileBreakdown.push({
+              file: fileContent.file,
+              tokens: fileTokens,
+              characters: fileContent.characters
+            });
+          }
+        }
+
+        const analyzedFiles = fileContents.length;
 
         // Sort by token count (highest first) for the breakdown
         fileBreakdown.sort((a, b) => b.tokens - a.tokens);
@@ -4104,7 +3310,7 @@ ${logContent}
 
         if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "Gemini API key is required. Provide geminiApiKey parameter or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -4312,7 +3518,7 @@ ${groupsData}
 
         if (apiKeys.length === 0 && defaultProvider !== "gemini-cli") {
           throw new Error(
-            "At least one Gemini API key is required. Provide geminiApiKey, geminiApiKeys array, or set GOOGLE_API_KEY or GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
+            "Gemini API key is required. Provide geminiApiKey parameter or set GEMINI_API_KEY environment variable. Get your key from https://makersuite.google.com/app/apikey",
           );
         }
 
@@ -4736,29 +3942,6 @@ async function prepareFullContext(
     return fullContext;
   } catch (error) {
     throw new Error(`Failed to prepare project context: ${error}`);
-  }
-}
-
-// Helper function to read log files securely
-async function readLogFileLogic(
-  filename: "activity.log" | "error.log",
-): Promise<string> {
-  const logDir = path.join(process.cwd(), "logs");
-  const filePath = path.join(logDir, filename);
-
-  // Security check: ensure the resolved path is within the logs directory
-  if (!path.resolve(filePath).startsWith(path.resolve(logDir))) {
-    throw new Error("Access denied: Invalid log file path.");
-  }
-
-  try {
-    const content = await fs.readFile(filePath, "utf-8");
-    return content;
-  } catch (error: any) {
-    if (error.code === "ENOENT") {
-      return `Log file '${filename}' not found. It may not have been created yet or the server hasn't logged any data to this file.`;
-    }
-    throw new Error(`Failed to read log file '${filename}': ${error.message}`);
   }
 }
 

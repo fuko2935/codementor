@@ -129,8 +129,8 @@ const EnvSchema = z.object({
   OPENROUTER_APP_NAME: z.string().optional(),
   /** Optional. API key for OpenRouter services. */
   OPENROUTER_API_KEY: z.string().optional(),
-  /** Optional. API key for Google Gemini services. */
-  GEMINI_API_KEY: z.string().optional(),
+  /** Required. API key for Google Gemini services. */
+  GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY is required"),
   /** Default LLM provider. Default: "gemini-cli". */
   LLM_DEFAULT_PROVIDER: z
     .enum([
@@ -198,10 +198,19 @@ if (!parsedEnv.success) {
       `❌ Invalid environment variables found: ${JSON.stringify(parsedEnv.error.flatten().fieldErrors)}\n`,
     );
   }
-  // Consider throwing an error in production for critical misconfigurations.
+  // GEMINI_API_KEY is required, so throw error if missing
+  if (parsedEnv.error.flatten().fieldErrors.GEMINI_API_KEY) {
+    throw new Error(
+      `GEMINI_API_KEY is required. Please set it in your environment variables or configuration.`,
+    );
+  }
+  // If validation fails for other reasons, throw with all errors
+  throw new Error(
+    `Invalid environment variables: ${JSON.stringify(parsedEnv.error.flatten().fieldErrors)}`,
+  );
 }
 
-const env = parsedEnv.success ? parsedEnv.data : EnvSchema.parse({});
+const env = parsedEnv.data;
 
 const providerApiKeys = {
   google: env.GOOGLE_API_KEY || env.GEMINI_API_KEY,
