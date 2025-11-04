@@ -21,12 +21,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cyanheads/mcp-ts-template.git"
+    "url": "git+https://github.com/fuko2935/gemini-mcp-local.git"
   },
   "bugs": {
-    "url": "https://github.com/cyanheads/mcp-ts-template/issues"
+    "url": "https://github.com/fuko2935/gemini-mcp-local/issues"
   },
-  "homepage": "https://github.com/cyanheads/mcp-ts-template#readme",
+  "homepage": "https://github.com/fuko2935/gemini-mcp-local#readme",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
