@@ -119,6 +119,60 @@ Each tool validates input with Zod schemas and automatically records structured 
 
 ---
 
+## .mcpignore Support
+
+Optimize MCP context by excluding files beyond `.gitignore`. The `.mcpignore` file works **on top of** `.gitignore` (additive) to allow you to exclude test files, documentation, and other files from AI analysis without modifying your `.gitignore`.
+
+### How it works
+
+1. `.gitignore` patterns are loaded first
+2. `.mcpignore` patterns are added on top
+3. All MCP tools (code search, token count, codebase analyzer, etc.) respect both files
+
+### Creating .mcpignore
+
+Copy the example file and customize as needed:
+
+```bash
+cp .mcpignore.example .mcpignore
+```
+
+### Common Use Cases
+
+**Exclude test files from AI context:**
+```gitignore
+# .mcpignore
+**/*.test.ts
+**/*.spec.ts
+**/tests/**
+__tests__/**
+```
+
+**Exclude documentation:**
+```gitignore
+# .mcpignore
+docs/**
+*.md
+!README.md
+```
+
+**Exclude generated files:**
+```gitignore
+# .mcpignore
+**/generated/**
+**/*.generated.ts
+```
+
+See `.mcpignore.example` for more patterns and examples.
+
+### Backward Compatibility
+
+- If `.mcpignore` doesn't exist, tools work normally with just `.gitignore`
+- All existing `.gitignore` functionality is preserved
+- The feature is completely optional
+
+---
+
 ## Code Metadata Extraction
 
 The server includes advanced code metadata extraction powered by **Tree-sitter AST parsing** for improved accuracy, especially with complex syntax structures (nested classes, decorators, generics).

@@ -1,10 +1,9 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { glob } from "glob";
-import ignore from "ignore";
 import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
-import { logger, type RequestContext, sanitization } from "../../../utils/index.js";
+import { logger, type RequestContext, sanitization, createIgnoreInstance } from "../../../utils/index.js";
 import { countTokens } from "../../../utils/metrics/tokenCounter.js";
 import { countTokensLocally } from "../../utils/tokenizer.js";
 
@@ -12,6 +11,11 @@ export const CalculateTokenCountInputSchema = z.object({
   projectPath: z.string().min(1).optional(),
   textToAnalyze: z.string().min(1).optional(),
   temporaryIgnore: z.array(z.string()).optional(),
+  ignoreMcpignore: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("If true, ignores the .mcpignore file and only uses .gitignore patterns."),
   fileExtensions: z.array(z.string()).optional(),
   maxFileSize: z.number().optional().default(1_000_000),
   tokenizerModel: z
@@ -79,27 +83,12 @@ export async function calculateTokenCountLogic(
     projectPath: normalizedPath,
   });
 
-  const ig = ignore();
-  ig.add([
-    "node_modules/**",
-    ".git/**",
-    "dist/**",
-    "build/**",
-    "*.log",
-    ".DS_Store",
-    "Thumbs.db",
-    "*.tmp",
-    "*.temp",
-    ".env*",
-  ]);
-  if (params.temporaryIgnore) ig.add(params.temporaryIgnore);
-  try {
-    const gitignorePath = path.join(normalizedPath, ".gitignore");
-    const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
-    ig.add(gitignoreContent);
-  } catch {
-    // no-op: .gitignore not present
-  }
+  const ig = await createIgnoreInstance({
+    projectPath: normalizedPath,
+    temporaryIgnore: params.temporaryIgnore,
+    ignoreMcpignore: params.ignoreMcpignore,
+    context,
+  });
 
   const pattern =
     params.fileExtensions && params.fileExtensions.length > 0

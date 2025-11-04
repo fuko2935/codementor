@@ -18,11 +18,11 @@
  */
 
 import fs from "fs/promises";
-import ignore from "ignore"; // Import the 'ignore' library
 import path from "path";
+import { createIgnoreInstance, requestContextService } from "../src/utils/index.js";
 
 // Get the type of the instance returned by ignore()
-type Ignore = ReturnType<typeof ignore>;
+type Ignore = Awaited<ReturnType<typeof createIgnoreInstance>>;
 
 const projectRoot = process.cwd();
 let outputPathArg = "docs/tree.md"; // Default output path
@@ -57,52 +57,22 @@ args.forEach((arg) => {
   }
 });
 
-const DEFAULT_IGNORE_PATTERNS: string[] = [
-  ".git",
-  "node_modules",
-  ".DS_Store",
-  "dist",
-  "build",
-  "logs",
-];
-
 /**
- * Loads and parses patterns from the .gitignore file at the project root,
+ * Loads and parses patterns from .gitignore and .mcpignore files at the project root,
  * and combines them with default ignore patterns.
  * @returns A promise resolving to an Ignore instance from the 'ignore' library.
  */
 async function loadIgnoreHandler(): Promise<Ignore> {
-  const ig = ignore();
-  ig.add(DEFAULT_IGNORE_PATTERNS); // Add default patterns first
+  // Create a minimal context for the script
+  const context = requestContextService.createRequestContext({
+    operation: "GenerateTree",
+    toolName: "tree-script",
+  });
 
-  const gitignorePath = path.join(projectRoot, ".gitignore");
-  try {
-    // Security: Ensure we read only from within the project root
-    if (!path.resolve(gitignorePath).startsWith(projectRoot + path.sep)) {
-      console.warn(
-        "Warning: Attempted to read .gitignore outside project root. Using default ignore patterns only.",
-      );
-      return ig;
-    }
-    const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
-    ig.add(gitignoreContent); // Add patterns from .gitignore file
-  } catch (error: unknown) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
-      console.warn(
-        "Info: No .gitignore file found at project root. Using default ignore patterns only.",
-      );
-    } else {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      console.error(`Error reading .gitignore: ${errorMessage}`);
-    }
-  }
-  return ig;
+  return await createIgnoreInstance({
+    projectPath: projectRoot,
+    context,
+  });
 }
 
 /**
@@ -295,7 +265,7 @@ const writeTreeToFile = async (): Promise<void> => {
           : "\n";
       // Use the newly generated tree content for the output
       const treeBlock = `\`\`\`\n${projectName}\n${newGeneratedTreeContent}\`\`\`\n`;
-      const fileFooter = `\n_Note: This tree excludes files and directories matched by .gitignore and default patterns._\n`;
+      const fileFooter = `\n_Note: This tree excludes files and directories matched by .gitignore, .mcpignore, and default patterns._\n`;
       const finalContent = fileHeader + depthInfo + treeBlock + fileFooter;
 
       await fs.writeFile(resolvedOutputFile, finalContent);

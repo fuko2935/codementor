@@ -1,0 +1,73 @@
+# MCP Ignore File - Context Optimization
+# This file works ON TOP of .gitignore
+# Use it to exclude files from MCP context that you don't want AI to analyze
+# 
+# How it works:
+# 1. .gitignore patterns are loaded first
+# 2. .mcpignore patterns are added on top (additive)
+# 3. All MCP tools respect both files
+#
+# Copy this file to .mcpignore and customize as needed
+
+# Test files
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+**/tests/**
+**/test/**
+__tests__/**
+*.test.*
+
+# Documentation (exclude all markdown except README)
+docs/**
+*.md
+!README.md
+
+# Build artifacts (if not already in .gitignore)
+*.map
+*.min.js
+*.min.css
+
+# Large data files
+*.json
+*.csv
+*.xlsx
+*.xls
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated files
+**/generated/**
+**/*.generated.ts
+**/*.generated.js
+
+# Migration files
+**/migrations/**
+**/migration/**
+
+# Configuration examples
+*.example.*
+*.sample.*
+*.template.*
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.cache
+
+# IDE and editor files
+.vscode/**
+.idea/**
+*.swp
+*.swo
+*~
+
+# Coverage reports
+coverage/**
+.nyc_output/**
+*.lcov
+
+

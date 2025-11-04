@@ -10,13 +10,18 @@ import path from "path";
 import { glob } from "glob";
 import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
-import { logger, type RequestContext, sanitization } from "../../../utils/index.js";
+import { logger, type RequestContext, sanitization, createIgnoreInstance } from "../../../utils/index.js";
 import { extractMetadata, type FileMetadata } from "../../utils/codeParser.js";
 import { groupFilesWithAI, type ProjectGroup } from "../../services/aiGroupingService.js";
 
 export const ProjectOrchestratorCreateInputSchema = z.object({
   projectPath: z.string().min(1),
   temporaryIgnore: z.array(z.string()).optional(),
+  ignoreMcpignore: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("If true, ignores the .mcpignore file and only uses .gitignore patterns."),
   question: z.string().min(1).max(50000).optional(),
   analysisMode: z
     .enum([
@@ -123,43 +128,22 @@ export async function projectOrchestratorCreateLogic(
     analysisMode: params.analysisMode,
   });
 
-  // Load .gitignore rules
-  let gitignoreRules: string[] = [];
-  try {
-    const gitignorePath = path.join(normalizedPath, ".gitignore");
-    const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
-    gitignoreRules = gitignoreContent
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith("#"));
-  } catch {
-    // no-op - .gitignore is optional
-  }
-
-  // Build ignore patterns
-  const ignorePatterns = [
-    ...gitignoreRules,
-    ...(params.temporaryIgnore || []),
-    "node_modules/**",
-    ".git/**",
-    "*.log",
-    ".env*",
-    "dist/**",
-    "build/**",
-    "*.map",
-    "*.lock",
-    ".cache/**",
-    "coverage/**",
-    "logs/**",
-  ];
+  const ig = await createIgnoreInstance({
+    projectPath: normalizedPath,
+    temporaryIgnore: params.temporaryIgnore,
+    ignoreMcpignore: params.ignoreMcpignore,
+    context,
+  });
 
   // Discover all files
-  const files = await glob("**/*", {
+  const allFiles = await glob("**/*", {
     cwd: normalizedPath,
-    ignore: ignorePatterns,
     nodir: true,
     dot: true, // Include dotfiles (e.g., .roomodes, .roo/)
   });
+
+  // Filter files using ignore instance
+  const files = allFiles.filter((f) => !ig.ignores(f));
 
   logger.info("Discovered files", {
     ...context,

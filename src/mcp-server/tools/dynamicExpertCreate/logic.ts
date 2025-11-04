@@ -4,13 +4,18 @@ import { glob } from "glob";
 import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
-import { type RequestContext, sanitization } from "../../../utils/index.js";
+import { type RequestContext, sanitization, createIgnoreInstance } from "../../../utils/index.js";
 import { config } from "../../../config/index.js";
 import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliProvider.js";
 
 export const DynamicExpertCreateInputSchema = z.object({
   projectPath: z.string().min(1),
   temporaryIgnore: z.array(z.string()).optional(),
+  ignoreMcpignore: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("If true, ignores the .mcpignore file and only uses .gitignore patterns."),
   expertiseHint: z.string().min(1).max(200).optional(),
   geminiApiKey: z.string().min(1).optional(),
 });
@@ -65,38 +70,24 @@ function createModelByProvider(
 async function prepareFullContext(
   projectPath: string,
   temporaryIgnore: string[] = [],
+  ignoreMcpignore: boolean = false,
+  context: RequestContext,
 ): Promise<string> {
-  let gitignoreRules: string[] = [];
-  try {
-    const gitignorePath = path.join(projectPath, ".gitignore");
-    const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
-    gitignoreRules = gitignoreContent
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith("#"));
-  } catch {
-    // no-op: .gitignore optional
-  }
-  const ignorePatterns = [
-    ...gitignoreRules,
-    ...temporaryIgnore,
-    "node_modules/**",
-    ".git/**",
-    "*.log",
-    ".env*",
-    "dist/**",
-    "build/**",
-    "*.map",
-    "*.lock",
-    ".cache/**",
-    "coverage/**",
-  ];
-  const files = await glob("**/*", {
+  const ig = await createIgnoreInstance({
+    projectPath,
+    temporaryIgnore,
+    ignoreMcpignore,
+    context,
+  });
+
+  const allFiles = await glob("**/*", {
     cwd: projectPath,
-    ignore: ignorePatterns,
     nodir: true,
     dot: true, // Include dotfiles (e.g., .roomodes, .roo/)
   });
+
+  const files = allFiles.filter((f) => !ig.ignores(f));
+
   let full = "";
   for (const file of files) {
     try {
@@ -112,7 +103,7 @@ async function prepareFullContext(
 
 export async function dynamicExpertCreateLogic(
   params: DynamicExpertCreateInput,
-  _context: RequestContext,
+  context: RequestContext,
 ): Promise<DynamicExpertCreateResponse> {
   const sanitized = sanitization.sanitizePath(params.projectPath, {
     rootDir: process.cwd(),
@@ -136,6 +127,8 @@ export async function dynamicExpertCreateLogic(
   const fullContext = await prepareFullContext(
     normalizedPath,
     params.temporaryIgnore,
+    params.ignoreMcpignore,
+    context,
   );
   if (fullContext.length === 0) {
     throw new McpError(

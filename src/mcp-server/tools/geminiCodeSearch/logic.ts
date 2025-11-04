@@ -7,11 +7,10 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { glob } from "glob";
-import ignore from "ignore";
 import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
-import { logger, type RequestContext, sanitization } from "../../../utils/index.js";
+import { logger, type RequestContext, sanitization, createIgnoreInstance } from "../../../utils/index.js";
 import { config } from "../../../config/index.js";
 import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliProvider.js";
 
@@ -24,6 +23,11 @@ export const GeminiCodeSearchInputSchema = z.object({
     .array(z.string())
     .optional()
     .describe("Additional ignore globs for this run only."),
+  ignoreMcpignore: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("If true, ignores the .mcpignore file and only uses .gitignore patterns."),
   searchQuery: z
     .string()
     .min(1)
@@ -108,29 +112,18 @@ async function findRelevantSnippets(
   fileTypes: string[] | undefined,
   maxResults: number,
   temporaryIgnore: string[] | undefined,
+  ignoreMcpignore: boolean | undefined,
+  context: RequestContext,
 ): Promise<{
   totalFiles: number;
   snippets: Array<{ file: string; content: string }>;
 }> {
-  const ig = ignore();
-  ig.add([
-    "node_modules/**",
-    ".git/**",
-    "dist/**",
-    "build/**",
-    "*.log",
-    ".env*",
-    "coverage/**",
-  ]);
-  if (temporaryIgnore?.length) ig.add(temporaryIgnore);
-
-  try {
-    const gitignorePath = path.join(projectPath, ".gitignore");
-    const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
-    ig.add(gitignoreContent);
-  } catch {
-    // no-op: .gitignore optional
-  }
+  const ig = await createIgnoreInstance({
+    projectPath,
+    temporaryIgnore,
+    ignoreMcpignore,
+    context,
+  });
 
   const pattern =
     fileTypes && fileTypes.length > 0
@@ -192,6 +185,8 @@ export async function geminiCodeSearchLogic(
     params.fileTypes,
     maxResults,
     params.temporaryIgnore,
+    params.ignoreMcpignore,
+    context,
   );
 
   if (snippets.length === 0) {

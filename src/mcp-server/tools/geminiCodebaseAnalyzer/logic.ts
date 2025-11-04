@@ -10,7 +10,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { promises as fs } from "fs";
 import path from "path";
 import { glob } from "glob";
-import { logger, type RequestContext } from "../../../utils/index.js";
+import { logger, type RequestContext, createIgnoreInstance } from "../../../utils/index.js";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { config } from "../../../config/index.js";
 import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliProvider.js";
@@ -52,6 +52,15 @@ export const GeminiCodebaseAnalyzerInputSchema = z
       .describe(
         "Analysis mode that guides the type of analysis to perform. Options: general, implementation, refactoring, explanation, debugging, audit, security, performance, testing, documentation",
       ),
+    temporaryIgnore: z
+      .array(z.string())
+      .optional()
+      .describe("Additional ignore globs for this run only."),
+    ignoreMcpignore: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("If true, ignores the .mcpignore file and only uses .gitignore patterns."),
     geminiApiKey: z
       .string()
       .min(1)
@@ -147,6 +156,8 @@ const MAX_FILE_COUNT = 1000;
  */
 async function prepareFullContext(
   projectPath: string,
+  temporaryIgnore: string[] | undefined,
+  ignoreMcpignore: boolean | undefined,
   context: RequestContext,
 ): Promise<string> {
   logger.debug("Starting project context preparation", {
@@ -155,46 +166,22 @@ async function prepareFullContext(
   });
 
   try {
-    let gitignoreRules: string[] = [];
-
-    // Read .gitignore file if it exists
-    try {
-      const gitignorePath = path.join(projectPath, ".gitignore");
-      const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
-      gitignoreRules = gitignoreContent
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith("#"));
-
-      logger.debug("Loaded gitignore rules", {
-        ...context,
-        rulesCount: gitignoreRules.length,
-      });
-    } catch (_error) {
-      logger.debug("No .gitignore file found, including all files", {
-        ...context,
-      });
-    }
+    const ig = await createIgnoreInstance({
+      projectPath,
+      temporaryIgnore,
+      ignoreMcpignore,
+      context,
+    });
 
     // Scan all files in the project (including dotfiles)
-    const files = await glob("**/*", {
+    const allFiles = await glob("**/*", {
       cwd: projectPath,
-      ignore: [
-        ...gitignoreRules,
-        "node_modules/**",
-        ".git/**",
-        "*.log",
-        ".env*",
-        "dist/**",
-        "build/**",
-        "*.map",
-        "*.lock",
-        ".cache/**",
-        "coverage/**",
-      ],
       nodir: true,
       dot: true, // Include dotfiles (e.g., .roomodes, .roo/)
     });
+
+    // Filter files using ignore instance
+    const files = allFiles.filter((f) => !ig.ignores(f));
 
     logger.info("Found files to process", {
       ...context,
@@ -338,7 +325,12 @@ export async function geminiCodebaseAnalyzerLogic(
     });
 
     // Prepare full project context
-    const fullContext = await prepareFullContext(params.projectPath, context);
+    const fullContext = await prepareFullContext(
+      params.projectPath,
+      params.temporaryIgnore,
+      params.ignoreMcpignore,
+      context,
+    );
 
     if (fullContext.length === 0) {
       throw new Error("No readable files found in the project directory");
