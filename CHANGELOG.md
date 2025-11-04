@@ -1,4 +1,21 @@
 # Changelog
+## [2.2.7] - 2025-11-04
+
+### Fixed
+
+- Updated repository URLs in `package.json` to point to correct GitHub repository (`fuko2935/gemini-mcp-local`)
+- Resolved all linting errors (14 errors → 0):
+  - Added `GeminiUsage` interface to replace `any` types in `geminiCliProvider.ts`
+  - Prefixed unused parameters with underscore in `integrationTest.ts`
+  - Removed unused `config` import from `integrationTest.ts`
+  - Added `dist/` and `node_modules/` to ESLint ignore patterns
+
+### Changed
+
+- Added comprehensive AGENTS.md documentation files at root and module levels
+- Reorganized example tools and resources into blueprint directories for better project structure
+- Enhanced ESLint configuration with proper ignore patterns for build artifacts
+
 ## [2.2.0] - 2025-01-28
 
 ### Fixed
