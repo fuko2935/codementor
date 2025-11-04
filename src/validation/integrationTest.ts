@@ -19,11 +19,11 @@ interface TestResult {
  */
 async function testStdioTransportStartup(): Promise<TestResult> {
   console.log("🧪 Testing STDIO Transport Startup...");
-  
+
   const startTime = Date.now();
   const errors: string[] = [];
   let output = "";
-  
+
   return new Promise((resolve) => {
     // Set environment for STDIO transport
     const env = {
@@ -48,13 +48,15 @@ async function testStdioTransportStartup(): Promise<TestResult> {
     child.stderr?.on("data", (data) => {
       const chunk = data.toString();
       stderrData += chunk;
-      
+
       // Check for logger initialization issues
-      if (chunk.includes("Logger not initialized") || 
-          chunk.includes("message dropped")) {
+      if (
+        chunk.includes("Logger not initialized") ||
+        chunk.includes("message dropped")
+      ) {
         errors.push("Logger initialization warning found in stderr");
       }
-      
+
       // Check for console interference (should not happen in STDIO)
       if (chunk.includes("console.log") || chunk.includes("console.warn")) {
         errors.push("Console interference detected in STDIO transport");
@@ -64,17 +66,18 @@ async function testStdioTransportStartup(): Promise<TestResult> {
     // Test with a simple MCP request after startup
     setTimeout(() => {
       if (child.stdin) {
-        const testRequest = JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "initialize",
-          params: {
-            protocolVersion: "2024-11-05",
-            capabilities: {},
-            clientInfo: { name: "test-client", version: "1.0.0" }
-          }
-        }) + "\n";
-        
+        const testRequest =
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "initialize",
+            params: {
+              protocolVersion: "2024-11-05",
+              capabilities: {},
+              clientInfo: { name: "test-client", version: "1.0.0" },
+            },
+          }) + "\n";
+
         child.stdin.write(testRequest);
       }
     }, 2000);
@@ -87,11 +90,11 @@ async function testStdioTransportStartup(): Promise<TestResult> {
     child.on("close", (code) => {
       const duration = Date.now() - startTime;
       output = `STDOUT:\n${stdoutData}\nSTDERR:\n${stderrData}`;
-      
+
       // Check if stdout contains valid JSON-RPC response
       let hasValidJsonRpc = false;
       try {
-        const lines = stdoutData.split('\n').filter(line => line.trim());
+        const lines = stdoutData.split("\n").filter((line) => line.trim());
         for (const line of lines) {
           const parsed = JSON.parse(line);
           if (parsed.jsonrpc === "2.0" && parsed.id === 1) {
@@ -108,7 +111,7 @@ async function testStdioTransportStartup(): Promise<TestResult> {
       }
 
       const success = errors.length === 0 && hasValidJsonRpc;
-      
+
       resolve({
         success,
         output,
@@ -134,11 +137,11 @@ async function testStdioTransportStartup(): Promise<TestResult> {
  */
 async function testHttpTransportStartup(): Promise<TestResult> {
   console.log("🧪 Testing HTTP Transport Startup...");
-  
+
   const startTime = Date.now();
   const errors: string[] = [];
   let output = "";
-  
+
   return new Promise((resolve) => {
     // Set environment for HTTP transport
     const env = {
@@ -164,10 +167,12 @@ async function testHttpTransportStartup(): Promise<TestResult> {
     child.stderr?.on("data", (data) => {
       const chunk = data.toString();
       stderrData += chunk;
-      
+
       // Check for logger initialization issues
-      if (chunk.includes("Logger not initialized") || 
-          chunk.includes("message dropped")) {
+      if (
+        chunk.includes("Logger not initialized") ||
+        chunk.includes("message dropped")
+      ) {
         errors.push("Logger initialization warning found in stderr");
       }
     });
@@ -188,8 +193,8 @@ async function testHttpTransportStartup(): Promise<TestResult> {
             params: {
               protocolVersion: "2024-11-05",
               capabilities: {},
-              clientInfo: { name: "test-client", version: "1.0.0" }
-            }
+              clientInfo: { name: "test-client", version: "1.0.0" },
+            },
           }),
         });
 
@@ -199,7 +204,7 @@ async function testHttpTransportStartup(): Promise<TestResult> {
       } catch (error) {
         errors.push(`HTTP request failed: ${error}`);
       }
-      
+
       child.kill("SIGTERM");
     }, 3000);
 
@@ -211,17 +216,18 @@ async function testHttpTransportStartup(): Promise<TestResult> {
     child.on("close", (code) => {
       const duration = Date.now() - startTime;
       output = `STDOUT:\n${stdoutData}\nSTDERR:\n${stderrData}`;
-      
+
       // Check for successful HTTP server startup
-      const hasHttpStartup = stderrData.includes("MCP Server running at") || 
-                            stderrData.includes("HTTP transport listening");
-      
+      const hasHttpStartup =
+        stderrData.includes("MCP Server running at") ||
+        stderrData.includes("HTTP transport listening");
+
       if (!hasHttpStartup) {
         errors.push("HTTP server startup confirmation not found");
       }
 
       const success = errors.length === 0;
-      
+
       resolve({
         success,
         output,
@@ -247,51 +253,51 @@ async function testHttpTransportStartup(): Promise<TestResult> {
  */
 export async function runIntegrationTests(): Promise<boolean> {
   console.log("🚀 Starting Integration Tests...\n");
-  
+
   // Ensure the project is built
   console.log("📦 Building project...");
   const buildResult = await new Promise<boolean>((resolve) => {
     const buildProcess = spawn("npm", ["run", "build"], {
       stdio: "inherit",
     });
-    
+
     buildProcess.on("close", (code) => {
       resolve(code === 0);
     });
   });
-  
+
   if (!buildResult) {
     console.error("❌ Build failed. Cannot run integration tests.");
     return false;
   }
-  
+
   console.log("✅ Build completed successfully.\n");
-  
+
   const tests = [
     { name: "STDIO Transport", test: testStdioTransportStartup },
     { name: "HTTP Transport", test: testHttpTransportStartup },
   ];
-  
+
   let allPassed = true;
-  
+
   for (const { name, test } of tests) {
     try {
       const result = await test();
-      
+
       if (result.success) {
         console.log(`✅ ${name} test passed (${result.duration}ms)`);
       } else {
         console.log(`❌ ${name} test failed (${result.duration}ms)`);
         console.log("Errors:");
-        result.errors.forEach(error => console.log(`  - ${error}`));
+        result.errors.forEach((error) => console.log(`  - ${error}`));
         allPassed = false;
       }
-      
+
       if (process.env.VERBOSE_TESTS) {
         console.log("Output:");
         console.log(result.output);
       }
-      
+
       console.log();
     } catch (error) {
       console.error(`❌ ${name} test failed with exception:`, error);
@@ -299,13 +305,13 @@ export async function runIntegrationTests(): Promise<boolean> {
       console.log();
     }
   }
-  
+
   if (allPassed) {
     console.log("🎉 All integration tests passed!");
   } else {
     console.log("❌ Some integration tests failed. Check the output above.");
   }
-  
+
   return allPassed;
 }
 

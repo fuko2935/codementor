@@ -21,7 +21,7 @@ sequenceDiagram
     participant Logger as Logger Singleton
     participant Config as Configuration
     participant Transport as MCP Transport
-    
+
     Main->>Config: Load configuration
     Config-->>Main: Transport type & log level
     Main->>Logger: initialize(level, transportType)
@@ -37,22 +37,24 @@ sequenceDiagram
 ### 1. Enhanced Logger Initialization
 
 **Interface Changes:**
+
 ```typescript
 interface LoggerInitializationOptions {
   level: McpLogLevel;
-  transportType: 'stdio' | 'http';
+  transportType: "stdio" | "http";
   environment: string;
   logsPath?: string;
 }
 
 class Logger {
-  public async initialize(options: LoggerInitializationOptions): Promise<void>
-  private configureTransportAwareLogging(transportType: string): void
-  private ensureInitialized(): boolean
+  public async initialize(options: LoggerInitializationOptions): Promise<void>;
+  private configureTransportAwareLogging(transportType: string): void;
+  private ensureInitialized(): boolean;
 }
 ```
 
 **Key Improvements:**
+
 - Transport-aware initialization with explicit transport type parameter
 - Synchronous initialization check with proper error handling
 - Environment-based configuration adaptation
@@ -60,22 +62,23 @@ class Logger {
 ### 2. Startup Sequence Orchestration
 
 **Modified index.ts Flow:**
+
 ```typescript
 async function start(): Promise<void> {
   // 1. Load configuration first
   const config = await loadConfiguration();
-  
+
   // 2. Initialize logger with transport awareness
   await logger.initialize({
     level: config.logLevel,
     transportType: config.mcpTransportType,
     environment: config.environment,
-    logsPath: config.logsPath
+    logsPath: config.logsPath,
   });
-  
+
   // 3. Now safe to log startup messages
   logger.info("Logger initialized successfully");
-  
+
   // 4. Continue with MCP server initialization
   const server = await initializeAndStartServer();
 }
@@ -84,13 +87,14 @@ async function start(): Promise<void> {
 ### 3. Transport-Aware Console Configuration
 
 **Console Transport Logic:**
+
 ```typescript
 private configureTransportAwareLogging(transportType: string): void {
   const isStdioTransport = transportType === 'stdio';
-  const shouldEnableConsole = !isStdioTransport && 
-                             process.stdout.isTTY && 
+  const shouldEnableConsole = !isStdioTransport &&
+                             process.stdout.isTTY &&
                              this.currentMcpLevel === 'debug';
-  
+
   if (shouldEnableConsole && !this.hasConsoleTransport()) {
     this.addConsoleTransport();
   } else if (!shouldEnableConsole && this.hasConsoleTransport()) {
@@ -102,6 +106,7 @@ private configureTransportAwareLogging(transportType: string): void {
 ### 4. Error Handling and Fallbacks
 
 **Graceful Degradation:**
+
 - File logging failure → Continue with console/stderr only
 - Invalid log level → Default to 'info' with warning
 - Transport detection failure → Default to safe configuration
@@ -116,7 +121,7 @@ interface LoggerState {
   initialized: boolean;
   initializationPromise?: Promise<void>;
   currentLevel: McpLogLevel;
-  transportType: 'stdio' | 'http';
+  transportType: "stdio" | "http";
   consoleEnabled: boolean;
   fileLoggingEnabled: boolean;
 }
@@ -127,7 +132,7 @@ interface LoggerState {
 ```typescript
 interface McpServerConfig {
   logLevel: McpLogLevel;
-  mcpTransportType: 'stdio' | 'http';
+  mcpTransportType: "stdio" | "http";
   environment: string;
   logsPath?: string;
 }
@@ -138,6 +143,7 @@ interface McpServerConfig {
 ### 1. Initialization Errors
 
 **Strategy**: Fail fast with clear error messages
+
 - Log directory creation failure → Warn and continue without file logging
 - Invalid configuration → Use safe defaults and warn
 - Winston setup failure → Fall back to console.error and exit
@@ -145,6 +151,7 @@ interface McpServerConfig {
 ### 2. Runtime Errors
 
 **Strategy**: Graceful degradation
+
 - Message logging before initialization → Queue or drop with warning
 - Transport configuration changes → Reconfigure safely
 - File system errors → Continue with available transports
@@ -152,11 +159,13 @@ interface McpServerConfig {
 ### 3. Transport-Specific Error Handling
 
 **STDIO Transport:**
+
 - Redirect all console output to stderr
 - Ensure stdout remains clean for JSON-RPC
 - Handle process.stdout.write errors gracefully
 
 **HTTP Transport:**
+
 - Allow console logging for debugging
 - Handle HTTP server startup errors
 - Maintain log correlation across requests
@@ -166,12 +175,14 @@ interface McpServerConfig {
 ### 1. Unit Tests
 
 **Logger Initialization:**
+
 - Test successful initialization with various configurations
 - Test initialization failure scenarios
 - Test multiple initialization attempts
 - Test transport-aware configuration
 
 **Transport Detection:**
+
 - Test STDIO transport console disabling
 - Test HTTP transport console enabling
 - Test TTY detection logic
@@ -180,12 +191,14 @@ interface McpServerConfig {
 ### 2. Integration Tests
 
 **Startup Sequence:**
+
 - Test complete server startup with STDIO transport
 - Test complete server startup with HTTP transport
 - Test startup with invalid configuration
 - Test startup with missing log directory
 
 **Error Scenarios:**
+
 - Test behavior when logs directory is not writable
 - Test behavior with invalid log levels
 - Test behavior with missing environment variables
@@ -193,6 +206,7 @@ interface McpServerConfig {
 ### 3. End-to-End Tests
 
 **MCP Communication:**
+
 - Test STDIO transport without console interference
 - Test HTTP transport with proper logging
 - Test log message correlation across requests

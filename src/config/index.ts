@@ -55,7 +55,9 @@ try {
   projectRoot = findProjectRoot(currentModuleDir);
 } catch (error: unknown) {
   const errorMessage = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`FATAL: Error determining project root: ${errorMessage}\n`);
+  process.stderr.write(
+    `FATAL: Error determining project root: ${errorMessage}\n`,
+  );
   // Fallback to process.cwd() if project root cannot be determined.
   // This might happen in unusual execution environments.
   projectRoot = process.cwd();
@@ -90,7 +92,18 @@ const EnvSchema = z.object({
   /** Optional. The version of the MCP server. Defaults to `package.json` version. */
   MCP_SERVER_VERSION: z.string().optional(),
   /** Minimum logging level. See `McpLogLevel` in logger utility. Default: "debug". */
-  MCP_LOG_LEVEL: z.enum(["debug", "info", "notice", "warning", "error", "crit", "alert", "emerg"]).default("debug"),
+  MCP_LOG_LEVEL: z
+    .enum([
+      "debug",
+      "info",
+      "notice",
+      "warning",
+      "error",
+      "crit",
+      "alert",
+      "emerg",
+    ])
+    .default("debug"),
   /** Directory for log files. Defaults to "logs" in project root. */
   LOGS_DIR: z.string().default(path.join(projectRoot, "logs")),
   /** Runtime environment (e.g., "development", "production"). Default: "development". */
@@ -129,8 +142,8 @@ const EnvSchema = z.object({
   OPENROUTER_APP_NAME: z.string().optional(),
   /** Optional. API key for OpenRouter services. */
   OPENROUTER_API_KEY: z.string().optional(),
-  /** Required. API key for Google Gemini services. */
-  GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY is required"),
+  /** Optional. API key for Google Gemini services. */
+  GEMINI_API_KEY: z.string().optional(),
   /** Default LLM provider. Default: "gemini-cli". */
   LLM_DEFAULT_PROVIDER: z
     .enum([
@@ -149,9 +162,7 @@ const EnvSchema = z.object({
     ])
     .default("gemini-cli"),
   /** Default LLM model. Default: "gemini-2.5-pro". */
-  LLM_DEFAULT_MODEL: z
-    .string()
-    .default("gemini-2.5-pro"),
+  LLM_DEFAULT_MODEL: z.string().default("gemini-2.5-pro"),
   /** Optional. Default LLM temperature (0.0-2.0). */
   LLM_DEFAULT_TEMPERATURE: z.coerce.number().min(0).max(2).optional(),
   /** Optional. Default LLM top_p (0.0-1.0). */
@@ -198,13 +209,7 @@ if (!parsedEnv.success) {
       `❌ Invalid environment variables found: ${JSON.stringify(parsedEnv.error.flatten().fieldErrors)}\n`,
     );
   }
-  // GEMINI_API_KEY is required, so throw error if missing
-  if (parsedEnv.error.flatten().fieldErrors.GEMINI_API_KEY) {
-    throw new Error(
-      `GEMINI_API_KEY is required. Please set it in your environment variables or configuration.`,
-    );
-  }
-  // If validation fails for other reasons, throw with all errors
+  // No special-casing for GEMINI_API_KEY; it is optional now. Throw generic error for other invalid vars.
   throw new Error(
     `Invalid environment variables: ${JSON.stringify(parsedEnv.error.flatten().fieldErrors)}`,
   );

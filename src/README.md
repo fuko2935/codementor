@@ -4,14 +4,14 @@ The `src` directory contains the TypeScript sources that power the `gemini-mcp-l
 
 ## Key Modules
 
-| Path | Purpose |
-| --- | --- |
-| `simple-server.ts` | CLI entry that registers tools, resolves provider API keys, and connects to the STDIO or HTTP transport. |
-| `config/` | Loads environment variables with Zod validation and exposes `config.providerApiKeys`. |
-| `mcp-server/` | Optional modular server scaffolding (create/register tools, HTTP & STDIO transports, auth middleware). |
-| `services/llm-providers/` | OpenRouter helper kept for reference when integrating additional providers. |
-| `utils/` | Shared utilities: logging, error handling, request context tracking, metrics, parsing, security. |
-| `index.ts` | Programmatic bootstrap for embedding the MCP server in other runtimes. |
+| Path                      | Purpose                                                                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `simple-server.ts`        | CLI entry that registers tools, resolves provider API keys, and connects to the STDIO or HTTP transport. |
+| `config/`                 | Loads environment variables with Zod validation and exposes `config.providerApiKeys`.                    |
+| `mcp-server/`             | Optional modular server scaffolding (create/register tools, HTTP & STDIO transports, auth middleware).   |
+| `services/llm-providers/` | OpenRouter helper kept for reference when integrating additional providers.                              |
+| `utils/`                  | Shared utilities: logging, error handling, request context tracking, metrics, parsing, security.         |
+| `index.ts`                | Programmatic bootstrap for embedding the MCP server in other runtimes.                                   |
 
 ## Coding Guidelines
 
@@ -38,4 +38,3 @@ For larger features, consider moving the implementation into `src/mcp-server` an
 - Use the HTTP transport (`MCP_TRANSPORT_TYPE=http`) when you need live console output during development.
 
 Happy building!
-

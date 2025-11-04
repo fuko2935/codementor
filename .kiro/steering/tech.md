@@ -10,23 +10,27 @@
 ## Key Dependencies
 
 ### MCP & AI Integration
+
 - `@modelcontextprotocol/sdk` - Core MCP functionality
 - `@google/generative-ai` - Gemini AI integration
 - `openai` - OpenAI API client
 - `tiktoken` - Token counting utilities
 
 ### Server & Transport
+
 - `hono` - Web framework for HTTP transport
 - `@hono/node-server` - Node.js adapter for Hono
 - `jose` - JWT handling for authentication
 
 ### Data & Storage
+
 - `@duckdb/node-api` - In-process analytical database
 - `@supabase/supabase-js` - Supabase client
 - `js-yaml` - YAML parsing
 - `partial-json` - Partial JSON parsing
 
 ### Utilities
+
 - `winston` - Structured logging
 - `dotenv` - Environment variable management
 - `glob` - File pattern matching
@@ -39,6 +43,7 @@
 ## Build System
 
 ### Core Commands
+
 ```bash
 # Development
 npm run start:local          # Run with ts-node and dotenv
@@ -65,12 +70,14 @@ npm run inspector           # Run MCP inspector tool
 ```
 
 ### TypeScript Configuration
+
 - **Target**: ES2020 with DOM libraries
 - **Module**: ESNext with Node resolution
 - **Output**: `dist/` directory with declarations
 - **Strict mode**: Enabled with consistent casing enforcement
 
 ### Code Quality Tools
+
 - **ESLint**: TypeScript-ESLint with recommended rules
 - **Prettier**: Automated formatting for TS/JS/JSON/MD/HTML/CSS
 - **TypeDoc**: API documentation generation
@@ -79,10 +86,12 @@ npm run inspector           # Run MCP inspector tool
 ## Environment Configuration
 
 ### Required Variables
+
 - `GEMINI_API_KEY` - Google Gemini API key
 - `OPENROUTER_API_KEY` - OpenRouter API key (for agent)
 
 ### Optional Variables
+
 - `MCP_TRANSPORT_TYPE` - `stdio` (default) or `http`
 - `MCP_HTTP_PORT` - HTTP server port (default: 3010)
 - `MCP_HTTP_HOST` - HTTP server host (default: 127.0.0.1)

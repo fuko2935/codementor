@@ -1,8 +1,8 @@
 /**
- * @fileoverview Handles the registration of the `get_random_cat_fact` tool
- * with an MCP server instance. This tool fetches a random cat fact from the
- * Cat Fact Ninja API.
- * @module src/mcp-server/tools/catFactFetcher/registration
+ * @fileoverview [ARCHITECTURAL BLUEPRINT] Handles the registration of the `echo_message` tool.
+ * This module serves as the primary template for creating new synchronous tools.
+ * DO NOT REMOVE: This tool is a living example of our architectural standards.
+ * @module src/mcp-server/tools/echoTool/registration
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -14,24 +14,18 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
-import {
-  CatFactFetcherInput,
-  CatFactFetcherInputSchema,
-  catFactFetcherLogic,
-} from "./logic.js";
+import { EchoToolInput, EchoToolInputSchema, echoToolLogic } from "./logic.js";
 
 /**
- * Registers the 'get_random_cat_fact' tool and its handler with the MCP server.
+ * Registers the 'echo_message' tool and its handler with the provided MCP server instance.
  *
  * @param server - The MCP server instance to register the tool with.
- * @returns A promise that resolves when tool registration is complete.
+ * @returns A promise that resolves when the tool registration is complete.
  */
-export const registerCatFactFetcherTool = async (
-  server: McpServer,
-): Promise<void> => {
-  const toolName = "get_random_cat_fact";
+export const registerEchoTool = async (server: McpServer): Promise<void> => {
+  const toolName = "echo_message";
   const toolDescription =
-    "Fetches a random cat fact from the Cat Fact Ninja API. Optionally, a maximum length for the fact can be specified.";
+    "Echoes a message back with optional formatting and repetition.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({
@@ -46,9 +40,9 @@ export const registerCatFactFetcherTool = async (
       server.tool(
         toolName,
         toolDescription,
-        CatFactFetcherInputSchema.shape,
+        EchoToolInputSchema.shape,
         async (
-          params: CatFactFetcherInput,
+          params: EchoToolInput,
           mcpContext: unknown,
         ): Promise<CallToolResult> => {
           const handlerContext: RequestContext =
@@ -61,7 +55,7 @@ export const registerCatFactFetcherTool = async (
             });
 
           try {
-            const result = await catFactFetcherLogic(params, handlerContext);
+            const result = await echoToolLogic(params, handlerContext);
             return {
               content: [
                 { type: "text", text: JSON.stringify(result, null, 2) },
@@ -70,7 +64,7 @@ export const registerCatFactFetcherTool = async (
             };
           } catch (error) {
             const handledError = ErrorHandler.handleError(error, {
-              operation: "catFactFetcherToolHandler",
+              operation: "echoToolHandler",
               context: handlerContext,
               input: params,
             });
@@ -80,7 +74,7 @@ export const registerCatFactFetcherTool = async (
                 ? handledError
                 : new McpError(
                     BaseErrorCode.INTERNAL_ERROR,
-                    "An unexpected error occurred while fetching a cat fact.",
+                    "An unexpected error occurred in the echo tool.",
                     { originalErrorName: handledError.name },
                   );
 

@@ -307,5 +307,4 @@ export class McpClientManager {
     logger.debug(`Total tools fetched: ${allTools.size}`, context);
     return allTools;
   }
-
 }

@@ -15,6 +15,7 @@ Tests logger initialization and configuration:
 - ✅ Transport-specific configurations
 
 **Run with:**
+
 ```bash
 npm run validate:startup
 # or
@@ -32,6 +33,7 @@ Tests complete startup sequence with actual server processes:
 - ✅ No logger initialization issues
 
 **Run with:**
+
 ```bash
 npm run test:integration
 ```
@@ -49,6 +51,7 @@ npm run test:all
 ### Expected Behavior
 
 #### STDIO Transport
+
 - ✅ Logger initializes without errors
 - ✅ Console transport is disabled (no stdout interference)
 - ✅ JSON-RPC communication works correctly
@@ -56,6 +59,7 @@ npm run test:all
 - ✅ No "Logger not initialized" messages
 
 #### HTTP Transport
+
 - ✅ Logger initializes without errors
 - ✅ Console logging enabled for debugging (in TTY environments)
 - ✅ HTTP server starts successfully
@@ -77,6 +81,7 @@ If tests fail, check:
 You can also manually test the startup sequence:
 
 #### STDIO Transport
+
 ```bash
 # Build first
 npm run build
@@ -86,6 +91,7 @@ MCP_TRANSPORT_TYPE=stdio MCP_LOG_LEVEL=debug node dist/index.js
 ```
 
 #### HTTP Transport
+
 ```bash
 # Build first
 npm run build

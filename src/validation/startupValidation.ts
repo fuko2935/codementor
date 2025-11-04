@@ -13,18 +13,18 @@ import { requestContextService } from "../utils/index.js";
  */
 async function validateLoggerInitialization(): Promise<boolean> {
   console.log("🧪 Testing Logger Initialization...");
-  
+
   try {
     // Logger is already initialized via singleton pattern
     // Just verify it's working
     const context = requestContextService.createRequestContext({
       operation: "StartupValidation.testLogger",
     });
-    
+
     logger.debug("Test debug message", context);
     logger.info("Test info message", context);
     logger.warning("Test warning message", context);
-    
+
     console.log("  ✓ Logger is working correctly");
     return true;
   } catch (error) {
@@ -38,14 +38,14 @@ async function validateLoggerInitialization(): Promise<boolean> {
  */
 async function validateNoInitializationWarnings(): Promise<boolean> {
   console.log("🧪 Testing for Logger Initialization Warnings...");
-  
+
   try {
     // Logger is already initialized via singleton pattern
     // Test logging operations
     const testContext = requestContextService.createRequestContext({
       operation: "validationTest",
     });
-    
+
     logger.info("Test message 1", testContext);
     logger.debug("Test message 2", testContext);
     logger.warning("Test warning", testContext);
@@ -63,17 +63,17 @@ async function validateNoInitializationWarnings(): Promise<boolean> {
  */
 async function validateTransportConfigurations(): Promise<boolean> {
   console.log("🧪 Testing Transport Configurations...");
-  
+
   try {
     // Logger is already initialized via singleton pattern
     // Just verify it's working
     const context = requestContextService.createRequestContext({
       operation: "StartupValidation.testTransport",
     });
-    
+
     logger.info("Transport test message", context);
     console.log("  ✓ Transport configuration validated");
-    
+
     return true;
   } catch (error) {
     console.error("  ❌ Transport configuration validation failed:", error);
@@ -86,17 +86,17 @@ async function validateTransportConfigurations(): Promise<boolean> {
  */
 async function validateDiagnostics(): Promise<boolean> {
   console.log("🧪 Testing Diagnostic Functionality...");
-  
+
   try {
     // Logger is already initialized via singleton pattern
     // Just verify it's working
     const context = requestContextService.createRequestContext({
       operation: "StartupValidation.testDiagnostics",
     });
-    
+
     logger.info("Diagnostic test message", context);
     console.log("  ✓ Diagnostic functionality validated");
-    
+
     return true;
   } catch (error) {
     console.error("  ❌ Diagnostic validation failed:", error);
@@ -109,16 +109,16 @@ async function validateDiagnostics(): Promise<boolean> {
  */
 export async function runStartupValidation(): Promise<boolean> {
   console.log("🚀 Starting Logger and Transport Validation...\n");
-  
+
   const validations = [
     validateLoggerInitialization,
     validateNoInitializationWarnings,
     validateTransportConfigurations,
     validateDiagnostics,
   ];
-  
+
   let allPassed = true;
-  
+
   for (const validation of validations) {
     try {
       const result = await validation();
@@ -132,13 +132,13 @@ export async function runStartupValidation(): Promise<boolean> {
       console.log();
     }
   }
-  
+
   if (allPassed) {
     console.log("✅ All startup validations passed!");
   } else {
     console.log("❌ Some validations failed. Please check the output above.");
   }
-  
+
   return allPassed;
 }
 

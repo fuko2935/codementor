@@ -11,6 +11,10 @@ import { promises as fs } from "fs";
 import path from "path";
 import { glob } from "glob";
 import { logger, type RequestContext } from "../../../utils/index.js";
+import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
+import { config } from "../../../config/index.js";
+import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliProvider.js";
+import { getSystemPrompt } from "../../prompts.js";
 
 /**
  * Zod schema defining the input parameters for the `gemini_codebase_analyzer` tool.
@@ -26,16 +30,34 @@ export const GeminiCodebaseAnalyzerInputSchema = z
     question: z
       .string()
       .min(1, "Question cannot be empty.")
-      .max(2000, "Question cannot exceed 2000 characters.")
+      .max(50000, "Question cannot exceed 50000 characters.")
       .describe(
         "Your question about the codebase. Examples: 'What does this project do?', 'Find potential bugs', 'Explain the architecture', 'How to add a new feature?', 'Review code quality'",
       ),
-    geminiApiKey: z
-      .string()
-      .min(1, "Gemini API key is required.")
+    analysisMode: z
+      .enum([
+        "general",
+        "implementation",
+        "refactoring",
+        "explanation",
+        "debugging",
+        "audit",
+        "security",
+        "performance",
+        "testing",
+        "documentation",
+      ])
+      .default("general")
       .optional()
       .describe(
-        "Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)",
+        "Analysis mode that guides the type of analysis to perform. Options: general, implementation, refactoring, explanation, debugging, audit, security, performance, testing, documentation",
+      ),
+    geminiApiKey: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional Gemini API key (not needed for gemini-cli provider). Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)",
       ),
   })
   .describe("Input parameters for analyzing a codebase with Gemini AI");
@@ -43,7 +65,9 @@ export const GeminiCodebaseAnalyzerInputSchema = z
 /**
  * Type definition for the input parameters of the Gemini codebase analyzer.
  */
-export type GeminiCodebaseAnalyzerInput = z.infer<typeof GeminiCodebaseAnalyzerInputSchema>;
+export type GeminiCodebaseAnalyzerInput = z.infer<
+  typeof GeminiCodebaseAnalyzerInputSchema
+>;
 
 /**
  * Interface defining the response structure for the codebase analysis.
@@ -61,36 +85,70 @@ export interface GeminiCodebaseAnalyzerResponse {
   question: string;
 }
 
+
 /**
- * System prompt for the Gemini AI to provide comprehensive codebase analysis.
+ * Maximum allowed total file size in bytes (100 MB).
  */
-const SYSTEM_PROMPT = `
-You are a senior AI Software Engineer and consultant with full access to an entire software project codebase. Your task is to analyze the complete project context and a specific question from another coding AI, providing the clearest and most accurate answer to help that AI.
+const MAX_TOTAL_SIZE = 100 * 1024 * 1024;
 
-YOUR RESPONSIBILITIES:
+/**
+ * Creates a model instance based on the configured provider.
+ * Supports both gemini-cli (OAuth) and direct API key authentication.
+ */
+function createModelByProvider(
+  modelId: string,
+  generationConfig?: {
+    maxOutputTokens?: number;
+    temperature?: number;
+    topK?: number;
+    topP?: number;
+  },
+  apiKey?: string,
+) {
+  const provider = config.llmDefaultProvider as
+    | "gemini"
+    | "google"
+    | "gemini-cli";
+  if (provider === "gemini-cli") {
+    return createGeminiCliModel(modelId, {}, generationConfig);
+  }
+  const key =
+    apiKey ||
+    config.geminiApiKey ||
+    config.googleApiKey ||
+    process.env.GEMINI_API_KEY ||
+    "";
+  if (!key) {
+    throw new McpError(
+      BaseErrorCode.CONFIGURATION_ERROR,
+      "Missing Gemini API key. Provide geminiApiKey or set GEMINI_API_KEY.",
+    );
+  }
+  const genAI = new GoogleGenerativeAI(key);
+  return genAI.getGenerativeModel({
+    model: modelId,
+    generationConfig: generationConfig || {},
+  });
+}
 
-1. Completely understand the vast code context provided to you.
-
-2. Evaluate the specific question (debugging, coding strategy, analysis, etc.) within this holistic context.
-
-3. Create your answer in a way that the coding AI can directly understand and use, in Markdown format, with explanatory texts and clear code blocks. Your goal is to guide that AI like a knowledgeable mentor who knows the entire project.
-
-RESPONSE FORMAT:
-- Use clear Markdown formatting
-- Include code examples when relevant
-- Provide actionable insights
-- Focus on practical guidance
-- Be comprehensive but concise
-`;
+/**
+ * Maximum allowed number of files to process.
+ */
+const MAX_FILE_COUNT = 1000;
 
 /**
  * Prepares the full context of a project by reading all files and combining them.
- * 
+ * Includes circuit breaker protection to prevent server crashes on large projects.
+ *
  * @param projectPath - The path to the project directory
  * @param context - Request context for logging
  * @returns Promise containing the full project context as a string
+ * @throws {McpError} If project exceeds size or file count limits
  */
-async function prepareFullContext(projectPath: string, context: RequestContext): Promise<string> {
+async function prepareFullContext(
+  projectPath: string,
+  context: RequestContext,
+): Promise<string> {
   logger.debug("Starting project context preparation", {
     ...context,
     projectPath,
@@ -98,43 +156,44 @@ async function prepareFullContext(projectPath: string, context: RequestContext):
 
   try {
     let gitignoreRules: string[] = [];
-    
+
     // Read .gitignore file if it exists
     try {
-      const gitignorePath = path.join(projectPath, '.gitignore');
-      const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8');
+      const gitignorePath = path.join(projectPath, ".gitignore");
+      const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
       gitignoreRules = gitignoreContent
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line && !line.startsWith('#'));
-      
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#"));
+
       logger.debug("Loaded gitignore rules", {
         ...context,
         rulesCount: gitignoreRules.length,
       });
-    } catch (error) {
+    } catch (_error) {
       logger.debug("No .gitignore file found, including all files", {
         ...context,
       });
     }
 
-    // Scan all files in the project
-    const files = await glob('**/*', {
+    // Scan all files in the project (including dotfiles)
+    const files = await glob("**/*", {
       cwd: projectPath,
       ignore: [
         ...gitignoreRules,
-        'node_modules/**',
-        '.git/**',
-        '*.log',
-        '.env*',
-        'dist/**',
-        'build/**',
-        '*.map',
-        '*.lock',
-        '.cache/**',
-        'coverage/**'
+        "node_modules/**",
+        ".git/**",
+        "*.log",
+        ".env*",
+        "dist/**",
+        "build/**",
+        "*.map",
+        "*.lock",
+        ".cache/**",
+        "coverage/**",
       ],
-      nodir: true
+      nodir: true,
+      dot: true, // Include dotfiles (e.g., .roomodes, .roo/)
     });
 
     logger.info("Found files to process", {
@@ -142,20 +201,70 @@ async function prepareFullContext(projectPath: string, context: RequestContext):
       fileCount: files.length,
     });
 
-    let fullContext = '';
+    // Check file count limit before processing
+    if (files.length > MAX_FILE_COUNT) {
+      throw new McpError(
+        BaseErrorCode.VALIDATION_ERROR,
+        `Project too large: ${files.length} files found (maximum ${MAX_FILE_COUNT} allowed). ` +
+          `For large projects, please use the \`project_orchestrator_create\` and \`project_orchestrator_analyze\` tools instead, ` +
+          `which handle large codebases more efficiently by splitting them into manageable groups.`,
+        {
+          fileCount: files.length,
+          maxFileCount: MAX_FILE_COUNT,
+        },
+      );
+    }
+
+    let fullContext = "";
     let processedFiles = 0;
+    let totalSize = 0;
 
     // Read each file and combine content
     for (const file of files) {
       try {
+        // Check file count limit during processing (safety check)
+        if (processedFiles >= MAX_FILE_COUNT) {
+          throw new McpError(
+            BaseErrorCode.VALIDATION_ERROR,
+            `Project too large: processed ${processedFiles} files (maximum ${MAX_FILE_COUNT} allowed). ` +
+              `For large projects, please use the \`project_orchestrator_create\` and \`project_orchestrator_analyze\` tools instead.`,
+            {
+              processedFiles,
+              maxFileCount: MAX_FILE_COUNT,
+            },
+          );
+        }
+
         const filePath = path.join(projectPath, file);
-        const content = await fs.readFile(filePath, 'utf-8');
-        
+        const content = await fs.readFile(filePath, "utf-8");
+        const contentSize = Buffer.byteLength(content, "utf-8");
+
+        // Check total size limit
+        if (totalSize + contentSize > MAX_TOTAL_SIZE) {
+          throw new McpError(
+            BaseErrorCode.VALIDATION_ERROR,
+            `Project too large: total size exceeds ${MAX_TOTAL_SIZE / (1024 * 1024)}MB limit ` +
+              `(current: ${Math.round(totalSize / (1024 * 1024))}MB). ` +
+              `For large projects, please use the \`project_orchestrator_create\` and \`project_orchestrator_analyze\` tools instead, ` +
+              `which handle large codebases more efficiently by splitting them into manageable groups.`,
+            {
+              currentSize: totalSize,
+              maxSize: MAX_TOTAL_SIZE,
+              processedFiles,
+            },
+          );
+        }
+
         fullContext += `--- File: ${file} ---\n`;
         fullContext += content;
-        fullContext += '\n\n';
+        fullContext += "\n\n";
         processedFiles++;
+        totalSize += contentSize;
       } catch (error) {
+        // Re-throw McpError (circuit breaker)
+        if (error instanceof McpError) {
+          throw error;
+        }
         // Skip binary files or unreadable files
         logger.debug("Skipping unreadable file", {
           ...context,
@@ -169,10 +278,15 @@ async function prepareFullContext(projectPath: string, context: RequestContext):
       ...context,
       processedFiles,
       totalCharacters: fullContext.length,
+      totalSizeBytes: totalSize,
     });
 
     return fullContext;
   } catch (error) {
+    // Re-throw McpError as-is (circuit breaker)
+    if (error instanceof McpError) {
+      throw error;
+    }
     logger.error("Failed to prepare project context", {
       ...context,
       error: String(error),
@@ -184,7 +298,7 @@ async function prepareFullContext(projectPath: string, context: RequestContext):
 /**
  * Core logic function for the Gemini codebase analyzer tool.
  * Analyzes a complete codebase using Gemini AI and returns comprehensive insights.
- * 
+ *
  * @param params - The input parameters containing project path, question, and API key
  * @param context - Request context for logging and tracking
  * @returns Promise containing the analysis response
@@ -197,26 +311,27 @@ export async function geminiCodebaseAnalyzerLogic(
     ...context,
     projectPath: params.projectPath,
     questionLength: params.question.length,
+    analysisMode: params.analysisMode || "general",
   });
 
   try {
-    // Use API key from environment (Smithery config) or from params
-    const apiKey = process.env.GEMINI_API_KEY || params.geminiApiKey;
-    
-    // Validate API key is provided when tool is actually invoked
-    if (!apiKey) {
-      throw new Error("Gemini API key is required to use this tool. Get your key from https://makersuite.google.com/app/apikey");
-    }
-
     // Validate project path exists
     const stats = await fs.stat(params.projectPath);
     if (!stats.isDirectory()) {
       throw new Error(`Project path is not a directory: ${params.projectPath}`);
     }
 
-    // Initialize Gemini AI
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    // Initialize model based on provider (supports gemini-cli OAuth or API key)
+    const model = createModelByProvider(
+      config.llmDefaultModel,
+      {
+        maxOutputTokens: 65536,
+        temperature: 0.5,
+        topK: 40,
+        topP: 0.95,
+      },
+      params.geminiApiKey,
+    );
 
     logger.debug("Gemini client initialized", {
       ...context,
@@ -224,13 +339,15 @@ export async function geminiCodebaseAnalyzerLogic(
 
     // Prepare full project context
     const fullContext = await prepareFullContext(params.projectPath, context);
-    
+
     if (fullContext.length === 0) {
       throw new Error("No readable files found in the project directory");
     }
 
-    // Create the mega prompt
-    const megaPrompt = `${SYSTEM_PROMPT}
+    // Create the mega prompt using mode-specific system prompt
+    const analysisMode = params.analysisMode || "general";
+    const systemPrompt = getSystemPrompt(analysisMode);
+    const megaPrompt = `${systemPrompt}
 
 PROJECT CONTEXT:
 ${fullContext}
@@ -256,7 +373,7 @@ ${params.question}`;
 
     return {
       analysis,
-      filesProcessed: fullContext.split('--- File:').length - 1,
+      filesProcessed: fullContext.split("--- File:").length - 1,
       totalCharacters: fullContext.length,
       projectPath: params.projectPath,
       question: params.question,

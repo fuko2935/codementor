@@ -19,11 +19,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { config, environment } from "../config/index.js";
 import { ErrorHandler, logger, requestContextService } from "../utils/index.js";
 import { BaseErrorCode } from "../types-global/errors.js";
-import { registerEchoResource } from "./resources/echoResource/index.js";
-import { registerCatFactFetcherTool } from "./tools/catFactFetcher/index.js";
-import { registerEchoTool } from "./tools/echoTool/index.js";
-import { registerFetchImageTestTool } from "./tools/imageTest/index.js";
 import { registerGeminiCodebaseAnalyzer } from "./tools/geminiCodebaseAnalyzer/index.js";
+import { registerGeminiCodeSearch } from "./tools/geminiCodeSearch/index.js";
+import { registerDynamicExpertCreate } from "./tools/dynamicExpertCreate/index.js";
+import { registerDynamicExpertAnalyze } from "./tools/dynamicExpertAnalyze/index.js";
+import { registerCalculateTokenCount } from "./tools/calculateTokenCount/index.js";
+import { registerProjectOrchestratorCreate } from "./tools/projectOrchestratorCreate/index.js";
+import { registerProjectOrchestratorAnalyze } from "./tools/projectOrchestratorAnalyze/index.js";
 import { startHttpTransport } from "./transports/httpTransport.js";
 import { connectStdioTransport } from "./transports/stdioTransport.js";
 
@@ -60,11 +62,13 @@ async function createMcpServerInstance(): Promise<McpServer> {
   await ErrorHandler.tryCatch(
     async () => {
       logger.debug("Registering resources and tools...", context);
-      await registerEchoResource(server);
-      await registerEchoTool(server);
-      await registerCatFactFetcherTool(server);
-      await registerFetchImageTestTool(server);
       await registerGeminiCodebaseAnalyzer(server);
+      await registerGeminiCodeSearch(server);
+      await registerDynamicExpertCreate(server);
+      await registerDynamicExpertAnalyze(server);
+      await registerCalculateTokenCount(server);
+      await registerProjectOrchestratorCreate(server);
+      await registerProjectOrchestratorAnalyze(server);
       logger.info("Resources and tools registered successfully", context);
     },
     {

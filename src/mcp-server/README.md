@@ -71,12 +71,34 @@ The core of extending this MCP server involves defining your custom logic and th
     - Create an `index.ts` file in your new directory that exports your registration function.
     - Import and call your registration function within the `createMcpServerInstance` function in `src/mcp-server/server.ts`. This makes your new tool/resource part of the server when it initializes.
 
-### ✨ Example References
+### ✨ Architectural Blueprints: Tool Implementation Patterns
 
-- **EchoTool**: See `src/mcp-server/tools/echoTool/` for a basic example of a synchronous tool.
-- **EchoResource**: See `src/mcp-server/resources/echoResource/` for a basic resource example.
-- **CatFactFetcher Tool**: For an example of a tool that performs asynchronous operations (like an external API call), refer to `src/mcp-server/tools/catFactFetcher/`. This demonstrates `async/await` usage, Promise management, and integration of external data sources within a tool's handler.
-- **ImageTest Tool**: See `src/mcp-server/tools/imageTest/` for an example of a tool that returns an image blob.
+The tools in this directory and the `tool-blueprints` folder serve as **live, working blueprints** for developing new tools. Do not remove them. They are the authoritative reference for our architectural standards.
+
+**Reference Blueprints (in `tool-blueprints/` - architectural examples only, not active):**
+- **`echoTool` (The "Hello World" Blueprint)**:
+  - **Purpose**: Demonstrates the absolute minimum required for a valid, synchronous tool.
+  - **Use Case**: Copy this directory to start any new tool that performs a simple, self-contained task.
+  - **Architectural Patterns Exhibited**: Separation of Concerns (`logic.ts`/`registration.ts`), Input Validation (Zod), and Structured Responses.
+  - **Location**: `src/mcp-server/tool-blueprints/echoTool/`
+- **`catFactFetcher` (The Asynchronous/External API Blueprint)**:
+  - **Purpose**: Demonstrates how to build a tool that interacts with an external, asynchronous service.
+  - **Use Case**: Use this as a template for any tool involving network requests, database queries, or other I/O operations.
+  - **Architectural Patterns Exhibited**: Async Logic, Error Propagation (`McpError`), and Utility Integration (`fetchWithTimeout`).
+  - **Location**: `src/mcp-server/tool-blueprints/catFactFetcher/`
+
+- **`imageTest` (The Image/Blob Handling Blueprint)**:
+  - **Purpose**: Demonstrates how to fetch and return image data as base64-encoded blobs in MCP tool responses.
+  - **Use Case**: Use this as a template for any tool that needs to handle binary data (images, files, etc.) and return them via MCP.
+  - **Architectural Patterns Exhibited**: Binary Data Handling, Base64 Encoding, and MIME Type Management.
+  - **Location**: `src/mcp-server/tool-blueprints/imageTest/`
+
+**Reference Resource Blueprints (in `resource-blueprints/` - architectural examples only, not active):**
+- **`echoResource` (The Basic Resource Blueprint)**:
+  - **Purpose**: Demonstrates the minimum required for a valid MCP resource.
+  - **Use Case**: Copy this directory to start any new resource that provides data via URI templates.
+  - **Architectural Patterns Exhibited**: Resource Template Patterns, URI Parameter Handling, and Content Delivery.
+  - **Location**: `src/mcp-server/resource-blueprints/echoResource/`
 
 ### 🚀 Server Initialization and Transports
 

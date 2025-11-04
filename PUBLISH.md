@@ -8,20 +8,24 @@
 ## Publishing Steps
 
 ### 1. Verify Package Name
+
 The published name is `gemini-mcp-local` (unscoped). Ensure `package.json` reflects this before publishing.
 
 ### 2. Build the Project
+
 ```bash
 npm run build
 ```
 
 ### 3. Test Locally (Optional)
+
 ```bash
 npm pack
 # This creates a .tgz file you can test with
 ```
 
 ### 4. Publish to NPM
+
 ```bash
 npm publish
 ```
@@ -35,6 +39,7 @@ Kullanıcılar artık Cursor'da MCP server'ınızı şu şekilde kullanabilir:
 **Cursor MCP Config:** `cursor_mcp_config.json` dosyasını kullanarak Cursor'a ekleyin. Detaylar için `CURSOR_SETUP.md` dosyasına bakın.
 
 **Gemini CLI Provider ile (Önerilen):**
+
 ```json
 {
   "mcpServers": {
@@ -50,6 +55,7 @@ Kullanıcılar artık Cursor'da MCP server'ınızı şu şekilde kullanabilir:
 ```
 
 **API Key ile:**
+
 ```json
 {
   "mcpServers": {
@@ -68,6 +74,7 @@ Kullanıcılar artık Cursor'da MCP server'ınızı şu şekilde kullanabilir:
 ## Updates
 
 To publish updates:
+
 1. Update version in `package.json`
 2. `npm run build`
 3. `npm publish`
@@ -81,6 +88,7 @@ To publish updates:
 ## File Structure for NPM
 
 The `files` array in `package.json` includes:
+
 - `dist/` - Compiled JavaScript
 - `README.md` - Package documentation
 - `claude_desktop_config.example.json` - Ready-to-use config

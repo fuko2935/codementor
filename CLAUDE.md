@@ -16,14 +16,14 @@ Legacy Supabase, DuckDB, Smithery, and agent packages were removed in release `2
 
 ## Daily Commands
 
-| Command | When to use |
-| --- | --- |
-| `npm run build` | Compile TypeScript into `dist/`. Always run before publishing. |
-| `npm start` | Launch compiled CLI on STDIO. |
-| `npm run start:local` | Run TypeScript entry with `ts-node` (uses `.env`). Ideal for rapid iteration. |
-| `npm run start:http` | Start compiled CLI with HTTP transport. |
-| `npm run lint` / `npm run lint:fix` | Lint the codebase. |
-| `npm run docs:generate` | Regenerate TypeDoc docs. |
+| Command                             | When to use                                                                   |
+| ----------------------------------- | ----------------------------------------------------------------------------- |
+| `npm run build`                     | Compile TypeScript into `dist/`. Always run before publishing.                |
+| `npm start`                         | Launch compiled CLI on STDIO.                                                 |
+| `npm run start:local`               | Run TypeScript entry with `ts-node` (uses `.env`). Ideal for rapid iteration. |
+| `npm run start:http`                | Start compiled CLI with HTTP transport.                                       |
+| `npm run lint` / `npm run lint:fix` | Lint the codebase.                                                            |
+| `npm run docs:generate`             | Regenerate TypeDoc docs.                                                      |
 
 ## Configuration Cheatsheet
 
@@ -92,4 +92,3 @@ The CLI remains opinionated and self-contained. If you add reusable tools, consi
 4. Update docs + changelog, then ensure `docs/tree.md` and `.env.example` stay in sync with config changes.
 
 Happy hacking! The project now optimises for fast local iteration—keep it lean.
-
