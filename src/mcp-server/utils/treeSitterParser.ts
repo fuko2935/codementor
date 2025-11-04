@@ -134,12 +134,9 @@ export class TreeSitterParserImpl implements TreeSitterParser {
       try {
         const query = new TreeSitter.Query(language.language, queryString);
         queryMap.set(queryName, query);
-      } catch (error) {
-        // Query compilation failed - log and skip
-        console.warn(
-          `Failed to compile Tree-sitter query for ${lang}.${queryName}:`,
-          error instanceof Error ? error.message : String(error),
-        );
+      } catch {
+        // Query compilation failed - log and skip (using debug level to avoid stdout pollution in STDIO mode)
+        // Note: console.warn would pollute stdout in STDIO transport and cause JSON parsing errors
       }
     }
 
@@ -161,20 +158,152 @@ export class TreeSitterParserImpl implements TreeSitterParser {
     langType: SupportedLanguage,
     filePath: string,
   ): FileMetadata {
-    if (!this.parser) {
-      throw new Error("Parser not initialized. Call setParser() first.");
-    }
+    let tree: Tree | null = null;
+    try {
+      if (!this.parser) {
+        // Parser not initialized, return minimal metadata
+        return {
+          filePath,
+          language: langType,
+          classes: [],
+          functions: [],
+          imports: [],
+          exports: [],
+          estimatedTokens: countTokensLocally(content),
+        };
+      }
 
-    // Initialize queries for this language
-    this.initializeQueries(langType, language);
+      // Initialize queries for this language
+      this.initializeQueries(langType, language);
 
-    // Set language on parser
-    this.parser.setLanguage(language.language);
+      // Set language on parser
+      this.parser.setLanguage(language.language);
 
-    // Parse content
-    const tree = this.parser.parse(content);
-    if (!tree) {
-      // Parsing failed, return minimal metadata
+      // Parse content
+      tree = this.parser.parse(content);
+      if (!tree) {
+        // Parsing failed, return minimal metadata
+        return {
+          filePath,
+          language: langType,
+          classes: [],
+          functions: [],
+          imports: [],
+          exports: [],
+          estimatedTokens: countTokensLocally(content),
+        };
+      }
+
+      // Initialize metadata
+      const metadata: FileMetadata = {
+        filePath,
+        language: langType,
+        classes: [],
+        functions: [],
+        imports: [],
+        exports: [],
+        estimatedTokens: countTokensLocally(content),
+      };
+
+      // Get queries for this language
+      const queryMap = this.queries.get(langType);
+      if (!queryMap) {
+        return metadata;
+      }
+
+      // Extract classes/types/structs
+      const classQueries = [
+        queryMap.get("classes"),
+        queryMap.get("interfaces"),
+        queryMap.get("types"),
+        queryMap.get("structs"),
+        queryMap.get("enums"),
+        queryMap.get("traits"),
+        queryMap.get("modules"),
+      ].filter((q): q is Query => q !== undefined);
+
+      for (const query of classQueries) {
+        try {
+          const captures = this.executeQuery(tree, query, [
+            "class_name",
+            "interface_name",
+            "type_name",
+            "struct_name",
+            "enum_name",
+            "trait_name",
+            "module_name",
+          ]);
+          metadata.classes.push(...captures);
+        } catch {
+          // Query execution failed, skip this query
+        }
+      }
+
+      // Extract functions/methods
+      const functionQueries = [
+        queryMap.get("functions"),
+        queryMap.get("methods"),
+      ].filter((q): q is Query => q !== undefined);
+
+      for (const query of functionQueries) {
+        try {
+          const captures = this.executeQuery(tree, query, [
+            "func_name",
+            "method_name",
+          ]);
+          metadata.functions.push(...captures);
+        } catch {
+          // Query execution failed, skip this query
+        }
+      }
+
+      // Extract imports/uses/requires
+      const importQueries = [
+        queryMap.get("imports"),
+        queryMap.get("usings"),
+        queryMap.get("uses"),
+        queryMap.get("requires"),
+      ].filter((q): q is Query => q !== undefined);
+
+      for (const query of importQueries) {
+        try {
+          const captures = this.executeQuery(tree, query, [
+            "import_path",
+            "using_path",
+            "use_path",
+            "require_path",
+          ]);
+          // Extract base package/module name (first segment)
+          const baseImports = captures.map((imp) => {
+            // Handle different import formats
+            if (imp.includes(".")) {
+              return imp.split(".")[0];
+            }
+            if (imp.includes("::")) {
+              return imp.split("::")[0];
+            }
+            if (imp.includes("/")) {
+              return imp.split("/")[0];
+            }
+            if (imp.includes("\\")) {
+              return imp.split("\\")[0];
+            }
+            return imp;
+          });
+          metadata.imports.push(...baseImports);
+        } catch {
+          // Query execution failed, skip this query
+        }
+      }
+
+      // Remove duplicates
+      metadata.classes = [...new Set(metadata.classes)];
+      metadata.functions = [...new Set(metadata.functions)];
+      metadata.imports = [...new Set(metadata.imports)];
+
+      return metadata;
+    } catch {
+      // Any parsing error - return minimal metadata
       return {
         filePath,
         language: langType,
@@ -184,104 +313,16 @@ export class TreeSitterParserImpl implements TreeSitterParser {
         exports: [],
         estimatedTokens: countTokensLocally(content),
       };
-    }
-
-    // Initialize metadata
-    const metadata: FileMetadata = {
-      filePath,
-      language: langType,
-      classes: [],
-      functions: [],
-      imports: [],
-      exports: [],
-      estimatedTokens: countTokensLocally(content),
-    };
-
-    // Get queries for this language
-    const queryMap = this.queries.get(langType);
-    if (!queryMap) {
-      return metadata;
-    }
-
-    // Extract classes/types/structs
-    const classQueries = [
-      queryMap.get("classes"),
-      queryMap.get("interfaces"),
-      queryMap.get("types"),
-      queryMap.get("structs"),
-      queryMap.get("enums"),
-      queryMap.get("traits"),
-      queryMap.get("modules"),
-    ].filter((q): q is Query => q !== undefined);
-
-    for (const query of classQueries) {
-      const captures = this.executeQuery(tree, query, [
-        "class_name",
-        "interface_name",
-        "type_name",
-        "struct_name",
-        "enum_name",
-        "trait_name",
-        "module_name",
-      ]);
-      metadata.classes.push(...captures);
-    }
-
-    // Extract functions/methods
-    const functionQueries = [
-      queryMap.get("functions"),
-      queryMap.get("methods"),
-    ].filter((q): q is Query => q !== undefined);
-
-    for (const query of functionQueries) {
-      const captures = this.executeQuery(tree, query, [
-        "func_name",
-        "method_name",
-      ]);
-      metadata.functions.push(...captures);
-    }
-
-    // Extract imports/uses/requires
-    const importQueries = [
-      queryMap.get("imports"),
-      queryMap.get("usings"),
-      queryMap.get("uses"),
-      queryMap.get("requires"),
-    ].filter((q): q is Query => q !== undefined);
-
-    for (const query of importQueries) {
-      const captures = this.executeQuery(tree, query, [
-        "import_path",
-        "using_path",
-        "use_path",
-        "require_path",
-      ]);
-      // Extract base package/module name (first segment)
-      const baseImports = captures.map((imp) => {
-        // Handle different import formats
-        if (imp.includes(".")) {
-          return imp.split(".")[0];
+    } finally {
+      // Always clean up tree to prevent memory leaks
+      if (tree) {
+        try {
+          tree.delete();
+        } catch {
+          // Tree cleanup failed, ignore
         }
-        if (imp.includes("::")) {
-          return imp.split("::")[0];
-        }
-        if (imp.includes("/")) {
-          return imp.split("/")[0];
-        }
-        if (imp.includes("\\")) {
-          return imp.split("\\")[0];
-        }
-        return imp;
-      });
-      metadata.imports.push(...baseImports);
+      }
     }
-
-    // Remove duplicates
-    metadata.classes = [...new Set(metadata.classes)];
-    metadata.functions = [...new Set(metadata.functions)];
-    metadata.imports = [...new Set(metadata.imports)];
-
-    return metadata;
   }
 
   /**

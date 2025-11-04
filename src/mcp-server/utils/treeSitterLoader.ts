@@ -148,9 +148,40 @@ export class TreeSitterLoader implements LanguageLoader {
     }
 
     try {
-      await TreeSitter.Parser.init();
-      this.parser = new TreeSitter.Parser();
-      this.initialized = true;
+      // In STDIO mode, suppress console output during WASM initialization
+      const isStdioMode = process.env.MCP_TRANSPORT_TYPE === "stdio";
+      let consoleOverride = false;
+      let originalLog: typeof console.log;
+      let originalInfo: typeof console.info;
+      let originalWarn: typeof console.warn;
+      let originalError: typeof console.error;
+
+      if (isStdioMode) {
+        consoleOverride = true;
+        originalLog = console.log;
+        originalInfo = console.info;
+        originalWarn = console.warn;
+        originalError = console.error;
+        
+        console.log = () => {};
+        console.info = () => {};
+        console.warn = () => {};
+        console.error = () => {};
+      }
+
+      try {
+        await TreeSitter.Parser.init();
+        this.parser = new TreeSitter.Parser();
+        this.initialized = true;
+      } finally {
+        // Restore console methods if they were overridden
+        if (consoleOverride) {
+          console.log = originalLog!;
+          console.info = originalInfo!;
+          console.warn = originalWarn!;
+          console.error = originalError!;
+        }
+      }
     } catch (error) {
       const logContext: RequestContext = {
         requestId: "tree-sitter-loader",
@@ -249,21 +280,52 @@ export class TreeSitterLoader implements LanguageLoader {
     }
 
     try {
-      // Load language from WASM file
-      const Language = (await import("web-tree-sitter")).Language;
-      const language = await Language.load(wasmPath);
+      // In STDIO mode, suppress console output during WASM loading
+      const isStdioMode = process.env.MCP_TRANSPORT_TYPE === "stdio";
+      let consoleOverride = false;
+      let originalLog: typeof console.log;
+      let originalInfo: typeof console.info;
+      let originalWarn: typeof console.warn;
+      let originalError: typeof console.error;
 
-      // Set language on parser
-      this.parser.setLanguage(language);
+      if (isStdioMode) {
+        consoleOverride = true;
+        originalLog = console.log;
+        originalInfo = console.info;
+        originalWarn = console.warn;
+        originalError = console.error;
+        
+        console.log = () => {};
+        console.info = () => {};
+        console.warn = () => {};
+        console.error = () => {};
+      }
 
-      // Cache the language
-      const treeSitterLang: TreeSitterLanguage = {
-        language,
-        name: lang,
-      };
-      this.languageCache.set(lang, treeSitterLang);
+      try {
+        // Load language from WASM file
+        const Language = (await import("web-tree-sitter")).Language;
+        const language = await Language.load(wasmPath);
 
-      return treeSitterLang;
+        // Set language on parser
+        this.parser.setLanguage(language);
+
+        // Cache the language
+        const treeSitterLang: TreeSitterLanguage = {
+          language,
+          name: lang,
+        };
+        this.languageCache.set(lang, treeSitterLang);
+
+        return treeSitterLang;
+      } finally {
+        // Restore console methods if they were overridden
+        if (consoleOverride) {
+          console.log = originalLog!;
+          console.info = originalInfo!;
+          console.warn = originalWarn!;
+          console.error = originalError!;
+        }
+      }
     } catch (error) {
       const logContext: RequestContext = {
         requestId: "tree-sitter-loader",

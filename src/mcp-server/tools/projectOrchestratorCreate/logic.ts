@@ -17,6 +17,7 @@ import { groupFilesWithAI, type ProjectGroup } from "../../services/aiGroupingSe
 export const ProjectOrchestratorCreateInputSchema = z.object({
   projectPath: z.string().min(1),
   temporaryIgnore: z.array(z.string()).optional(),
+  question: z.string().min(1).max(50000).optional(),
   analysisMode: z
     .enum([
       "general",
@@ -220,6 +221,7 @@ export async function projectOrchestratorCreateLogic(
     maxPerGroup,
     context,
     params.geminiApiKey,
+    params.question,
   );
 
   // Convert to format expected by analyze step

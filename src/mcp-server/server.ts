@@ -28,6 +28,7 @@ import { registerProjectOrchestratorCreate } from "./tools/projectOrchestratorCr
 import { registerProjectOrchestratorAnalyze } from "./tools/projectOrchestratorAnalyze/index.js";
 import { startHttpTransport } from "./transports/httpTransport.js";
 import { connectStdioTransport } from "./transports/stdioTransport.js";
+import { warmupTreeSitter } from "./utils/codeParser.js";
 
 /**
  * Creates and configures a new instance of the `McpServer`.
@@ -48,12 +49,49 @@ async function createMcpServerInstance(): Promise<McpServer> {
     environment,
   });
 
+  // Pre-initialize Tree-sitter WASM before STDIO transport starts
+  // This prevents WASM loading messages from polluting stdout/JSON-RPC stream
+  if (config.mcpTransportType === "stdio") {
+    try {
+      logger.debug("Pre-initializing Tree-sitter for STDIO transport", context);
+      
+      // Temporarily suppress console output during Tree-sitter initialization
+      // to prevent WASM loading messages from polluting JSON-RPC stream
+      const originalLog = console.log;
+      const originalInfo = console.info;
+      const originalWarn = console.warn;
+      const originalError = console.error;
+      
+      console.log = () => {};
+      console.info = () => {};
+      console.warn = () => {};
+      console.error = () => {};
+      
+      try {
+        await warmupTreeSitter(["javascript", "typescript", "python"]);
+      } finally {
+        // Restore console methods
+        console.log = originalLog;
+        console.info = originalInfo;
+        console.warn = originalWarn;
+        console.error = originalError;
+      }
+      
+      logger.debug("Tree-sitter pre-initialization completed", context);
+    } catch (error) {
+      // Non-critical - Tree-sitter will be initialized on first use
+      logger.debug("Tree-sitter pre-initialization failed, will retry on first use", {
+        ...context,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   const server = new McpServer(
     { name: config.mcpServerName, version: config.mcpServerVersion },
     {
       capabilities: {
         logging: {},
-        resources: { listChanged: true },
         tools: { listChanged: true },
       },
     },

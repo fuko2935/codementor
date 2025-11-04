@@ -66,16 +66,30 @@ function createModelByProvider(
 /**
  * Constructs the system prompt for AI grouping.
  */
-function buildSystemPrompt(maxTokensPerGroup: number): string {
+function buildSystemPrompt(maxTokensPerGroup: number, question?: string): string {
+  const questionSection = question
+    ? `**IMPORTANT: USER QUESTION CONTEXT**
+The user has asked: "${question}"
+
+You MUST analyze this question and ONLY group files that are relevant to answering it. Files that are not relevant to the user's question should NOT be included in any group. For example:
+- If the user asks about "frontend", do NOT group backend files
+- If the user asks about "authentication", do NOT group unrelated files like "database utilities" or "logging"
+- If the user asks about a specific feature, ONLY group files related to that feature
+
+Your task is to create groups that will help answer the user's question. Irrelevant files should be excluded entirely from all groups.
+
+`
+    : "";
+
   return `You are an expert software architect specializing in analyzing and structuring large codebases. Your task is to group a list of project files into logically coherent and functionally related clusters.
 
-You will be provided with a JSON array of file metadata. Each object in the array represents a file and contains its path, estimated token count, and a list of classes, functions, imports, and exports within it.
+${questionSection}You will be provided with a JSON array of file metadata. Each object in the array represents a file and contains its path, estimated token count, and a list of classes, functions, imports, and exports within it.
 
 Your goal is to organize these files into groups based on their purpose and interdependencies. For example, files related to "authentication", "UI components", "database services", or "API routing" should be clustered together.
 
 **CONSTRAINTS:**
 1. The total \`estimatedTokens\` of all files in a single group MUST NOT exceed ${maxTokensPerGroup}.
-2. Every file from the input list MUST be assigned to exactly one group.
+${question ? "2. ONLY group files that are relevant to answering the user's question. Files that are not relevant should NOT appear in any group." : "2. Every file from the input list MUST be assigned to exactly one group."}
 3. Aim to create the most logically cohesive groups possible, even if it means creating more groups with fewer files. Quality of grouping is more important than minimizing the number of groups.
 
 **INPUT FORMAT:**
@@ -155,7 +169,7 @@ IMPORTANT:
 - Return ONLY valid JSON, no markdown code blocks, no explanations
 - Include the full metadata object for each file in the metadata array
 - Ensure totalTokens matches the sum of estimatedTokens for all files in the group
-- Every file from the input MUST appear in exactly one group's files array`;
+${question ? "- Only include files that are relevant to answering the user's question. Irrelevant files should NOT appear in any group." : "- Every file from the input MUST appear in exactly one group's files array"}`;
 }
 
 /**
@@ -164,6 +178,7 @@ IMPORTANT:
 function parseAIResponse(
   responseText: string,
   metadata: FileMetadata[],
+  question?: string,
 ): ProjectGroup[] {
   // Remove markdown code blocks if present
   let cleaned = responseText.trim();
@@ -252,8 +267,8 @@ function parseAIResponse(
     }
   }
 
-  // Verify all files are assigned
-  if (processedFiles.size !== metadata.length) {
+  // Verify all files are assigned (only if no question filter)
+  if (!question && processedFiles.size !== metadata.length) {
     const missing = metadata
       .filter((m) => !processedFiles.has(m.filePath))
       .map((m) => m.filePath);
@@ -261,6 +276,18 @@ function parseAIResponse(
       BaseErrorCode.PARSING_ERROR,
       `Not all files were assigned to groups. Missing: ${missing.join(", ")}`,
     );
+  }
+
+  if (question && processedFiles.size < metadata.length) {
+    const excluded = metadata
+      .filter((m) => !processedFiles.has(m.filePath))
+      .map((m) => m.filePath);
+    logger.info("Some files were excluded due to question filter", {
+      requestId: "ai-grouping-validation",
+      timestamp: new Date().toISOString(),
+      excludedCount: excluded.length,
+      excludedFiles: excluded.slice(0, 10), // Log first 10
+    });
   }
 
   return groups;
@@ -273,6 +300,7 @@ function parseAIResponse(
  * @param maxTokensPerGroup - Maximum tokens allowed per group
  * @param context - Request context for logging
  * @param apiKey - Optional Gemini API key override
+ * @param question - Optional user question to filter relevant files
  * @returns Promise resolving to array of ProjectGroup
  * @throws {McpError} If grouping fails or response is invalid
  */
@@ -281,6 +309,7 @@ export async function groupFilesWithAI(
   maxTokensPerGroup: number,
   context: RequestContext,
   apiKey?: string,
+  question?: string,
 ): Promise<ProjectGroup[]> {
   if (metadata.length === 0) {
     return [];
@@ -305,9 +334,11 @@ export async function groupFilesWithAI(
   );
 
   // Build prompt
-  const systemPrompt = buildSystemPrompt(maxTokensPerGroup);
+  const systemPrompt = buildSystemPrompt(maxTokensPerGroup, question);
   const inputJson = JSON.stringify(metadata, null, 2);
-  const userPrompt = `Here is the file metadata array:\n\n${inputJson}\n\nGroup these files into logically coherent clusters.`;
+  const userPrompt = question
+    ? `Here is the file metadata array:\n\n${inputJson}\n\nGroup these files into logically coherent clusters that will help answer the user's question: "${question}". Only include files that are relevant to answering this question.`
+    : `Here is the file metadata array:\n\n${inputJson}\n\nGroup these files into logically coherent clusters.`;
 
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
@@ -332,7 +363,7 @@ export async function groupFilesWithAI(
       });
 
       // Parse and validate response
-      const groups = parseAIResponse(responseText, metadata);
+      const groups = parseAIResponse(responseText, metadata, question);
 
       // Verify token limits
       const violations = groups.filter(

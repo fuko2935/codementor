@@ -788,6 +788,14 @@ let treeSitterLoader: TreeSitterLoader | null = null;
 let treeSitterParser: TreeSitterParserImpl | null = null;
 
 /**
+ * Checks if running in STDIO transport mode.
+ * @returns true if STDIO mode is active
+ */
+function isStdioMode(): boolean {
+  return process.env.MCP_TRANSPORT_TYPE === "stdio";
+}
+
+/**
  * Gets or initializes the Tree-sitter loader singleton.
  * Returns null if initialization fails (graceful fallback).
  *
@@ -796,14 +804,45 @@ let treeSitterParser: TreeSitterParserImpl | null = null;
 async function getTreeSitterLoader(): Promise<TreeSitterLoader | null> {
   if (!treeSitterLoader) {
     try {
-      treeSitterLoader = new TreeSitterLoader();
-      await treeSitterLoader.initialize();
+      // In STDIO mode, suppress console output during initialization
+      // to prevent WASM loading messages from polluting JSON-RPC stream
+      let consoleOverride = false;
+      let originalLog: typeof console.log;
+      let originalInfo: typeof console.info;
+      let originalWarn: typeof console.warn;
+      let originalError: typeof console.error;
 
-      // Initialize parser instance
-      const parser = treeSitterLoader.getParser();
-      if (parser) {
-        treeSitterParser = new TreeSitterParserImpl();
-        treeSitterParser.setParser(parser);
+      if (isStdioMode()) {
+        consoleOverride = true;
+        originalLog = console.log;
+        originalInfo = console.info;
+        originalWarn = console.warn;
+        originalError = console.error;
+        
+        console.log = () => {};
+        console.info = () => {};
+        console.warn = () => {};
+        console.error = () => {};
+      }
+
+      try {
+        treeSitterLoader = new TreeSitterLoader();
+        await treeSitterLoader.initialize();
+
+        // Initialize parser instance
+        const parser = treeSitterLoader.getParser();
+        if (parser) {
+          treeSitterParser = new TreeSitterParserImpl();
+          treeSitterParser.setParser(parser);
+        }
+      } finally {
+        // Restore console methods if they were overridden
+        if (consoleOverride) {
+          console.log = originalLog!;
+          console.info = originalInfo!;
+          console.warn = originalWarn!;
+          console.error = originalError!;
+        }
       }
     } catch (error) {
       // Reset loader to null so we can retry on next call
@@ -822,6 +861,32 @@ async function getTreeSitterLoader(): Promise<TreeSitterLoader | null> {
     }
   }
   return treeSitterLoader;
+}
+
+/**
+ * Pre-initializes Tree-sitter WASM and optionally pre-loads common languages.
+ * Useful for STDIO transport to prevent WASM loading messages from polluting stdout.
+ * This is safe to call multiple times (uses singleton pattern).
+ *
+ * @param languagesToPreload - Optional list of languages to pre-load (default: ["javascript"])
+ * @returns Promise resolving when initialization is complete
+ */
+export async function warmupTreeSitter(
+  languagesToPreload: SupportedLanguage[] = ["javascript"],
+): Promise<void> {
+  const loader = await getTreeSitterLoader();
+  if (!loader) {
+    return; // Initialization failed, will retry on first use
+  }
+
+  // Pre-load specified languages to warm up cache
+  for (const lang of languagesToPreload) {
+    try {
+      await loader.loadLanguage(lang);
+    } catch {
+      // Ignore errors - language will be loaded on first use
+    }
+  }
 }
 
 /**
