@@ -5,6 +5,7 @@
 A comprehensive, production-ready TypeScript implementation of the Model Context Protocol (MCP) ecosystem that serves dual purposes:
 
 ### 1. Production MCP Server for Codebase Analysis
+
 A sophisticated AI-powered codebase analysis server using Google's Gemini 2.0 Flash AI with capabilities including:
 
 - **Comprehensive Codebase Analysis** - Complete project understanding with file traversal, .gitignore respect, and context preparation
@@ -15,14 +16,17 @@ A sophisticated AI-powered codebase analysis server using Google's Gemini 2.0 Fl
 - **Token-Aware Processing** - Intelligent token counting and management for large codebases
 
 ### 2. Comprehensive MCP Development Template
+
 A complete reference implementation demonstrating enterprise-grade MCP application development:
 
 #### Three-Part MCP Architecture
+
 - **Agent Framework** (`src/agent/`) - Autonomous agent with LLM integration, tool orchestration, and conversation management
 - **MCP Server** (`src/mcp-server/`) - Full-featured server with tools, resources, and dual transport support (stdio/HTTP)
 - **MCP Client** (`src/mcp-client/`) - Robust client with connection management, session handling, and multi-server support
 
 #### Production-Ready Infrastructure
+
 - **Structured Error Handling** - Comprehensive error classification, context propagation, and recovery strategies
 - **Advanced Logging** - Multi-level logging with file rotation, interaction tracking, and MCP notification support
 - **Security Framework** - JWT/OAuth authentication, rate limiting, input sanitization, and CORS management
@@ -32,18 +36,21 @@ A complete reference implementation demonstrating enterprise-grade MCP applicati
 ## Core Value Propositions
 
 ### For Developers Using the Server
+
 - **Zero-Installation Usage** - Works directly with Claude Desktop via npx
 - **Comprehensive Analysis** - Understands entire project context, not just individual files
 - **Intelligent Responses** - Contextual answers based on complete codebase understanding
 - **Multi-Language Support** - Works with any programming language or project structure
 
 ### For Template Users & MCP Developers
+
 - **Complete Reference Implementation** - Demonstrates all MCP specification features
 - **Enterprise Patterns** - Production-ready error handling, logging, security, and scalability patterns
 - **Extensible Architecture** - Clear patterns for adding tools, resources, and transport layers
 - **Best Practices** - Follows MCP 2025-03-26 specification with modern TypeScript practices
 
 ### For Teams & Organizations
+
 - **Standardized Analysis** - Consistent codebase evaluation across projects and team members
 - **Knowledge Transfer** - Helps onboard new developers and understand legacy systems
 - **Quality Assurance** - Automated code review and architectural analysis
@@ -52,12 +59,14 @@ A complete reference implementation demonstrating enterprise-grade MCP applicati
 ## Target Users & Use Cases
 
 ### Primary Users
+
 - **Individual Developers** - Code analysis, debugging assistance, architecture understanding
 - **Development Teams** - Code reviews, onboarding, knowledge sharing, quality assurance
 - **Technical Leaders** - Architecture evaluation, technical debt assessment, migration planning
 - **MCP Developers** - Reference implementation for building MCP servers and clients
 
 ### Secondary Users
+
 - **AI Researchers** - Multi-agent systems, tool orchestration, LLM integration patterns
 - **DevOps Engineers** - Infrastructure patterns, deployment strategies, monitoring integration
 - **Technical Writers** - Documentation generation, API analysis, system understanding
@@ -65,12 +74,14 @@ A complete reference implementation demonstrating enterprise-grade MCP applicati
 ## Distribution & Deployment
 
 ### NPM Package Distribution
+
 - **Package Name**: `@fukobabatekkral/gemini-mcp-server`
 - **Zero-Installation**: Direct usage via `npx` for immediate availability
 - **Versioned Releases**: Semantic versioning with comprehensive changelogs
 - **Multiple Entry Points**: Server, client, and agent components available separately
 
 ### Deployment Options
+
 - **Claude Desktop Integration** - Primary deployment target with configuration examples
 - **Standalone Server** - HTTP transport for web applications and custom clients
 - **Agent Framework** - Autonomous operation with multi-server connectivity
@@ -79,18 +90,21 @@ A complete reference implementation demonstrating enterprise-grade MCP applicati
 ## Technical Excellence Standards
 
 ### Code Quality
+
 - **100% TypeScript** - Full type safety with strict compiler settings
 - **Comprehensive Testing** - Unit, integration, and end-to-end test coverage
 - **Documentation** - JSDoc comments, architectural diagrams, and usage examples
 - **Linting & Formatting** - ESLint and Prettier with consistent code style
 
 ### Security & Reliability
+
 - **Input Validation** - Zod schemas for all external inputs
 - **Error Boundaries** - Graceful degradation and recovery mechanisms
 - **Rate Limiting** - Protection against abuse and resource exhaustion
 - **Secure Defaults** - Security-first configuration and implementation choices
 
 ### Performance & Scalability
+
 - **Efficient Processing** - Optimized file reading, parsing, and analysis
 - **Memory Management** - Careful resource usage and cleanup
 - **Concurrent Operations** - Parallel processing where appropriate

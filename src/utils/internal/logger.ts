@@ -369,7 +369,9 @@ export class Logger {
     const consoleTransport = this.winstonLogger.transports.find(
       (t) => t instanceof winston.transports.Console,
     );
-    const shouldHaveConsole = true;
+    // Never write console logs to stdout in MCP stdio mode; it corrupts JSON-RPC.
+    // Enable console only when stdout is an interactive TTY AND transport is not 'stdio'.
+    const shouldHaveConsole = Boolean(process.stdout.isTTY) && config.mcpTransportType !== "stdio";
     let message: string | null = null;
 
     if (shouldHaveConsole && !consoleTransport) {
@@ -380,7 +382,7 @@ export class Logger {
           format: consoleFormat,
         }),
       );
-      message = "Console logging enabled (level: debug, stdout is TTY).";
+      message = "Console logging enabled (level: debug).";
     } else if (!shouldHaveConsole && consoleTransport) {
       this.winstonLogger.remove(consoleTransport);
       message = "Console logging disabled (level not debug or stdout not TTY).";

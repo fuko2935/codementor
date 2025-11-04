@@ -14,10 +14,11 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
-import { 
-  GeminiCodebaseAnalyzerInput, 
-  GeminiCodebaseAnalyzerInputSchema, 
-  geminiCodebaseAnalyzerLogic 
+import { config } from "../../../config/index.js";
+import {
+  GeminiCodebaseAnalyzerInput,
+  GeminiCodebaseAnalyzerInputSchema,
+  geminiCodebaseAnalyzerLogic,
 } from "./logic.js";
 
 /**
@@ -26,10 +27,12 @@ import {
  * @param server - The MCP server instance to register the tool with.
  * @returns A promise that resolves when the tool registration is complete.
  */
-export const registerGeminiCodebaseAnalyzer = async (server: McpServer): Promise<void> => {
+export const registerGeminiCodebaseAnalyzer = async (
+  server: McpServer,
+): Promise<void> => {
   const toolName = "gemini_codebase_analyzer";
   const toolDescription =
-    "Analyze any codebase with Gemini AI - scans all project files and provides comprehensive analysis, architecture insights, bug detection, and answers to specific questions about the code.";
+    "Analyzes an entire project codebase. WARNING: May cause performance issues or timeouts on very large projects. For large codebases, please use the 'project_orchestrator_create' and 'project_orchestrator_analyze' tools for a more stable, multi-step analysis.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({
@@ -45,7 +48,9 @@ export const registerGeminiCodebaseAnalyzer = async (server: McpServer): Promise
         toolName,
         toolDescription,
         GeminiCodebaseAnalyzerInputSchema.shape,
-        async (params: GeminiCodebaseAnalyzerInput): Promise<CallToolResult> => {
+        async (
+          params: GeminiCodebaseAnalyzerInput,
+        ): Promise<CallToolResult> => {
           const toolContext: RequestContext =
             requestContextService.createRequestContext({
               operation: "GeminiCodebaseAnalysis",
@@ -53,27 +58,26 @@ export const registerGeminiCodebaseAnalyzer = async (server: McpServer): Promise
               questionLength: params.question.length,
             });
 
-          logger.info(
-            "Processing Gemini codebase analysis request",
-            {
-              ...toolContext,
-              projectPath: params.projectPath,
-              question: params.question.substring(0, 100) + (params.question.length > 100 ? "..." : ""),
-            },
-          );
+          logger.info("Processing Gemini codebase analysis request", {
+            ...toolContext,
+            projectPath: params.projectPath,
+            question:
+              params.question.substring(0, 100) +
+              (params.question.length > 100 ? "..." : ""),
+          });
 
           try {
-            const result = await geminiCodebaseAnalyzerLogic(params, toolContext);
-
-            logger.info(
-              "Gemini codebase analysis completed successfully",
-              {
-                ...toolContext,
-                filesProcessed: result.filesProcessed,
-                totalCharacters: result.totalCharacters,
-                analysisLength: result.analysis.length,
-              },
+            const result = await geminiCodebaseAnalyzerLogic(
+              params,
+              toolContext,
             );
+
+            logger.info("Gemini codebase analysis completed successfully", {
+              ...toolContext,
+              filesProcessed: result.filesProcessed,
+              totalCharacters: result.totalCharacters,
+              analysisLength: result.analysis.length,
+            });
 
             return {
               content: [
@@ -96,17 +100,20 @@ ${result.analysis}
 
 ---
 
-*Analysis powered by Gemini 2.0 Flash*`,
+*Analysis powered by ${config.llmDefaultModel}*`,
                 },
               ],
               isError: false,
             };
           } catch (error) {
-            const mcpError = error instanceof McpError ? error : new McpError(
-              BaseErrorCode.INTERNAL_ERROR,
-              `Codebase analysis failed: ${error instanceof Error ? error.message : String(error)}`,
-              { originalError: error }
-            );
+            const mcpError =
+              error instanceof McpError
+                ? error
+                : new McpError(
+                    BaseErrorCode.INTERNAL_ERROR,
+                    `Codebase analysis failed: ${error instanceof Error ? error.message : String(error)}`,
+                    { originalError: error },
+                  );
 
             const handledError = ErrorHandler.handleError(mcpError, {
               operation: "GeminiCodebaseAnalysis",
@@ -115,14 +122,11 @@ ${result.analysis}
               critical: false,
             });
 
-            logger.error(
-              "Gemini codebase analysis failed",
-              {
-                ...toolContext,
-                error: handledError.message,
-                projectPath: params.projectPath,
-              },
-            );
+            logger.error("Gemini codebase analysis failed", {
+              ...toolContext,
+              error: handledError.message,
+              projectPath: params.projectPath,
+            });
 
             return {
               content: [
@@ -160,5 +164,8 @@ ${handledError.message}
     },
   );
 
-  logger.info(`Successfully registered tool: '${toolName}'`, registrationContext);
+  logger.info(
+    `Successfully registered tool: '${toolName}'`,
+    registrationContext,
+  );
 };

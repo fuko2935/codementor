@@ -1,10 +1,10 @@
 {
   "name": "gemini-mcp-local",
-  "version": "2.0.5",
+  "version": "2.2.6",
   "description": "Local-first Gemini MCP tool for stdio or HTTP transports using environment-supplied provider credentials.",
-  "main": "dist/simple-server.js",
+  "main": "dist/index.js",
   "bin": {
-    "gemini-mcp-local": "dist/simple-server.js"
+    "gemini-mcp-local": "dist/index.js"
   },
   "files": [
     "dist",
@@ -29,10 +29,10 @@
   "homepage": "https://github.com/cyanheads/mcp-ts-template#readme",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/simple-server.js",
-    "start:local": "ts-node -r dotenv/config src/simple-server.ts",
-    "start:stdio": "node dist/simple-server.js",
-    "start:http": "MCP_TRANSPORT_TYPE=http node dist/simple-server.js",
+    "start": "node dist/index.js",
+    "start:local": "ts-node -r dotenv/config src/index.ts",
+    "start:stdio": "node dist/index.js",
+    "start:http": "MCP_TRANSPORT_TYPE=http node dist/index.js",
     "rebuild": "ts-node --esm scripts/clean.ts && npm run build",
     "docs:generate": "typedoc --tsconfig ./tsconfig.typedoc.json",
     "depcheck": "npx depcheck",

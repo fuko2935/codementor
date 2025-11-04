@@ -26,6 +26,17 @@ export interface GeminiCliGenerateTextParams {
 }
 
 /**
+ * Type definition for Gemini usage statistics
+ */
+interface GeminiUsage {
+  promptTokens?: number;
+  inputTokens?: number;
+  completionTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+/**
  * Creates a Gemini CLI provider instance
  */
 export function createGeminiCliProvider(
@@ -61,12 +72,15 @@ export function createGeminiCliProvider(
     // Create and return the provider
     return createGeminiProvider(authOptions);
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const context = requestContextService.createRequestContext({
       operation: "GeminiCliProvider.initialize",
     });
-    logger.error("Gemini CLI provider initialization failed", error as Error, context);
+    logger.error(
+      "Gemini CLI provider initialization failed",
+      error as Error,
+      context,
+    );
     throw new Error(
       `Gemini CLI provider initialization failed: ${errorMessage}`,
     );
@@ -79,7 +93,10 @@ export function createGeminiCliProvider(
  */
 export function extractSystemMessage(
   messages: Array<{ role: string; content: string }>,
-): { systemPrompt: string | undefined; messages: Array<{ role: string; content: string }> } {
+): {
+  systemPrompt: string | undefined;
+  messages: Array<{ role: string; content: string }>;
+} {
   if (!messages || !Array.isArray(messages)) {
     return { systemPrompt: undefined, messages: messages || [] };
   }
@@ -102,7 +119,14 @@ export function extractSystemMessage(
 export async function generateTextWithGeminiCli(
   provider: ReturnType<typeof createGeminiProvider>,
   params: GeminiCliGenerateTextParams,
-): Promise<{ text: string; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } }> {
+): Promise<{
+  text: string;
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+  };
+}> {
   try {
     // Extract system messages for separate handling
     const { systemPrompt, messages } = extractSystemMessage(params.messages);
@@ -113,29 +137,37 @@ export async function generateTextWithGeminiCli(
     const result = await generateText({
       model: provider(params.modelId),
       system: effectiveSystemPrompt,
-      messages: messages as Array<{ role: "user" | "assistant"; content: string }>,
+      messages: messages as Array<{
+        role: "user" | "assistant";
+        content: string;
+      }>,
       maxOutputTokens: params.maxOutputTokens,
-      ...(params.temperature !== undefined ? { temperature: params.temperature } : {}),
+      ...(params.temperature !== undefined
+        ? { temperature: params.temperature }
+        : {}),
     });
 
     return {
       text: result.text,
       usage: {
-        promptTokens: (result.usage as any)?.promptTokens ?? (result.usage as any)?.inputTokens ?? 0,
-        completionTokens: (result.usage as any)?.completionTokens ?? (result.usage as any)?.outputTokens ?? 0,
-        totalTokens: (result.usage as any)?.totalTokens ?? 0,
+        promptTokens:
+          (result.usage as GeminiUsage)?.promptTokens ??
+          (result.usage as GeminiUsage)?.inputTokens ??
+          0,
+        completionTokens:
+          (result.usage as GeminiUsage)?.completionTokens ??
+          (result.usage as GeminiUsage)?.outputTokens ??
+          0,
+        totalTokens: (result.usage as GeminiUsage)?.totalTokens ?? 0,
       },
     };
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const context = requestContextService.createRequestContext({
       operation: "GeminiCliProvider.generateText",
     });
     logger.error("Gemini CLI text generation failed", error as Error, context);
-    throw new Error(
-      `Gemini CLI text generation failed: ${errorMessage}`,
-    );
+    throw new Error(`Gemini CLI text generation failed: ${errorMessage}`);
   }
 }
 
@@ -176,4 +208,3 @@ export function createGeminiCliModel(
     },
   };
 }
-

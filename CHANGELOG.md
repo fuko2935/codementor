@@ -1,4 +1,53 @@
 # Changelog
+## [2.2.0] - 2025-01-28
+
+### Fixed
+
+- **Critical**: Fixed missing error logging in uncaught exception handlers. All unhandled errors and promise rejections are now properly logged with full error details using `logger.fatal` for production debugging.
+- **Critical**: Removed contradictory `.min(1)` constraint from `GEMINI_API_KEY` Zod schema. The field is now properly optional to support `gemini-cli` provider.
+- **Critical**: Fixed architectural inconsistency by migrating entry point from legacy `simple-server.ts` to modern modular `index.ts`. Updated `package.json` main/bin fields and all scripts to use the correct entry point.
+
+### Changed
+
+- **Breaking**: Removed `src/simple-server.ts` file. The project now fully uses the modular architecture documented in CHANGELOG v2.1.1. All entry points now use `dist/index.js`.
+- Added circuit breaker protection to `geminiCodebaseAnalyzer` and `dynamicExpertAnalyze` tools to prevent server crashes on large projects:
+  - Maximum file count: 1000 files
+  - Maximum total size: 100 MB
+  - Users are directed to use `project_orchestrator` tools for larger codebases
+- Improved token counting fallback mechanism in `tokenizer.ts`:
+  - Added `tiktoken` as intermediate fallback between Gemini tokenizer and heuristic method
+  - More accurate token counting when Gemini tokenizer is unavailable
+- Enhanced path validation security by replacing direct `path.resolve` calls with `sanitization.sanitizePath` in all tools accepting `projectPath`:
+  - `geminiCodeSearch`
+  - `dynamicExpertAnalyze`
+  - `dynamicExpertCreate`
+  - `projectOrchestratorCreate`
+  - `calculateTokenCount`
+
+## [2.1.1] - 2025-11-04
+
+### Fixed
+
+- MCP stdio mode: disabled console transport in stdio to prevent non-JSON output (e.g., "Meta:") corrupting JSON-RPC. Ensures clean stdio for MCP hosts.
+
+
+### Changed
+
+- Modularized legacy `simple-server.ts` by delegating startup to the modular server and registering tools per-module. Removed in-file switch logic and embedded schemas/prompts.
+- Extracted `SYSTEM_PROMPTS` into `src/mcp-server/prompts.ts`.
+- Added six new modular tools with isolated logic/registration:
+  - `geminiCodeSearch`, `dynamicExpertCreate`, `dynamicExpertAnalyze`, `calculateTokenCount`, `projectOrchestratorCreate`, `projectOrchestratorAnalyze`.
+- Updated analyzer tool description with a large-codebase warning and guidance to use orchestrator tools for stability.
+- Made `GEMINI_API_KEY` optional in config and removed hard requirement to support the `gemini-cli` provider.
+- Introduced local token counting utility `src/mcp-server/utils/tokenizer.ts` using Google's tokenizer subpath when available, with safe fallback; replaced heuristic token counting in validation and tools.
+- Improved documentation:
+  - Replaced "Example References" with "Architectural Blueprints" in `src/mcp-server/README.md`.
+  - Added blueprint headers to `echoTool` and `catFactFetcher` registrations.
+
+### Maintenance
+
+- Ran Prettier and ESLint fixers across the codebase. Remaining lints are pre-existing in generated `dist/` artifacts and unrelated modules.
+
 
 All notable changes to this project will be documented in this file.
 
