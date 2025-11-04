@@ -20,7 +20,6 @@ import { config, environment } from "../config/index.js";
 import { ErrorHandler, logger, requestContextService } from "../utils/index.js";
 import { BaseErrorCode } from "../types-global/errors.js";
 import { registerGeminiCodebaseAnalyzer } from "./tools/geminiCodebaseAnalyzer/index.js";
-import { registerGeminiCodeSearch } from "./tools/geminiCodeSearch/index.js";
 import { registerDynamicExpertCreate } from "./tools/dynamicExpertCreate/index.js";
 import { registerDynamicExpertAnalyze } from "./tools/dynamicExpertAnalyze/index.js";
 import { registerCalculateTokenCount } from "./tools/calculateTokenCount/index.js";
@@ -101,7 +100,6 @@ async function createMcpServerInstance(): Promise<McpServer> {
     async () => {
       logger.debug("Registering resources and tools...", context);
       await registerGeminiCodebaseAnalyzer(server);
-      await registerGeminiCodeSearch(server);
       await registerDynamicExpertCreate(server);
       await registerDynamicExpertAnalyze(server);
       await registerCalculateTokenCount(server);

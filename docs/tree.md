@@ -89,10 +89,6 @@ gemini-mcp-local
 │   │   │   │   ├── index.ts
 │   │   │   │   ├── logic.ts
 │   │   │   │   └── registration.ts
-│   │   │   ├── geminiCodeSearch
-│   │   │   │   ├── index.ts
-│   │   │   │   ├── logic.ts
-│   │   │   │   └── registration.ts
 │   │   │   ├── projectOrchestratorAnalyze
 │   │   │   │   ├── index.ts
 │   │   │   │   ├── logic.ts

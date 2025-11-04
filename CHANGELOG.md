@@ -35,7 +35,6 @@
   - Added `tiktoken` as intermediate fallback between Gemini tokenizer and heuristic method
   - More accurate token counting when Gemini tokenizer is unavailable
 - Enhanced path validation security by replacing direct `path.resolve` calls with `sanitization.sanitizePath` in all tools accepting `projectPath`:
-  - `geminiCodeSearch`
   - `dynamicExpertAnalyze`
   - `dynamicExpertCreate`
   - `projectOrchestratorCreate`
@@ -52,8 +51,8 @@
 
 - Modularized legacy `simple-server.ts` by delegating startup to the modular server and registering tools per-module. Removed in-file switch logic and embedded schemas/prompts.
 - Extracted `SYSTEM_PROMPTS` into `src/mcp-server/prompts.ts`.
-- Added six new modular tools with isolated logic/registration:
-  - `geminiCodeSearch`, `dynamicExpertCreate`, `dynamicExpertAnalyze`, `calculateTokenCount`, `projectOrchestratorCreate`, `projectOrchestratorAnalyze`.
+- Added five new modular tools with isolated logic/registration:
+  - `dynamicExpertCreate`, `dynamicExpertAnalyze`, `calculateTokenCount`, `projectOrchestratorCreate`, `projectOrchestratorAnalyze`.
 - Updated analyzer tool description with a large-codebase warning and guidance to use orchestrator tools for stability.
 - Made `GEMINI_API_KEY` optional in config and removed hard requirement to support the `gemini-cli` provider.
 - Introduced local token counting utility `src/mcp-server/utils/tokenizer.ts` using Google's tokenizer subpath when available, with safe fallback; replaced heuristic token counting in validation and tools.

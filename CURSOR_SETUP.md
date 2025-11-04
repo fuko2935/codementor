@@ -88,7 +88,6 @@ Cursor'da MCP araçlarına şu şekilde erişebilirsiniz:
 
 2. **Doğrudan Araç Adları:**
    - `gemini_codebase_analyzer` - Proje analizi için kapsamlı analiz
-   - `gemini_code_search` - Kod tabanında arama yapma
    - `gemini_dynamic_expert_create` - Özel uzman mod oluşturma
    - `gemini_dynamic_expert_analyze` - Uzman analizi ile proje inceleme
    - `project_orchestrator` - Büyük projeler için orkestrasyon
