@@ -26,6 +26,17 @@ export interface GeminiCliGenerateTextParams {
 }
 
 /**
+ * Type definition for Gemini usage statistics
+ */
+interface GeminiUsage {
+  promptTokens?: number;
+  inputTokens?: number;
+  completionTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+/**
  * Creates a Gemini CLI provider instance
  */
 export function createGeminiCliProvider(
@@ -140,14 +151,14 @@ export async function generateTextWithGeminiCli(
       text: result.text,
       usage: {
         promptTokens:
-          (result.usage as any)?.promptTokens ??
-          (result.usage as any)?.inputTokens ??
+          (result.usage as GeminiUsage)?.promptTokens ??
+          (result.usage as GeminiUsage)?.inputTokens ??
           0,
         completionTokens:
-          (result.usage as any)?.completionTokens ??
-          (result.usage as any)?.outputTokens ??
+          (result.usage as GeminiUsage)?.completionTokens ??
+          (result.usage as GeminiUsage)?.outputTokens ??
           0,
-        totalTokens: (result.usage as any)?.totalTokens ?? 0,
+        totalTokens: (result.usage as GeminiUsage)?.totalTokens ?? 0,
       },
     };
   } catch (error) {

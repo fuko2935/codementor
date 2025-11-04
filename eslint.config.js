@@ -8,6 +8,9 @@ const trimmedGlobals = Object.fromEntries(
 );
 
 export default [
+  {
+    ignores: ["dist/**", "node_modules/**"],
+  },
   { languageOptions: { globals: trimmedGlobals } },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,

@@ -5,7 +5,6 @@
  */
 
 import { spawn, ChildProcess } from "child_process";
-import { config } from "../config/index.js";
 
 interface TestResult {
   success: boolean;
@@ -87,7 +86,7 @@ async function testStdioTransportStartup(): Promise<TestResult> {
       child.kill("SIGTERM");
     }, 5000);
 
-    child.on("close", (code) => {
+    child.on("close", (_code) => {
       const duration = Date.now() - startTime;
       output = `STDOUT:\n${stdoutData}\nSTDERR:\n${stderrData}`;
 
@@ -102,7 +101,7 @@ async function testStdioTransportStartup(): Promise<TestResult> {
             break;
           }
         }
-      } catch (e) {
+      } catch (_e) {
         errors.push("Invalid JSON-RPC response format");
       }
 
@@ -213,7 +212,7 @@ async function testHttpTransportStartup(): Promise<TestResult> {
       child.kill("SIGTERM");
     }, 8000);
 
-    child.on("close", (code) => {
+    child.on("close", (_code) => {
       const duration = Date.now() - startTime;
       output = `STDOUT:\n${stdoutData}\nSTDERR:\n${stderrData}`;
 
