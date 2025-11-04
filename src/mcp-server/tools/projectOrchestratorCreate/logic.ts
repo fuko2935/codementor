@@ -1,9 +1,18 @@
+/**
+ * @fileoverview AI-powered project orchestrator create logic.
+ * Uses AI to group project files into logically coherent clusters based on
+ * extracted code metadata (classes, functions, imports, exports).
+ * @module src/mcp-server/tools/projectOrchestratorCreate/logic
+ */
+
 import { promises as fs } from "fs";
 import path from "path";
 import { glob } from "glob";
 import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { logger, type RequestContext, sanitization } from "../../../utils/index.js";
+import { extractMetadata, type FileMetadata } from "../../utils/codeParser.js";
+import { groupFilesWithAI, type ProjectGroup } from "../../services/aiGroupingService.js";
 
 export const ProjectOrchestratorCreateInputSchema = z.object({
   projectPath: z.string().min(1),
@@ -39,19 +48,56 @@ export interface ProjectOrchestratorCreateResponse {
   groupsData: string;
 }
 
-function estimateTokens(content: string): number {
-  // Simple heuristic sufficient for grouping (exact count not required)
-  const basic = Math.ceil(content.length / 4);
-  const newlines = (content.match(/\n/g) || []).length;
-  const specials = (content.match(/[{}[\]();,.<>/\\=+\-*&|!@#$%^`~]/g) || [])
-    .length;
-  return basic + Math.ceil(newlines * 0.5) + Math.ceil(specials * 0.2);
+/**
+ * Converts AI-generated ProjectGroup[] to the format expected by projectOrchestratorAnalyze.
+ * Includes metadata for enhanced analysis capabilities.
+ */
+function convertGroupsToAnalyzeFormat(
+  aiGroups: ProjectGroup[],
+  totalFiles: number,
+  totalTokens: number,
+  projectPath: string,
+  analysisMode: string,
+  maxTokensPerGroup: number,
+): string {
+  const groups = aiGroups.map((aiGroup) => ({
+    files: aiGroup.files.map((filePath) => {
+      // Find metadata for this file to get token count
+      const fileMetadata = aiGroup.metadata.find((m) => m.filePath === filePath);
+      return {
+        filePath,
+        tokens: fileMetadata?.estimatedTokens || 0,
+      };
+    }),
+    totalTokens: aiGroup.totalTokens,
+    groupIndex: aiGroup.groupIndex,
+    name: aiGroup.name,
+    description: aiGroup.description,
+    reasoning: `AI-powered logical grouping based on code structure and interdependencies. ${aiGroup.description}`,
+    customPrompt: `You are a Senior Codebase Analyst. This group "${aiGroup.name}" contains files that are logically related: ${aiGroup.description}. Focus on analyzing these files together and summarize the architecture, then answer the user question precisely.`,
+    // Include metadata for analyze step
+    metadata: aiGroup.metadata,
+  }));
+
+  return JSON.stringify({
+    groups,
+    totalFiles,
+    totalTokens,
+    projectPath,
+    analysisMode,
+    maxTokensPerGroup,
+  });
 }
 
+/**
+ * Core logic for creating AI-powered file groups.
+ * Extracts metadata from all files and uses Gemini AI to create logically coherent groups.
+ */
 export async function projectOrchestratorCreateLogic(
   params: ProjectOrchestratorCreateInput,
   context: RequestContext,
 ): Promise<ProjectOrchestratorCreateResponse> {
+  // Validate and normalize project path
   const sanitized = sanitization.sanitizePath(params.projectPath, {
     rootDir: process.cwd(),
     allowAbsolute: true,
@@ -70,7 +116,13 @@ export async function projectOrchestratorCreateLogic(
       `Project path is not a directory: ${normalizedPath}`,
     );
 
-  // Load files
+  logger.info("Starting project orchestrator create", {
+    ...context,
+    projectPath: normalizedPath,
+    analysisMode: params.analysisMode,
+  });
+
+  // Load .gitignore rules
   let gitignoreRules: string[] = [];
   try {
     const gitignorePath = path.join(normalizedPath, ".gitignore");
@@ -80,9 +132,10 @@ export async function projectOrchestratorCreateLogic(
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith("#"));
   } catch {
-    // no-op
+    // no-op - .gitignore is optional
   }
 
+  // Build ignore patterns
   const ignorePatterns = [
     ...gitignoreRules,
     ...(params.temporaryIgnore || []),
@@ -98,6 +151,8 @@ export async function projectOrchestratorCreateLogic(
     "coverage/**",
     "logs/**",
   ];
+
+  // Discover all files
   const files = await glob("**/*", {
     cwd: normalizedPath,
     ignore: ignorePatterns,
@@ -105,78 +160,84 @@ export async function projectOrchestratorCreateLogic(
     dot: true, // Include dotfiles (e.g., .roomodes, .roo/)
   });
 
-  const fileInfos: Array<{
-    filePath: string;
-    tokens: number;
-    content: string;
-  }> = [];
-  let totalProjectTokens = 0;
-  for (const file of files) {
-    try {
-      const p = path.join(normalizedPath, file);
-      const c = await fs.readFile(p, "utf-8");
-      const t = estimateTokens(c);
-      totalProjectTokens += t;
-      fileInfos.push({ filePath: file, tokens: t, content: c });
-    } catch {
-      // no-op
-    }
-  }
-
-  // Greedy grouping by size
-  const maxPerGroup = params.maxTokensPerGroup ?? 900000;
-  const sorted = [...fileInfos].sort((a, b) => b.tokens - a.tokens);
-  const groups: Array<{
-    files: Array<{ filePath: string; tokens: number }>;
-    totalTokens: number;
-    groupIndex: number;
-    name?: string;
-    description?: string;
-    reasoning?: string;
-    customPrompt?: string;
-  }> = [];
-  let groupIndex = 0;
-  let current: (typeof groups)[number] = {
-    files: [],
-    totalTokens: 0,
-    groupIndex,
-  };
-  for (const f of sorted) {
-    if (
-      current.totalTokens + f.tokens > maxPerGroup &&
-      current.files.length > 0
-    ) {
-      groups.push(current);
-      groupIndex += 1;
-      current = { files: [], totalTokens: 0, groupIndex };
-    }
-    current.files.push({ filePath: f.filePath, tokens: f.tokens });
-    current.totalTokens += f.tokens;
-  }
-  if (current.files.length > 0) groups.push(current);
-
-  // Annotate minimal prompts per group (simple blueprint)
-  for (const g of groups) {
-    g.name = `Group ${g.groupIndex + 1}`;
-    g.description = "Automatically grouped files by estimated token size.";
-    g.reasoning = "Greedy grouping to stay within token limits.";
-    g.customPrompt =
-      "You are a Senior Codebase Analyst. Focus only on the files listed for this group; summarize architecture and answer the user question precisely.";
-  }
-
-  const groupsData = JSON.stringify({
-    groups,
-    totalFiles: fileInfos.length,
-    totalTokens: totalProjectTokens,
-    projectPath: normalizedPath,
-    analysisMode: params.analysisMode,
-    maxTokensPerGroup: maxPerGroup,
-  });
-
-  logger.info("Project orchestrator (create) built groups", {
+  logger.info("Discovered files", {
     ...context,
-    groups: groups.length,
-    totalFiles: fileInfos.length,
+    fileCount: files.length,
   });
+
+  // Extract metadata from all files in parallel
+  const metadataPromises = files.map(async (file) => {
+    try {
+      const filePath = path.join(normalizedPath, file);
+      const content = await fs.readFile(filePath, "utf-8");
+      const metadata = await extractMetadata(file, content, context);
+      return metadata;
+    } catch (error) {
+      // Log and skip unreadable files
+      logger.debug("Skipping unreadable file", {
+        ...context,
+        file,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  });
+
+  const metadataResults = await Promise.all(metadataPromises);
+  const metadata: FileMetadata[] = metadataResults.filter(
+    (m): m is FileMetadata => m !== null,
+  );
+
+  if (metadata.length === 0) {
+    throw new McpError(
+      BaseErrorCode.INVALID_INPUT,
+      "No readable files found in project directory",
+    );
+  }
+
+  logger.info("Extracted metadata from files", {
+    ...context,
+    metadataCount: metadata.length,
+    skippedFiles: files.length - metadata.length,
+  });
+
+  // Calculate total project tokens
+  const totalProjectTokens = metadata.reduce(
+    (sum, m) => sum + m.estimatedTokens,
+    0,
+  );
+
+  // Use AI to group files
+  const maxPerGroup = params.maxTokensPerGroup ?? 900000;
+  logger.info("Starting AI-powered grouping", {
+    ...context,
+    maxTokensPerGroup: maxPerGroup,
+    totalProjectTokens,
+  });
+
+  const aiGroups = await groupFilesWithAI(
+    metadata,
+    maxPerGroup,
+    context,
+    params.geminiApiKey,
+  );
+
+  // Convert to format expected by analyze step
+  const groupsData = convertGroupsToAnalyzeFormat(
+    aiGroups,
+    metadata.length,
+    totalProjectTokens,
+    normalizedPath,
+    params.analysisMode || "general",
+    maxPerGroup,
+  );
+
+  logger.info("Project orchestrator (create) completed", {
+    ...context,
+    groups: aiGroups.length,
+    totalFiles: metadata.length,
+    totalTokens: totalProjectTokens,
+  });
+
   return { groupsData };
 }

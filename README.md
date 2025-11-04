@@ -119,6 +119,50 @@ Each tool validates input with Zod schemas and automatically records structured 
 
 ---
 
+## Code Metadata Extraction
+
+The server includes advanced code metadata extraction powered by **Tree-sitter AST parsing** for improved accuracy, especially with complex syntax structures (nested classes, decorators, generics).
+
+### Supported Languages
+
+Tree-sitter parsing is enabled for:
+- **Java** - Classes, interfaces, methods, imports
+- **Go** - Types, functions, imports
+- **Rust** - Structs, enums, traits, functions, use statements
+- **C#** - Classes, interfaces, methods, using statements
+- **Ruby** - Classes, modules, methods, require statements
+- **PHP** - Classes, interfaces, traits, functions, use statements
+- **Python** - Classes, functions, import statements
+
+JavaScript/TypeScript files use Babel AST parsing (already implemented).
+
+### Hybrid Fallback Strategy
+
+The system uses a graceful degradation approach:
+
+1. **Tree-sitter AST parsing** (best accuracy) - Primary method for supported languages
+2. **Regex pattern matching** (acceptable) - Fallback if Tree-sitter fails or unavailable
+3. **Minimal metadata** (basic) - Final fallback if all parsing methods fail
+
+This ensures the system continues to work even if grammar packages are missing or parsing encounters errors.
+
+### Performance
+
+- Grammar loading: <500ms on first use (cached thereafter)
+- Parse time: <100ms per file (average)
+- Memory overhead: <50MB for all grammar caches
+- Grammar packages are loaded lazily (only when needed)
+
+### Troubleshooting
+
+If Tree-sitter parsing fails:
+- The system automatically falls back to regex parsing
+- Check that optional grammar packages are installed: `npm install`
+- Grammar packages are optional dependencies - missing packages trigger regex fallback
+- Check logs for detailed error messages
+
+---
+
 ## Development Commands
 
 | Command                             | Purpose                                                            |
