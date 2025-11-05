@@ -75,7 +75,7 @@ describe("mcpSetupGuide Tool", () => {
       const content = await fs.readFile(filePath, "utf-8");
       assert.ok(content.includes(MCP_CONTENT_START_MARKER));
       assert.ok(content.includes(MCP_CONTENT_END_MARKER));
-      assert.ok(content.includes("MCP IS YOUR MENTOR"));
+      assert.ok(content.includes("MCP = YOUR MENTOR"));
     });
 
     it("should create file in subdirectory for clients like cline", async () => {

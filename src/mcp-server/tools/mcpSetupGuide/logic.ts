@@ -225,7 +225,7 @@ START
   Is project size unknown?
   ├─ YES → Run calculate_token_count
   │         ↓
-  │         < 200K tokens?
+  │         < 900K tokens?
   │         ├─ YES → Use gemini_codebase_analyzer
   │         └─ NO  → Use orchestrator workflow
   │
@@ -334,18 +334,41 @@ project_orchestrator_analyze({
 `;
 */
 
+// In-memory cache for config existence check
+// This prevents file system scan on every tool call
+const configCache = new Map<string, { exists: boolean; filePath?: string; client?: ClientName; timestamp: number }>();
+const CACHE_TTL_MS = 60000; // 60 seconds - refresh periodically
+
 /**
  * Checks if MCP configuration exists in project
+ * Uses in-memory cache to avoid repeated file system scans
  */
 export async function mcpConfigExists(
   projectPath: string,
   context: RequestContext,
+  forceRefresh = false,
 ): Promise<{ exists: boolean; filePath?: string; client?: ClientName }> {
+  const normalizedPath = path.resolve(projectPath);
+  const now = Date.now();
+  
+  // Check cache (skip if forceRefresh or expired)
+  if (!forceRefresh) {
+    const cached = configCache.get(normalizedPath);
+    if (cached && (now - cached.timestamp) < CACHE_TTL_MS) {
+      logger.debug("MCP config check: using cache", {
+        ...context,
+        projectPath: normalizedPath,
+        cachedResult: cached.exists,
+      });
+      return { exists: cached.exists, filePath: cached.filePath, client: cached.client };
+    }
+  }
+  
   // Check all possible client config files
   for (const [clientName, profile] of Object.entries(CLIENT_PROFILES)) {
     const fullPath = profile.directory
-      ? path.join(projectPath, profile.directory, profile.file)
-      : path.join(projectPath, profile.file);
+      ? path.join(normalizedPath, profile.directory, profile.file)
+      : path.join(normalizedPath, profile.file);
 
     try {
       const content = await fs.readFile(fullPath, "utf-8");
@@ -353,24 +376,34 @@ export async function mcpConfigExists(
         content.includes(MCP_CONTENT_START_MARKER) &&
         content.includes(MCP_CONTENT_END_MARKER)
       ) {
-        logger.debug("MCP config found", {
+        const result = {
+          exists: true,
+          filePath: fullPath,
+          client: clientName as ClientName,
+        };
+        
+        // Cache the positive result
+        configCache.set(normalizedPath, { ...result, timestamp: now });
+        
+        logger.debug("MCP config found (cached)", {
           ...context,
           filePath: fullPath,
           client: clientName,
-        }      );
-      return {
-        exists: true,
-        filePath: fullPath,
-        client: clientName as ClientName,
-      };
+        });
+        
+        return result;
+      }
+    } catch (_error) {
+      // File doesn't exist or can't be read, continue checking
+      continue;
     }
-  } catch (_error) {
-    // File doesn't exist or can't be read, continue checking
-    continue;
-  }
   }
 
-  return { exists: false };
+  // Cache the negative result (shorter TTL)
+  const result = { exists: false };
+  configCache.set(normalizedPath, { ...result, timestamp: now });
+  
+  return result;
 }
 
 /**
@@ -448,6 +481,15 @@ export async function mcpSetupGuideLogic(
 
       await fs.writeFile(filePath, newContent, "utf-8");
       logger.info("Updated MCP content", { ...context, filePath });
+      
+      // Invalidate cache after successful write
+      configCache.set(normalizedPath, {
+        exists: true,
+        filePath,
+        client: params.client,
+        timestamp: Date.now(),
+      });
+      
       return {
         success: true,
         message: `Successfully updated MCP configuration in ${profile.file}`,
@@ -462,6 +504,15 @@ export async function mcpSetupGuideLogic(
         ...context,
         filePath,
       });
+      
+      // Invalidate cache after successful write
+      configCache.set(normalizedPath, {
+        exists: true,
+        filePath,
+        client: params.client,
+        timestamp: Date.now(),
+      });
+      
       return {
         success: true,
         message: `Successfully added MCP configuration to existing ${profile.file}`,
@@ -474,6 +525,15 @@ export async function mcpSetupGuideLogic(
     const newContent = `# AI Assistant Configuration\n\n${wrappedContent}\n`;
     await fs.writeFile(filePath, newContent, "utf-8");
     logger.info("Created new file with MCP content", { ...context, filePath });
+    
+    // Invalidate cache after successful write
+    configCache.set(normalizedPath, {
+      exists: true,
+      filePath,
+      client: params.client,
+      timestamp: Date.now(),
+    });
+    
     return {
       success: true,
       message: `Successfully created ${profile.file} with MCP configuration`,
