@@ -348,27 +348,27 @@ export async function mcpConfigExists(
   context: RequestContext,
   forceRefresh = false,
 ): Promise<{ exists: boolean; filePath?: string; client?: ClientName }> {
-  const normalizedPath = path.resolve(projectPath);
+  const validatedPath = await validateSecurePath(projectPath, process.cwd(), context);
   const now = Date.now();
-  
+
   // Check cache (skip if forceRefresh or expired)
   if (!forceRefresh) {
-    const cached = configCache.get(normalizedPath);
+    const cached = configCache.get(validatedPath);
     if (cached && (now - cached.timestamp) < CACHE_TTL_MS) {
       logger.debug("MCP config check: using cache", {
         ...context,
-        projectPath: normalizedPath,
+        projectPath: validatedPath,
         cachedResult: cached.exists,
       });
       return { exists: cached.exists, filePath: cached.filePath, client: cached.client };
     }
   }
-  
+
   // Check all possible client config files
   for (const [clientName, profile] of Object.entries(CLIENT_PROFILES)) {
     const fullPath = profile.directory
-      ? path.join(normalizedPath, profile.directory, profile.file)
-      : path.join(normalizedPath, profile.file);
+      ? path.join(validatedPath, profile.directory, profile.file)
+      : path.join(validatedPath, profile.file);
 
     try {
       const content = await fs.readFile(fullPath, "utf-8");
@@ -383,8 +383,8 @@ export async function mcpConfigExists(
         };
         
         // Cache the positive result
-        configCache.set(normalizedPath, { ...result, timestamp: now });
-        
+        configCache.set(validatedPath, { ...result, timestamp: now });
+
         logger.debug("MCP config found (cached)", {
           ...context,
           filePath: fullPath,
@@ -401,8 +401,8 @@ export async function mcpConfigExists(
 
   // Cache the negative result (shorter TTL)
   const result = { exists: false };
-  configCache.set(normalizedPath, { ...result, timestamp: now });
-  
+  configCache.set(validatedPath, { ...result, timestamp: now });
+
   return result;
 }
 
