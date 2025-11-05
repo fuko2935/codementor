@@ -64,7 +64,7 @@ export interface ExtractGitDiffParams {
 export function validateRevision(revision: string): boolean {
   // Disallows leading hyphens and shell metacharacters (;, &, |, $, etc.)
   // Allows: alphanumeric, ~, ^, ., /, -, _, and .. (for ranges)
-  const validRevisionRegex = /^(?![-])[a-zA-Z0-9\~\^\.\/\-\_]+$/;
+  const validRevisionRegex = /^(?![-])[a-zA-Z0-9~^./\-_]+$/;
   return validRevisionRegex.test(revision);
 }
 
