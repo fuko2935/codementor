@@ -224,23 +224,83 @@ function parseAIResponse(
       );
     }
 
-    // Verify all files exist in metadata
-    for (const filePath of group.files) {
-      if (!metadataMap.has(filePath)) {
+    // Verify all files exist in metadata and fix paths
+    // AI might return paths without full prefixes, so we need flexible matching
+    const correctedFiles: string[] = [];
+    
+    for (let i = 0; i < group.files.length; i++) {
+      const filePath = group.files[i];
+      let correctedPath = filePath;
+      
+      // Try exact match first
+      if (metadataMap.has(filePath)) {
+        correctedPath = filePath;
+      } else {
+        // If exact match fails, try finding by filename or suffix match
+        let found = false;
+        for (const [metadataPath] of metadataMap.entries()) {
+          // Check if metadata path ends with the AI-returned path
+          // E.g., "internal/logger.ts" should match "utils/internal/logger.ts"
+          if (metadataPath.endsWith('/' + filePath) || metadataPath.endsWith('\\' + filePath)) {
+            correctedPath = metadataPath;
+            found = true;
+            break;
+          }
+        }
+        
+        if (!found) {
+          // Debug: List available paths in metadata
+          const availablePaths = Array.from(metadataMap.keys()).slice(0, 10);
+          throw new McpError(
+            BaseErrorCode.PARSING_ERROR,
+            `Group contains unknown file: ${filePath}\n` +
+            `Available paths in metadata (first 10): ${JSON.stringify(availablePaths, null, 2)}\n` +
+            `Total files in metadata: ${metadataMap.size}`,
+          );
+        }
+      }
+      
+      // Check for duplicates
+      if (processedFiles.has(correctedPath)) {
         throw new McpError(
           BaseErrorCode.PARSING_ERROR,
-          `Group contains unknown file: ${filePath}`,
+          `File appears in multiple groups: ${correctedPath}`,
         );
       }
-      if (processedFiles.has(filePath)) {
-        throw new McpError(
-          BaseErrorCode.PARSING_ERROR,
-          `File appears in multiple groups: ${filePath}`,
-        );
-      }
-      processedFiles.add(filePath);
+      processedFiles.add(correctedPath);
+      correctedFiles.push(correctedPath);
     }
+    
+    // Update group.files with corrected paths
+    group.files = correctedFiles;
 
+    // Fix metadata paths to match corrected file paths
+    group.metadata = group.files.map(correctedFilePath => {
+      // Find metadata by corrected path
+      const existingMeta = metadataMap.get(correctedFilePath);
+      if (existingMeta) {
+        return existingMeta;
+      }
+      
+      // Fallback: Try to find in group's metadata by matching
+      const groupMeta = group.metadata.find(m => 
+        m.filePath === correctedFilePath || 
+        correctedFilePath.endsWith('/' + m.filePath) ||
+        correctedFilePath.endsWith('\\' + m.filePath)
+      );
+      
+      if (groupMeta) {
+        // Update the metadata's filePath to match corrected path
+        return { ...groupMeta, filePath: correctedFilePath };
+      }
+      
+      // This shouldn't happen if our matching logic above worked
+      throw new McpError(
+        BaseErrorCode.PARSING_ERROR,
+        `Could not find metadata for file: ${correctedFilePath}`,
+      );
+    });
+    
     // Verify metadata matches files
     if (group.files.length !== group.metadata.length) {
       throw new McpError(

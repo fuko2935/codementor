@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.4.2] - 2025-11-05
+
+### Fixed
+
+- **Critical**: Fixed path matching issue in `project_orchestrator_create` tool. AI-generated file paths (e.g., `internal/logger.ts`) now correctly match metadata paths (e.g., `utils/internal/logger.ts`) using flexible suffix matching. This resolves "Group contains unknown file" errors for markdown and other files.
+
 ## [2.4.1] - 2025-11-05
 
 ### Fixed
