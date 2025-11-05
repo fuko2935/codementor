@@ -1,6 +1,6 @@
 {
   "name": "gemini-mcp-local",
-  "version": "2.5.4",
+  "version": "2.7.0",
   "description": "Local-first Gemini MCP tool for stdio or HTTP transports using environment-supplied provider credentials.",
   "main": "dist/index.js",
   "bin": {
@@ -28,7 +28,8 @@
   },
   "homepage": "https://github.com/fuko2935/gemini-mcp-local#readme",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy:templates",
+    "copy:templates": "node -e \"require('fs').cpSync('src/mcp-server/tools/mcpSetupGuide/templates', 'dist/mcp-server/tools/mcpSetupGuide/templates', {recursive: true})\" && node -e \"require('fs').cpSync('src/mcp-server/tools/mcpSetupGuide/templates', 'dist-test/src/mcp-server/tools/mcpSetupGuide/templates', {recursive: true})\"",
     "start": "node dist/index.js",
     "start:local": "ts-node -r dotenv/config src/index.ts",
     "start:stdio": "node dist/index.js",

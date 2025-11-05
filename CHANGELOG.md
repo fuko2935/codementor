@@ -1,5 +1,139 @@
 # Changelog
 
+## [2.7.0] - 2025-11-05
+
+### 🎯 Major Feature: MCP-Driven Development Workflow
+
+**AI assistants now have a mandatory mentor-driven workflow:**
+- 🎓 **MCP as Mentor**: AI must consult MCP before, during, and after implementation
+- 🔄 **Iterative Review Cycle**: BEFORE → IMPLEMENT → REVIEW → FIX → VERIFY → REPEAT
+- ✅ **Approval Gates**: Clear criteria for when code is "APPROVED" vs needs fixes
+- 📝 **Structured Consultation**: Detailed implementation plans requested from MCP
+
+This fundamentally changes how AI assistants interact with MCP - from a passive analysis tool to an active coding mentor.
+
+### 📝 Guide Optimizations
+
+- **50% Content Reduction**: Template reduced from 239 → 120 lines while MORE effective
+- **Aggressive Messaging**: 
+  - Error messages now use ASCII art boxes (█) and strong emojis (🚨, ⛔)
+  - Title changed to "MCP IS YOUR MENTOR - CONSULT IT FOR EVERYTHING"
+  - Mandatory directives: "NEVER implement without consulting MCP first"
+- **Better Structure**:
+  - "QUICK START" decision tree at top
+  - "MANDATORY RULES" section with critical workflows
+  - "COMMON MISTAKES" table with DO/DON'T comparisons
+  - Approval determination guide (what counts as "APPROVED")
+
+### 🔧 Technical Improvements
+
+- **Template as Critical Asset**: Template file now required in builds (no fallback)
+  - Build fails if template missing
+  - Prevents shipping with stale documentation
+- **ESM Compatibility**: Fixed `__dirname` usage for ES modules
+- **Build Pipeline**: Auto-copies templates to both `dist/` and `dist-test/`
+- **Test Coverage**: All 21 unit tests passing with updated assertions
+
+### 🎯 Best Practices Added
+
+**Consultation Phase Template:**
+```javascript
+gemini_codebase_analyzer({
+  question: "I need to add feature X. Please provide step-by-step plan including: 
+    1) Files to modify, 2) New functions/classes, 3) Patterns to follow, 4) Side effects"
+})
+```
+
+**Review Phase Template:**
+```javascript
+gemini_codebase_analyzer({
+  question: "Review changes for feature X. Are they correct? Issues? Improvements?",
+  analysisMode: "review"
+})
+```
+
+**Verification Phase Template:**
+```javascript
+gemini_codebase_analyzer({
+  question: "I applied your suggestions. Did I implement them correctly? Remaining issues?",
+  analysisMode: "review"
+})
+```
+
+### 📚 Documentation Philosophy
+
+**For AI Consumption:**
+- Treats AI as junior developer needing mentorship
+- Enforces consulting workflow at every step
+- No optional suggestions - all rules are mandatory
+- Repeat until explicit approval from MCP
+
+**Impact:**
+- AI assistants will stop defaulting to manual file reading
+- Forces iterative improvement cycles
+- Creates consistent, high-quality code patterns
+- Builds AI "muscle memory" for using MCP tools
+
+---
+
+## [2.6.0] - 2025-11-05
+
+### Added
+
+- **🔧 MCP Setup Guide Tool**: New `mcp_setup_guide` tool for automated AI client configuration
+  - Supports 21 AI clients (Cursor, Claude Code, Gemini CLI, Warp, Cline, Kiro, etc.)
+  - Auto-generates comprehensive MCP usage documentation for AI assistants
+  - Template-based content management with fallback mechanism
+  - Marker-based content injection preserves existing documentation
+  - Intelligent client profile detection and file placement
+- **📦 Client Profiles Configuration**: Externalized client profiles to `src/config/clientProfiles.ts`
+  - Type-safe client definitions with helper functions
+  - Easy to extend and maintain
+  - 21 pre-configured AI client profiles
+- **🔒 MCP Config Validation**: New validation mechanism for all MCP tools
+  - Ensures setup is completed before tool usage
+  - Provides helpful error messages with next steps
+  - Validates across 6 major analysis tools
+- **✅ Comprehensive Unit Tests**: 21 unit tests for setup guide tool
+  - File creation, updates, and content preservation
+  - Edge case handling (special characters, nested directories)
+  - Security testing (path traversal prevention)
+  - 100% passing test suite
+
+### Security
+
+- **🔐 Path Traversal Fix**: Critical security vulnerability fixed in `mcp_setup_guide`
+  - Added `validateSecurePath` to all file operations
+  - Prevents directory traversal attacks
+  - Verified with dedicated security test
+- **🛡️ Regex Injection Prevention**: Secure regex construction for content updates
+  - Proper escaping of special characters
+  - Injection-proof marker matching
+
+### Improved
+
+- **📝 Template-Based Documentation**: AI usage guide now managed via external templates
+  - Easy to update without touching code
+  - Markdown preview support in IDEs
+  - Fallback content for resilience
+- **🎯 Error Handling**: Consistent ErrorHandler pattern across all tools
+  - Simplified registration handlers
+  - Better error messages and context
+  - Centralized error processing
+- **🏗️ Architecture**: Clean separation of concerns
+  - Configuration externalized from logic
+  - Modular and maintainable structure
+  - Best-practice patterns throughout
+
+### Changed
+
+- All MCP analysis tools now require setup guide configuration
+  - `gemini_codebase_analyzer`
+  - `project_orchestrator_create`
+  - `project_orchestrator_analyze`
+  - `gemini_dynamic_expert_create`
+  - `gemini_dynamic_expert_analyze`
+
 ## [2.5.0] - 2025-11-05
 
 ### Added

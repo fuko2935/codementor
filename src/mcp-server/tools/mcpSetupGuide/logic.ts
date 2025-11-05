@@ -5,6 +5,7 @@
 
 import { promises as fs } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { logger, type RequestContext } from "../../../utils/index.js";
@@ -14,6 +15,10 @@ import {
   getAllClientNames,
 } from "../../../config/clientProfiles.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
+
+// ESM __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Marker constants for content injection
 export const MCP_CONTENT_START_MARKER = "<!-- MCP:GEMINI-MCP-LOCAL:START -->";
@@ -57,15 +62,39 @@ export interface McpSetupGuideResponse {
  * Generates the MCP usage guide content by reading the template file
  * This content will be injected between the markers
  */
-async function generateMcpGuideContent(): Promise<string> {
+async function generateMcpGuideContent(context?: RequestContext): Promise<string> {
   try {
     const templatePath = path.join(__dirname, "templates", "mcp-guide.md");
     const content = await fs.readFile(templatePath, "utf-8");
     return content;
-  } catch (_error) {
-    // Fallback to embedded content if template file is not found
-    // This ensures backward compatibility during development
-    return `
+  } catch (error) {
+    // CRITICAL: Template file is now a required asset
+    // If missing, this indicates a critical build/packaging issue
+    if (context) {
+      logger.error("MCP guide template file not found - critical error", {
+        ...context,
+        templatePath: path.join(__dirname, "templates", "mcp-guide.md"),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    
+    throw new McpError(
+      BaseErrorCode.INTERNAL_ERROR,
+      `CRITICAL: The MCP guide template file is missing. This indicates a build or packaging issue.
+
+Please report this at: https://github.com/fuko2935/gemini-mcp-local/issues
+
+Expected location: src/mcp-server/tools/mcpSetupGuide/templates/mcp-guide.md`,
+      { templatePath: path.join(__dirname, "templates", "mcp-guide.md") },
+    );
+  }
+}
+
+// LEGACY FALLBACK CONTENT - NO LONGER USED
+// Template is now a critical asset and must always exist in builds
+// This content is kept for reference only
+/*
+LEGACY_FALLBACK_CONTENT = `
 # 🚀 MCP Gemini Local - AI Usage Guide
 
 **⚠️ IMPORTANT: DO NOT DELETE THIS SECTION ⚠️**
@@ -303,8 +332,7 @@ project_orchestrator_analyze({
 
 **🎓 End of MCP Gemini Local Usage Guide**
 `;
-  }
-}
+*/
 
 /**
  * Checks if MCP configuration exists in project
@@ -383,7 +411,7 @@ export async function mcpSetupGuideLogic(
     );
   }
 
-  const mcpContent = await generateMcpGuideContent();
+  const mcpContent = await generateMcpGuideContent(context);
   const wrappedContent = `${MCP_CONTENT_START_MARKER}\n${mcpContent}\n${MCP_CONTENT_END_MARKER}`;
 
   let existingContent = "";

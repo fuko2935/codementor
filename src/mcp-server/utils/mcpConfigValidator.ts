@@ -23,20 +23,27 @@ export async function validateMcpConfigExists(
   const configCheck = await mcpConfigExists(projectPath, context);
 
   if (!configCheck.exists) {
-    const clientList = Object.keys(CLIENT_PROFILES).join(", ");
     const errorMessage =
-      `❌ MCP Setup Required: No MCP configuration found in project directory.\n\n` +
-      `Before using MCP analysis tools, you must first set up the configuration file by calling the 'mcp_setup_guide' tool.\n\n` +
-      `**Required Action:**\n` +
-      `Call 'mcp_setup_guide' tool with your AI client name:\n` +
-      `- client: Choose from: ${clientList}\n` +
-      `- projectPath: "${projectPath}" (optional, defaults to current directory)\n\n` +
-      `**Example:**\n` +
-      `mcp_setup_guide({ client: "cursor", projectPath: "." })\n\n` +
-      `This will create the necessary configuration file with comprehensive MCP usage guidelines for AI assistants.\n\n` +
-      `**Why is this required?**\n` +
-      `The setup guide creates a structured documentation file that helps AI assistants understand how to use MCP tools effectively. ` +
-      `It includes tool descriptions, workflows, best practices, and examples. This ensures better tool usage and more accurate results.`;
+      `\n` +
+      `█████████████████████████████████████████████████████████████████\n` +
+      `█                                                               █\n` +
+      `█  🚨 STOP - YOU MUST RUN 'mcp_setup_guide' TOOL FIRST 🚨     █\n` +
+      `█                                                               █\n` +
+      `█████████████████████████████████████████████████████████████████\n\n` +
+      `⛔ THIS TOOL CANNOT RUN WITHOUT SETUP ⛔\n\n` +
+      `REQUIRED FIRST STEP (takes 1 second):\n` +
+      `Call mcp_setup_guide tool NOW:\n\n` +
+      `  mcp_setup_guide({ \n` +
+      `    client: "cursor",    // or: gemini-cli, claude-code, warp, cline, etc.\n` +
+      `    projectPath: "."\n` +
+      `  })\n\n` +
+      `After setup completes, you can use all MCP analysis tools.\n\n` +
+      `WHY THIS IS REQUIRED:\n` +
+      `The setup guide provides essential documentation on how to use MCP tools\n` +
+      `correctly. This ensures efficient analysis and avoids token limits or\n` +
+      `incorrect operations. It takes 1 second to run.\n\n` +
+      `❌ DO NOT try to analyze files manually\n` +
+      `✅ DO call mcp_setup_guide first`;
 
     logger.warning("MCP config validation failed - setup required", {
       ...context,
