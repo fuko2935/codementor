@@ -10,9 +10,12 @@ import path from "path";
 import { glob } from "glob";
 import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
-import { logger, type RequestContext, sanitization, createIgnoreInstance } from "../../../utils/index.js";
+import { logger, type RequestContext, createIgnoreInstance } from "../../../utils/index.js";
 import { extractMetadata, type FileMetadata } from "../../utils/codeParser.js";
 import { groupFilesWithAI, type ProjectGroup } from "../../services/aiGroupingService.js";
+import { validateProjectSize } from "../../utils/projectSizeValidator.js";
+import { config } from "../../../config/index.js";
+import { validateSecurePath } from "../../utils/securePathValidator.js";
 
 export const ProjectOrchestratorCreateInputSchema = z.object({
   projectPath: z.string().min(1),
@@ -103,24 +106,28 @@ export async function projectOrchestratorCreateLogic(
   params: ProjectOrchestratorCreateInput,
   context: RequestContext,
 ): Promise<ProjectOrchestratorCreateResponse> {
-  // Validate and normalize project path
-  const sanitized = sanitization.sanitizePath(params.projectPath, {
-    rootDir: process.cwd(),
-    allowAbsolute: true,
-  });
-  const normalizedPath = path.resolve(process.cwd(), sanitized.sanitizedPath);
-  const stats = await fs.stat(normalizedPath).catch((e) => {
+  // Validate and secure the project path
+  const normalizedPath = await validateSecurePath(params.projectPath, process.cwd(), context);
+
+  // Validate project size before making LLM API call
+  const sizeValidation = await validateProjectSize(
+    normalizedPath,
+    undefined,
+    params.temporaryIgnore,
+    params.ignoreMcpignore,
+    context,
+  );
+
+  if (!sizeValidation.valid) {
     throw new McpError(
-      BaseErrorCode.INVALID_INPUT,
-      `Invalid project path: ${normalizedPath}`,
-      { cause: e },
+      BaseErrorCode.VALIDATION_ERROR,
+      sizeValidation.error || "Project size exceeds token limit",
+      {
+        tokenCount: sizeValidation.tokenCount,
+        maxTokens: config.maxProjectTokens ?? 20_000_000,
+      },
     );
-  });
-  if (!stats.isDirectory())
-    throw new McpError(
-      BaseErrorCode.INVALID_INPUT,
-      `Project path is not a directory: ${normalizedPath}`,
-    );
+  }
 
   logger.info("Starting project orchestrator create", {
     ...context,

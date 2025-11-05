@@ -48,42 +48,56 @@ async function createMcpServerInstance(): Promise<McpServer> {
     environment,
   });
 
-  // Pre-initialize Tree-sitter WASM before STDIO transport starts
-  // This prevents WASM loading messages from polluting stdout/JSON-RPC stream
-  if (config.mcpTransportType === "stdio") {
+  // Pre-initialize Tree-sitter WASM and all supported grammars at startup
+  // This prevents WASM loading latency on first request and improves performance
+  try {
+    logger.info("Pre-warming Tree-sitter grammars at startup...", context);
+    
+    // Temporarily suppress console output during Tree-sitter initialization
+    // CRITICAL: The web-tree-sitter library and its underlying Emscripten WASM module
+    // write initialization messages directly to stdout/stderr, which corrupts the JSON-RPC
+    // stream in STDIO transport mode. We temporarily override console methods to prevent
+    // this pollution. This is a necessary workaround until web-tree-sitter provides a
+    // configuration option to suppress these messages. The console methods are restored
+    // immediately after warmup completes.
+    const originalLog = console.log;
+    const originalInfo = console.info;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+    
+    console.log = () => {};
+    console.info = () => {};
+    console.warn = () => {};
+    console.error = () => {};
+    
     try {
-      logger.debug("Pre-initializing Tree-sitter for STDIO transport", context);
-      
-      // Temporarily suppress console output during Tree-sitter initialization
-      // to prevent WASM loading messages from polluting JSON-RPC stream
-      const originalLog = console.log;
-      const originalInfo = console.info;
-      const originalWarn = console.warn;
-      const originalError = console.error;
-      
-      console.log = () => {};
-      console.info = () => {};
-      console.warn = () => {};
-      console.error = () => {};
-      
-      try {
-        await warmupTreeSitter(["javascript", "typescript", "python"]);
-      } finally {
-        // Restore console methods
-        console.log = originalLog;
-        console.info = originalInfo;
-        console.warn = originalWarn;
-        console.error = originalError;
-      }
-      
-      logger.debug("Tree-sitter pre-initialization completed", context);
-    } catch (error) {
-      // Non-critical - Tree-sitter will be initialized on first use
-      logger.debug("Tree-sitter pre-initialization failed, will retry on first use", {
-        ...context,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      // Pre-load all supported Tree-sitter grammars
+      const allSupportedLanguages: Array<"java" | "python" | "javascript" | "typescript" | "go" | "rust" | "csharp" | "ruby" | "php"> = [
+        "java",
+        "python",
+        "javascript",
+        "typescript",
+        "go",
+        "rust",
+        "csharp",
+        "ruby",
+        "php",
+      ];
+      await warmupTreeSitter(allSupportedLanguages);
+      logger.info("Tree-sitter grammars pre-warmed successfully.", context);
+    } finally {
+      // Restore console methods
+      console.log = originalLog;
+      console.info = originalInfo;
+      console.warn = originalWarn;
+      console.error = originalError;
     }
+  } catch (error) {
+    // Non-critical - Tree-sitter will be initialized on first use (lazy loading)
+    logger.warning("Failed to pre-warm all Tree-sitter grammars. They will be loaded on-demand.", {
+      ...context,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   const server = new McpServer(

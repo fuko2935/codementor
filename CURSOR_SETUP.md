@@ -59,6 +59,8 @@ Aşağıdaki JSON içeriğini yukarıdaki konuma yapıştırın:
 
 #### API Key ile (Alternatif)
 
+**⚠️ GÜVENLİK UYARISI:** API key'leri asla config dosyalarına yazmayın! Environment variable olarak ayarlayın.
+
 ```json
 {
   "mcpServers": {
@@ -66,12 +68,29 @@ Aşağıdaki JSON içeriğini yukarıdaki konuma yapıştırın:
       "command": "npx",
       "args": ["-y", "gemini-mcp-local"],
       "env": {
-        "LLM_DEFAULT_PROVIDER": "gemini",
-        "GOOGLE_API_KEY": "your-api-key-here"
+        "LLM_DEFAULT_PROVIDER": "gemini"
+        // GOOGLE_API_KEY'i buraya EKLEMEYİN - environment variable olarak ayarlayın!
       }
     }
   }
 }
+```
+
+**API key'i environment variable olarak ayarlayın:**
+
+**Windows (PowerShell):**
+```powershell
+$env:GOOGLE_API_KEY="your-api-key-here"
+```
+
+**macOS/Linux:**
+```bash
+export GOOGLE_API_KEY="your-api-key-here"
+```
+
+**Veya shell profile'ınıza ekleyin** (`~/.bashrc`, `~/.zshrc`, vb.):
+```bash
+export GOOGLE_API_KEY="your-api-key-here"
 ```
 
 ### 4. Cursor'u Yeniden Başlatın
@@ -134,9 +153,11 @@ gemini
 
 ### API Key hatası (gemini-cli kullanmıyorsanız)
 
-Eğer `LLM_DEFAULT_PROVIDER=gemini` kullanıyorsanız, `GOOGLE_API_KEY` environment variable'ının ayarlandığından emin olun.
+Eğer `LLM_DEFAULT_PROVIDER=gemini` kullanıyorsanız, `GOOGLE_API_KEY` environment variable'ının ayarlandığından emin olun. **API key'i config dosyasına değil, environment variable olarak ayarlayın!**
 
 API key'i şuradan alabilirsiniz: https://makersuite.google.com/app/apikey
+
+**⚠️ ÖNEMLİ:** API key'leri asla config dosyalarına yazmayın! Bu, güvenlik riski oluşturur ve Git'e commit edilirse secret'ınız açığa çıkabilir.
 
 ## Özellikler
 

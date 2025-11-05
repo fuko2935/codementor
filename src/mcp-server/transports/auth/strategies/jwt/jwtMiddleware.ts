@@ -20,23 +20,23 @@
 import { HttpBindings } from "@hono/node-server";
 import { Context, Next } from "hono";
 import { jwtVerify } from "jose";
-import { config, environment } from "../../../../../config/index.js";
+import { config } from "../../../../../config/index.js";
 import { logger, requestContextService } from "../../../../../utils/index.js";
 import { BaseErrorCode, McpError } from "../../../../../types-global/errors.js";
 import { authContext } from "../../core/authContext.js";
 
 // Startup Validation: Validate secret key presence on module load.
 if (config.mcpAuthMode === "jwt") {
-  if (environment === "production" && !config.mcpAuthSecretKey) {
-    logger.fatal(
-      "CRITICAL: MCP_AUTH_SECRET_KEY is not set in production environment for JWT auth. Authentication cannot proceed securely.",
-    );
-    throw new Error(
-      "MCP_AUTH_SECRET_KEY must be set in production environment for JWT authentication.",
+  if (config.mcpDisableAuth) {
+    logger.warning(
+      "MCP_DISABLE_AUTH is enabled. Authentication is completely bypassed (DEVELOPMENT ONLY).",
     );
   } else if (!config.mcpAuthSecretKey) {
-    logger.warning(
-      "MCP_AUTH_SECRET_KEY is not set. JWT auth middleware will bypass checks (DEVELOPMENT ONLY). This is insecure for production.",
+    logger.fatal(
+      "CRITICAL: MCP_AUTH_SECRET_KEY is not set for JWT auth. Authentication cannot proceed securely.",
+    );
+    throw new Error(
+      "MCP_AUTH_SECRET_KEY must be set when MCP_AUTH_MODE is 'jwt' and MCP_DISABLE_AUTH is not true.",
     );
   }
 }
@@ -66,34 +66,35 @@ export async function mcpAuthMiddleware(
     return await next();
   }
 
-  // Development Mode Bypass
+  // Explicit disable auth flag (for development only)
+  if (config.mcpDisableAuth) {
+    logger.warning(
+      "Authentication bypassed: MCP_DISABLE_AUTH is enabled (DEVELOPMENT ONLY).",
+      context,
+    );
+    reqWithAuth.auth = {
+      token: "dev-mode-placeholder-token",
+      clientId: "dev-client-id",
+      scopes: ["dev-scope"],
+    };
+    const authInfo = reqWithAuth.auth;
+    logger.debug("Dev mode auth object created.", {
+      ...context,
+      authDetails: authInfo,
+    });
+    return await authContext.run({ authInfo }, next);
+  }
+
+  // If we reach here, config validation ensures mcpAuthSecretKey exists
   if (!config.mcpAuthSecretKey) {
-    if (environment !== "production") {
-      logger.warning(
-        "Bypassing JWT authentication: MCP_AUTH_SECRET_KEY is not set (DEVELOPMENT ONLY).",
-        context,
-      );
-      reqWithAuth.auth = {
-        token: "dev-mode-placeholder-token",
-        clientId: "dev-client-id",
-        scopes: ["dev-scope"],
-      };
-      const authInfo = reqWithAuth.auth;
-      logger.debug("Dev mode auth object created.", {
-        ...context,
-        authDetails: authInfo,
-      });
-      return await authContext.run({ authInfo }, next);
-    } else {
-      logger.error(
-        "FATAL: MCP_AUTH_SECRET_KEY is missing in production. Cannot bypass auth.",
-        context,
-      );
-      throw new McpError(
-        BaseErrorCode.INTERNAL_ERROR,
-        "Server configuration error: Authentication key missing.",
-      );
-    }
+    logger.error(
+      "FATAL: MCP_AUTH_SECRET_KEY is missing. This should have been caught at startup.",
+      context,
+    );
+    throw new McpError(
+      BaseErrorCode.INTERNAL_ERROR,
+      "Server configuration error: Authentication key missing.",
+    );
   }
 
   const secretKey = new TextEncoder().encode(config.mcpAuthSecretKey);

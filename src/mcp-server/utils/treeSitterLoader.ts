@@ -8,7 +8,7 @@ import * as TreeSitter from "web-tree-sitter";
 import type { Language, Parser } from "web-tree-sitter";
 import path from "path";
 import { createRequire } from "module";
-import { existsSync } from "fs";
+import { promises as fs } from "fs";
 import { logger, type RequestContext } from "../../utils/index.js";
 import type { SupportedLanguage } from "./codeParser.js";
 
@@ -83,7 +83,28 @@ const LANGUAGE_WASM_MAP: Record<string, string> = {
  * @param packageName - The npm package name (e.g., "tree-sitter-java")
  * @returns The absolute path to the WASM file, or null if not found
  */
-function findWasmPath(packageName: string): string | null {
+/**
+ * Checks if a file exists asynchronously.
+ * @param filePath - Path to check
+ * @returns Promise resolving to true if file exists, false otherwise
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.stat(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Finds the WASM file path for a Tree-sitter language package.
+ * Uses asynchronous file system operations to avoid blocking the event loop.
+ *
+ * @param packageName - The tree-sitter package name (e.g., "tree-sitter-javascript")
+ * @returns Promise resolving to the WASM file path or null if not found
+ */
+async function findWasmPathAsync(packageName: string): Promise<string | null> {
   try {
     const packagePath = require.resolve(`${packageName}/package.json`);
     const packageDir = path.dirname(packagePath);
@@ -96,7 +117,7 @@ function findWasmPath(packageName: string): string | null {
       (languageKey && LANGUAGE_WASM_MAP[languageKey]) ||
       `${packageName}.wasm`;
     const rootWasmPath = path.join(packageDir, wasmFileName);
-    if (existsSync(rootWasmPath)) {
+    if (await fileExists(rootWasmPath)) {
       return rootWasmPath;
     }
 
@@ -107,13 +128,13 @@ function findWasmPath(packageName: string): string | null {
       "node",
       wasmFileName,
     );
-    if (existsSync(bindingsPath)) {
+    if (await fileExists(bindingsPath)) {
       return bindingsPath;
     }
 
     // Try src directory: node_modules/tree-sitter-*/src/tree-sitter-*.wasm
     const srcPath = path.join(packageDir, "src", wasmFileName);
-    if (existsSync(srcPath)) {
+    if (await fileExists(srcPath)) {
       return srcPath;
     }
 
@@ -149,6 +170,12 @@ export class TreeSitterLoader implements LanguageLoader {
 
     try {
       // In STDIO mode, suppress console output during WASM initialization
+      // CRITICAL: The web-tree-sitter library and its underlying Emscripten WASM module
+      // write initialization messages directly to stdout/stderr, which corrupts the JSON-RPC
+      // stream in STDIO transport mode. We temporarily override console methods to prevent
+      // this pollution. This is a necessary workaround until web-tree-sitter provides a
+      // configuration option to suppress these messages. The console methods are restored
+      // immediately after initialization completes.
       const isStdioMode = process.env.MCP_TRANSPORT_TYPE === "stdio";
       let consoleOverride = false;
       let originalLog: typeof console.log;
@@ -264,8 +291,8 @@ export class TreeSitterLoader implements LanguageLoader {
       return null;
     }
 
-    // Find WASM file path
-    const wasmPath = findWasmPath(packageName);
+    // Find WASM file path (async)
+    const wasmPath = await findWasmPathAsync(packageName);
     if (!wasmPath) {
       const logContext: RequestContext = {
         requestId: "tree-sitter-loader",

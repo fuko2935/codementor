@@ -7,7 +7,7 @@ Guidance for Claude Code (claude.ai/code) when editing this repository.
 - **Name:** `gemini-mcp-local`
 - **Purpose:** Local-first MCP server exposing a Gemini-driven analysis toolkit over STDIO or HTTP.
 - **Entry Points:**
-  - CLI: `src/simple-server.ts` → `dist/simple-server.js`
+  - CLI: `src/index.ts` → `dist/index.js` (main entry point)
   - Programmatic: `src/index.ts`
 - **Transports:** STDIO (default) and streamable HTTP (`/mcp`).
 - **Logging:** JSON logs to `logs/activity.log` & `logs/error.log` (managed by Winston).
@@ -43,33 +43,41 @@ Provide whichever vendors you need. The resolver checks request parameters → e
 
 ```
 src/
-├── simple-server.ts        # CLI entry, tool definitions, provider key resolver
+├── index.ts                # Main entry point, server initialization
 ├── config/                 # Zod-backed environment parsing
-├── mcp-server/             # Reusable MCP server scaffolding (stdio + HTTP)
-├── services/llm-providers/ # OpenRouter helper (still available)
+├── mcp-server/            # MCP server scaffolding (stdio + HTTP)
+│   ├── server.ts           # Server instance creation
+│   ├── tools/              # Tool implementations
+│   ├── transports/         # STDIO and HTTP transports
+│   └── utils/              # Tree-sitter parser, code parser utilities
+├── services/llm-providers/ # LLM provider abstractions (Gemini CLI, OpenRouter)
 ├── utils/                  # Logger, error handler, metrics, parsing, security
-└── index.ts                # Programmatic bootstrap for MCP servers
+└── types-global/           # Shared TypeScript types and error definitions
 ```
 
-The CLI remains opinionated and self-contained. If you add reusable tools, consider porting them into `src/mcp-server` modules for cleaner separation.
+The CLI is modular and well-structured. When adding new tools, follow the pattern in `src/mcp-server/tools/` with separate `logic.ts` and `registration.ts` files.
 
 ## Coding Conventions
 
 1. **Request Contexts Everywhere** – Create a `RequestContext` at the boundary of every handler and pass it into dependencies. Logs must include the context payload.
-2. **Logic Throws, Handlers Catch** – Business logic (typically helper functions inside `simple-server.ts`) should throw typed errors. Handlers catch and format them through the central `ErrorHandler` when applicable.
-3. **Zod for Validation** – Input schemas live next to the tool definitions. Annotate fields with `.describe()` so downstream LLMs get helpful metadata.
-4. **Shared Provider Credentials** – Always call `resolveProviderApiKeys` or `requireProviderApiKeys` from `simple-server.ts` when interacting with an external LLM. Do not reach for `process.env` directly.
-5. **Logging** – Use the Winston logger from `simple-server.ts` (or `utils/internal/logger`) and include contextual metadata. Do not `console.log` (except for the intentional HTTP startup notice).
+2. **Logic Throws, Handlers Catch** – Business logic (in `logic.ts` files) should throw typed errors. Registration handlers catch and format them through the central `ErrorHandler`.
+3. **Zod for Validation** – Input schemas live in `logic.ts` files. Annotate fields with `.describe()` so downstream LLMs get helpful metadata.
+4. **Provider Credentials** – Use `config.providerApiKeys` or the provider-specific config helpers. Do not reach for `process.env` directly.
+5. **Logging** – Use the Winston logger from `utils/internal/logger` and include contextual metadata. Do not `console.log` (except for intentional HTTP startup notices).
+6. **Security** – Always use `validateSecurePath` for project paths. Never allow absolute paths from user input. Use `validateProjectSize` before LLM API calls.
+7. **Path Security** – All project paths must be validated against `process.cwd()` using `validateSecurePath` to prevent path traversal attacks.
 
-## Working on `simple-server.ts`
+## Working on Tools
 
-- The file is long but deliberately flat. Add helper functions near related logic and keep the top-level tool registration readable.
+- Tools are organized in `src/mcp-server/tools/` with a clear separation:
+  - `logic.ts`: Core business logic (throws errors)
+  - `registration.ts`: Tool registration with MCP server (catches and handles errors)
 - When creating new tools:
-  1. Define a Zod schema for inputs.
-  2. Parse `request.params.arguments` with that schema.
-  3. Resolve provider credentials with the shared helper.
-  4. Wrap LLM calls in the existing retry + key rotation utilities if you need resilience.
-  5. Return `CallToolResult` objects with a single `type: "text"` entry unless binary content is required.
+  1. Define a Zod schema for inputs in `logic.ts`
+  2. Implement the core logic function
+  3. Register the tool in `registration.ts` using `ErrorHandler.tryCatch`
+  4. Export from `index.ts` and register in `server.ts`
+  5. Follow the pattern: Logic throws, Handlers catch
 
 ## HTTP Transport Notes
 
@@ -80,8 +88,9 @@ The CLI remains opinionated and self-contained. If you add reusable tools, consi
 ## Documentation & Samples
 
 - Root README: user-facing quick start, configuration, and tool highlights.
-- `claude_desktop_config.example.json`: Copy/paste config referencing the new CLI name and provider keys.
-- `docs/tree.md`: Directory overview (regenerate after structural changes).
+- `claude_desktop_config.example.json`: Copy/paste config referencing the server (uses `gemini-cli` provider by default).
+- `CURSOR_SETUP.md`: Setup guide for Cursor IDE integration.
+- `SETUP.md`: Quick setup guide for Claude Desktop.
 - `CHANGELOG.md`: Add a new section for any user-facing change.
 
 ## QA Checklist Before Shipping

@@ -19,10 +19,13 @@ gemini  # Then select "Login with Google"
 npx gemini-mcp-local
 ```
 
-**With API Key:**
+**With API Key (Alternative):**
 
 ```bash
-GOOGLE_API_KEY="your-google-or-gemini-key" LLM_DEFAULT_PROVIDER=gemini npx gemini-mcp-local
+# ⚠️ SECURITY WARNING: Never hardcode API keys in config files!
+# Set the API key as an environment variable instead:
+export GOOGLE_API_KEY="your-google-or-gemini-key"
+LLM_DEFAULT_PROVIDER=gemini npx gemini-mcp-local
 ```
 
 The CLI starts on STDIO transport by default so it is immediately ready for Claude Desktop and other local MCP clients.
@@ -71,7 +74,9 @@ To switch back to API key-based authentication, set `LLM_DEFAULT_PROVIDER=gemini
 
 ### Provider API keys (all optional)
 
-**Gemini CLI Provider (Default):**
+**⚠️ SECURITY WARNING:** Never hardcode API keys in configuration files! Always use environment variables or system-level secret management. API keys committed to version control can be exposed and lead to unauthorized access and financial loss.
+
+**Gemini CLI Provider (Default - Recommended):**
 
 - Uses OAuth authentication via `gemini` CLI tool
 - No API keys required
@@ -80,6 +85,8 @@ To switch back to API key-based authentication, set `LLM_DEFAULT_PROVIDER=gemini
 
 **Standard API Key Providers:**
 Set whichever providers you plan to call; the shared resolver looks at request parameters first and then these environment variables.
+
+**Set API keys as environment variables** (never in config files):
 
 - `GOOGLE_API_KEY` / `GEMINI_API_KEY`
 - `OPENAI_API_KEY`
@@ -107,7 +114,7 @@ Logs for both transports land in `logs/activity.log` and `logs/error.log`. Delet
 
 ## Tool Highlights
 
-The bundled `simple-server.ts` exposes the same analysis workflow that powers the previous Smithery build, including:
+The server exposes a comprehensive analysis workflow including:
 
 - **Comprehensive project analysis** with expert persona selection and grouped summaries.
 - **Targeted code search** utilities for locating files, functions, or patterns inside large repositories.
@@ -282,7 +289,7 @@ Use the sample in [`claude_desktop_config.example.json`](./claude_desktop_config
 }
 ```
 
-Or with API key authentication:
+Or with API key authentication (⚠️ **SECURITY WARNING:** Never hardcode API keys in config files! Use environment variables instead):
 
 ```json
 {
@@ -291,8 +298,8 @@ Or with API key authentication:
       "command": "npx",
       "args": ["-y", "gemini-mcp-local"],
       "env": {
-        "LLM_DEFAULT_PROVIDER": "gemini",
-        "GOOGLE_API_KEY": "set-if-using-google-gemini"
+        "LLM_DEFAULT_PROVIDER": "gemini"
+        // DO NOT add GOOGLE_API_KEY here - set it as an environment variable instead!
       }
     }
   }

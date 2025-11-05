@@ -354,6 +354,7 @@ export async function projectOrchestratorAnalyzeLogic(
         estimatedTokens: number;
       }>;
     }>;
+    totalTokens?: number;
   };
 
   const groups: Array<{
@@ -379,6 +380,25 @@ export async function projectOrchestratorAnalyzeLogic(
     throw new McpError(
       BaseErrorCode.INVALID_INPUT,
       "fileGroupsData contains no groups",
+    );
+  }
+
+  // Validate project size from fileGroupsData before making LLM API calls
+  const totalTokens = blob.totalTokens ?? groups.reduce((sum, g) => sum + g.totalTokens, 0);
+  const maxTokens = config.maxProjectTokens ?? 20_000_000;
+
+  if (totalTokens > maxTokens) {
+    throw new McpError(
+      BaseErrorCode.VALIDATION_ERROR,
+      `Projenizin boyutu çok büyük (${totalTokens.toLocaleString()} token, limit: ${maxTokens.toLocaleString()}).\n\n` +
+        `Lütfen şunları kontrol edin:\n` +
+        `- .gitignore dosyanızda node_modules, dist, build klasörleri ignore edilmiş mi?\n` +
+        `- .mcpignore dosyası oluşturup ek dosya/klasörleri ignore ettiniz mi?\n` +
+        `- Gereksiz büyük binary, video, image dosyaları var mı?`,
+      {
+        tokenCount: totalTokens,
+        maxTokens,
+      },
     );
   }
 

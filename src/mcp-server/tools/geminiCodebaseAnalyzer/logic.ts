@@ -15,6 +15,8 @@ import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { config } from "../../../config/index.js";
 import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliProvider.js";
 import { getSystemPrompt } from "../../prompts.js";
+import { validateProjectSize } from "../../utils/projectSizeValidator.js";
+import { validateSecurePath } from "../../utils/securePathValidator.js";
 
 /**
  * Zod schema defining the input parameters for the `gemini_codebase_analyzer` tool.
@@ -302,10 +304,27 @@ export async function geminiCodebaseAnalyzerLogic(
   });
 
   try {
-    // Validate project path exists
-    const stats = await fs.stat(params.projectPath);
-    if (!stats.isDirectory()) {
-      throw new Error(`Project path is not a directory: ${params.projectPath}`);
+    // Validate and secure the project path
+    const normalizedPath = await validateSecurePath(params.projectPath, process.cwd(), context);
+
+    // Validate project size before making LLM API call
+    const sizeValidation = await validateProjectSize(
+      normalizedPath,
+      undefined,
+      params.temporaryIgnore,
+      params.ignoreMcpignore,
+      context,
+    );
+
+    if (!sizeValidation.valid) {
+      throw new McpError(
+        BaseErrorCode.VALIDATION_ERROR,
+        sizeValidation.error || "Project size exceeds token limit",
+        {
+          tokenCount: sizeValidation.tokenCount,
+          maxTokens: config.maxProjectTokens ?? 20_000_000,
+        },
+      );
     }
 
     // Initialize model based on provider (supports gemini-cli OAuth or API key)
@@ -326,7 +345,7 @@ export async function geminiCodebaseAnalyzerLogic(
 
     // Prepare full project context
     const fullContext = await prepareFullContext(
-      params.projectPath,
+      normalizedPath,
       params.temporaryIgnore,
       params.ignoreMcpignore,
       context,
@@ -367,7 +386,7 @@ ${params.question}`;
       analysis,
       filesProcessed: fullContext.split("--- File:").length - 1,
       totalCharacters: fullContext.length,
-      projectPath: params.projectPath,
+      projectPath: normalizedPath,
       question: params.question,
     };
   } catch (error) {

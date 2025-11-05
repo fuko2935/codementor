@@ -198,7 +198,27 @@ const EnvSchema = z.object({
   OLLAMA_API_KEY: z.string().optional(),
   /** Optional. Ollama host when targeting remote instances. */
   OLLAMA_HOST: z.string().optional(),
-});
+  /** Maximum allowed project tokens before rejecting LLM API calls. Default: 20,000,000 (20M). */
+  MAX_PROJECT_TOKENS: z.coerce.number().int().positive().optional(),
+  /** If true, disables authentication completely (DEVELOPMENT ONLY). Should NEVER be true in production. */
+  MCP_DISABLE_AUTH: z.preprocess(
+    (val) => String(val).toLowerCase() === "true",
+    z.boolean(),
+  ).optional(),
+}).refine(
+  (data) => {
+    // If auth is not disabled and mode is jwt, the secret key MUST be present.
+    if (!data.MCP_DISABLE_AUTH && data.MCP_AUTH_MODE === "jwt" && !data.MCP_AUTH_SECRET_KEY) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message:
+      "MCP_AUTH_SECRET_KEY must be set when MCP_AUTH_MODE is 'jwt' and MCP_DISABLE_AUTH is not true.",
+    path: ["MCP_AUTH_SECRET_KEY"],
+  },
+);
 
 const parsedEnv = EnvSchema.safeParse(process.env);
 
@@ -421,6 +441,10 @@ export const config = {
   ollamaApiKey: providerApiKeys.ollama,
   /** Ollama host override. From `OLLAMA_HOST`. */
   ollamaHost: providerOptions.ollama.host,
+  /** Maximum project tokens limit. From `MAX_PROJECT_TOKENS`. Default: 20,000,000. */
+  maxProjectTokens: env.MAX_PROJECT_TOKENS ?? 20_000_000,
+  /** Whether authentication is disabled. From `MCP_DISABLE_AUTH`. Default: false. */
+  mcpDisableAuth: env.MCP_DISABLE_AUTH ?? false,
   /** Default LLM provider. From `LLM_DEFAULT_PROVIDER`. */
   llmDefaultProvider: env.LLM_DEFAULT_PROVIDER,
   /** Default LLM model. From `LLM_DEFAULT_MODEL`. */

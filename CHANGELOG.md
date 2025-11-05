@@ -1,5 +1,74 @@
 # Changelog
-## [2.2.7] - 2025-11-04
+
+## [2.4.0] - 2025-11-05
+
+### Security & Enhancement Release
+
+**⚠️ Note:** This release includes important security fixes that are backward compatible for normal usage. Only edge cases are affected:
+
+- **Path Security (Edge Case Only)**: Project paths pointing outside `process.cwd()` are now rejected to prevent path traversal attacks. **Normal usage is fully backward compatible** - both relative paths and absolute paths within the working directory work exactly as before.
+- **Authentication (Development Only)**: Development mode authentication bypass now requires explicit `MCP_DISABLE_AUTH=true` environment variable. **Production users are unaffected**. The previous `NODE_ENV`-based bypass was insecure and has been removed.
+- **Project Size Limits (Large Projects Only)**: Projects exceeding 20M tokens (configurable via `MAX_PROJECT_TOKENS`) are now rejected with a helpful error message. **Most projects are well under this limit**. For very large codebases, use `project_orchestrator_*` tools or increase the limit via environment variable.
+
+### Added
+
+- **Global Token Limit System**: 
+  - New `projectSizeValidator.ts` utility to validate project size before LLM API calls
+  - Configurable `MAX_PROJECT_TOKENS` environment variable (default: 20,000,000)
+  - Friendly error messages guiding users to optimize their `.gitignore` and `.mcpignore` files
+  - All LLM-using tools now validate project size before making API calls
+- **Secure Path Validation**:
+  - New `securePathValidator.ts` utility with strict path validation
+  - Prevents path traversal attacks by ensuring all paths stay within `process.cwd()`
+  - All tools now use `validateSecurePath` instead of direct path resolution
+- **Enhanced Authentication**:
+  - New `MCP_DISABLE_AUTH` environment variable for explicit development mode bypass
+  - Strengthened config validation requiring `MCP_AUTH_SECRET_KEY` when JWT mode is enabled
+  - Startup validation prevents insecure configurations
+
+### Changed
+
+- **Performance Optimizations**:
+  - Tree-sitter warmup now loads all supported languages at startup (Java, Python, JavaScript, TypeScript, Go, Rust, C#, Ruby, PHP)
+  - `findWasmPath` function converted to async (`findWasmPathAsync`) to avoid blocking the event loop
+- **Security Improvements**:
+  - Removed all API key placeholders from configuration example files
+  - Added security warnings throughout documentation
+  - Updated all config examples to use `gemini-cli` provider (OAuth) as the recommended method
+  - Standardized API key documentation to always recommend environment variables
+- **Documentation**:
+  - Updated `SETUP.md` to remove `simple-server.js` references and use `dist/index.js`
+  - Updated `CLAUDE.md` with correct entry points and security best practices
+  - Added comprehensive security warnings in `README.md`, `SETUP.md`, and `CURSOR_SETUP.md`
+  - Removed outdated `simple-server.ts` references from all documentation
+
+### Fixed
+
+- **Path Traversal Vulnerability**: Fixed critical security issue where user-provided paths could escape the intended directory
+- **Authentication Bypass**: Fixed insecure default where production servers could bypass authentication if `NODE_ENV` was not set correctly
+- **API Key Exposure Risk**: Removed hardcoded API key placeholders from config files that could lead to accidental secret exposure
+
+### Security
+
+- **Critical**: Fixed path traversal vulnerability in all tools accepting `projectPath` parameter (affects malicious path inputs only)
+- **High**: Fixed authentication bypass vulnerability in JWT middleware (development mode only)
+- **High**: Removed API key placeholders from configuration files (prevents accidental secret exposure)
+- **Medium**: Added comprehensive path validation to prevent directory traversal attacks
+- **Medium**: Strengthened authentication configuration validation at startup
+- **Dependencies**: Updated `hono` from `^4.8.4` to `^4.10.4` to address security vulnerabilities
+- **Dependencies**: Updated `validator` from `13.15.15` to `^13.15.20` to fix URL validation bypass vulnerability
+- **Dependencies**: Updated dev dependencies via `npm audit fix` (axios, form-data, @eslint/plugin-kit)
+
+### Migration Guide
+
+**For 99% of users:** ✅ **No action required!** This release is fully backward compatible.
+
+**Only if you were using edge cases:**
+1. **Paths outside working directory** (rare): Update to use paths within `process.cwd()` or use relative paths
+2. **Development auth bypass** (dev only): Set `MCP_DISABLE_AUTH=true` environment variable explicitly
+3. **Very large projects** (20M+ tokens): Use `project_orchestrator_*` tools or set `MAX_PROJECT_TOKENS` to a higher value
+
+## [2.3.4] - 2025-11-04
 
 ### Fixed
 

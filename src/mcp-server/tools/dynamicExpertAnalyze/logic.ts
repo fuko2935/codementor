@@ -4,9 +4,11 @@ import { glob } from "glob";
 import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
-import { type RequestContext, logger, sanitization, createIgnoreInstance } from "../../../utils/index.js";
+import { type RequestContext, logger, createIgnoreInstance } from "../../../utils/index.js";
 import { config } from "../../../config/index.js";
 import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliProvider.js";
+import { validateProjectSize } from "../../utils/projectSizeValidator.js";
+import { validateSecurePath } from "../../utils/securePathValidator.js";
 
 export const DynamicExpertAnalyzeInputSchema = z.object({
   projectPath: z.string().min(1),
@@ -181,22 +183,26 @@ export async function dynamicExpertAnalyzeLogic(
   params: DynamicExpertAnalyzeInput,
   context: RequestContext,
 ): Promise<DynamicExpertAnalyzeResponse> {
-  const sanitized = sanitization.sanitizePath(params.projectPath, {
-    rootDir: process.cwd(),
-    allowAbsolute: true,
-  });
-  const normalizedPath = path.resolve(process.cwd(), sanitized.sanitizedPath);
-  const stats = await fs.stat(normalizedPath).catch((e) => {
+  // Validate and secure the project path
+  const normalizedPath = await validateSecurePath(params.projectPath, process.cwd(), context);
+
+  // Validate project size before making LLM API call
+  const sizeValidation = await validateProjectSize(
+    normalizedPath,
+    undefined,
+    params.temporaryIgnore,
+    params.ignoreMcpignore,
+    context,
+  );
+
+  if (!sizeValidation.valid) {
     throw new McpError(
-      BaseErrorCode.INVALID_INPUT,
-      `Invalid project path: ${normalizedPath}`,
-      { cause: e },
-    );
-  });
-  if (!stats.isDirectory()) {
-    throw new McpError(
-      BaseErrorCode.INVALID_INPUT,
-      `Project path is not a directory: ${normalizedPath}`,
+      BaseErrorCode.VALIDATION_ERROR,
+      sizeValidation.error || "Project size exceeds token limit",
+      {
+        tokenCount: sizeValidation.tokenCount,
+        maxTokens: config.maxProjectTokens ?? 20_000_000,
+      },
     );
   }
 

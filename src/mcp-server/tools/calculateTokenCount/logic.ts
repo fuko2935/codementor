@@ -3,9 +3,10 @@ import path from "path";
 import { glob } from "glob";
 import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
-import { logger, type RequestContext, sanitization, createIgnoreInstance } from "../../../utils/index.js";
+import { logger, type RequestContext, createIgnoreInstance } from "../../../utils/index.js";
 import { countTokens } from "../../../utils/metrics/tokenCounter.js";
 import { countTokensLocally } from "../../utils/tokenizer.js";
+import { validateSecurePath } from "../../utils/securePathValidator.js";
 
 export const CalculateTokenCountInputSchema = z.object({
   projectPath: z.string().min(1).optional(),
@@ -73,11 +74,7 @@ export async function calculateTokenCountLogic(
   }
 
   // Project analysis mode
-  const sanitized = sanitization.sanitizePath(params.projectPath!, {
-    rootDir: process.cwd(),
-    allowAbsolute: true,
-  });
-  const normalizedPath = path.resolve(process.cwd(), sanitized.sanitizedPath);
+  const normalizedPath = await validateSecurePath(params.projectPath!, process.cwd(), context);
   logger.info("Starting project token analysis", {
     ...context,
     projectPath: normalizedPath,
