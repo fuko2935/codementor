@@ -67,6 +67,7 @@
     "openai": "^5.8.2",
     "partial-json": "^0.1.7",
     "sanitize-html": "^2.17.0",
+    "simple-git": "^3.30.0",
     "tiktoken": "^1.0.21",
     "validator": "^13.15.20",
     "web-tree-sitter": "^0.25.10",
@@ -76,13 +77,13 @@
     "zod-to-json-schema": "^3.23.5"
   },
   "optionalDependencies": {
-    "tree-sitter-java": "^0.20.4",
-    "tree-sitter-go": "^0.20.0",
-    "tree-sitter-rust": "^0.20.4",
     "tree-sitter-c-sharp": "^0.20.4",
-    "tree-sitter-ruby": "^0.20.3",
+    "tree-sitter-go": "^0.20.0",
+    "tree-sitter-java": "^0.20.4",
     "tree-sitter-php": "^0.20.3",
-    "tree-sitter-python": "^0.20.4"
+    "tree-sitter-python": "^0.20.4",
+    "tree-sitter-ruby": "^0.20.3",
+    "tree-sitter-rust": "^0.20.4"
   },
   "keywords": [
     "typescript",

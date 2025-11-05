@@ -17,61 +17,116 @@ import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliP
 import { getSystemPrompt } from "../../prompts.js";
 import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
+import { extractGitDiff, type ExtractGitDiffParams } from "../../utils/gitDiffAnalyzer.js";
+
+/**
+ * Base Zod schema for the `gemini_codebase_analyzer` tool (before refinements).
+ * This is used for MCP tool registration which requires `.shape` property.
+ */
+export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
+  projectPath: z
+    .string()
+    .min(1, "Project path cannot be empty.")
+    .describe(
+      "Absolute path to the project directory to analyze. Must be a valid directory path.",
+    ),
+  question: z
+    .string()
+    .min(1, "Question cannot be empty.")
+    .max(50000, "Question cannot exceed 50000 characters.")
+    .describe(
+      "Your question about the codebase. Examples: 'What does this project do?', 'Find potential bugs', 'Explain the architecture', 'How to add a new feature?', 'Review code quality'",
+    ),
+  analysisMode: z
+    .enum([
+      "general",
+      "implementation",
+      "refactoring",
+      "explanation",
+      "debugging",
+      "audit",
+      "security",
+      "performance",
+      "testing",
+      "documentation",
+      "review",
+    ])
+    .default("general")
+    .optional()
+    .describe(
+      "Analysis mode that guides the type of analysis to perform. Options: general, implementation, refactoring, explanation, debugging, audit, security, performance, testing, documentation, review",
+    ),
+  includeChanges: z
+    .object({
+      revision: z
+        .string()
+        .optional()
+        .describe(
+          "Commit hash, range (e.g., 'main..feature'), or '.' for uncommitted changes. Use '.' for staged/unstaged changes.",
+        ),
+      count: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Number of recent commits to analyze (e.g., 5 for last 5 commits)"),
+    })
+    .optional()
+    .describe(
+      "IMPORTANT: Only use with analysisMode='review'. Specifies which code changes to analyze alongside the codebase.",
+    )
+    .refine(
+      (data) => {
+        if (!data) return true;
+        const hasRevision = data.revision !== undefined && data.revision.length > 0;
+        const hasCount = data.count !== undefined;
+        // Must specify either revision OR count, or neither (defaults to uncommitted)
+        return (
+          (hasRevision && !hasCount) || (!hasRevision && hasCount) || (!hasRevision && !hasCount)
+        );
+      },
+      {
+        message:
+          "Specify either 'revision' OR 'count', not both. For uncommitted changes, use revision: '.'",
+      },
+    ),
+  temporaryIgnore: z
+    .array(z.string())
+    .optional()
+    .describe("Additional ignore globs for this run only."),
+  ignoreMcpignore: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("If true, ignores the .mcpignore file and only uses .gitignore patterns."),
+  geminiApiKey: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Optional Gemini API key (not needed for gemini-cli provider). Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)",
+    ),
+});
 
 /**
  * Zod schema defining the input parameters for the `gemini_codebase_analyzer` tool.
+ * Includes validation refinements.
  */
-export const GeminiCodebaseAnalyzerInputSchema = z
-  .object({
-    projectPath: z
-      .string()
-      .min(1, "Project path cannot be empty.")
-      .describe(
-        "Absolute path to the project directory to analyze. Must be a valid directory path.",
-      ),
-    question: z
-      .string()
-      .min(1, "Question cannot be empty.")
-      .max(50000, "Question cannot exceed 50000 characters.")
-      .describe(
-        "Your question about the codebase. Examples: 'What does this project do?', 'Find potential bugs', 'Explain the architecture', 'How to add a new feature?', 'Review code quality'",
-      ),
-    analysisMode: z
-      .enum([
-        "general",
-        "implementation",
-        "refactoring",
-        "explanation",
-        "debugging",
-        "audit",
-        "security",
-        "performance",
-        "testing",
-        "documentation",
-      ])
-      .default("general")
-      .optional()
-      .describe(
-        "Analysis mode that guides the type of analysis to perform. Options: general, implementation, refactoring, explanation, debugging, audit, security, performance, testing, documentation",
-      ),
-    temporaryIgnore: z
-      .array(z.string())
-      .optional()
-      .describe("Additional ignore globs for this run only."),
-    ignoreMcpignore: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe("If true, ignores the .mcpignore file and only uses .gitignore patterns."),
-    geminiApiKey: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        "Optional Gemini API key (not needed for gemini-cli provider). Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)",
-      ),
-  })
-  .describe("Input parameters for analyzing a codebase with Gemini AI");
+export const GeminiCodebaseAnalyzerInputSchema = GeminiCodebaseAnalyzerInputSchemaBase.refine(
+  (data) => {
+    // If includeChanges is provided, analysisMode must be "review"
+    if (data.includeChanges && data.analysisMode !== "review") {
+      return false;
+    }
+    return true;
+  },
+  {
+    message:
+      "The 'includeChanges' parameter can only be used with analysisMode='review'. " +
+      "To analyze code changes, set analysisMode to 'review'.",
+    path: ["includeChanges"],
+  },
+).describe("Input parameters for analyzing a codebase with Gemini AI");
 
 /**
  * Type definition for the input parameters of the Gemini codebase analyzer.
@@ -304,15 +359,18 @@ export async function geminiCodebaseAnalyzerLogic(
   });
 
   try {
+    // Validate with refined schema (includes check that includeChanges requires review mode)
+    const validatedParams = GeminiCodebaseAnalyzerInputSchema.parse(params);
+
     // Validate and secure the project path
-    const normalizedPath = await validateSecurePath(params.projectPath, process.cwd(), context);
+    const normalizedPath = await validateSecurePath(validatedParams.projectPath, process.cwd(), context);
 
     // Validate project size before making LLM API call
     const sizeValidation = await validateProjectSize(
       normalizedPath,
       undefined,
-      params.temporaryIgnore,
-      params.ignoreMcpignore,
+      validatedParams.temporaryIgnore,
+      validatedParams.ignoreMcpignore,
       context,
     );
 
@@ -346,8 +404,8 @@ export async function geminiCodebaseAnalyzerLogic(
     // Prepare full project context
     const fullContext = await prepareFullContext(
       normalizedPath,
-      params.temporaryIgnore,
-      params.ignoreMcpignore,
+      validatedParams.temporaryIgnore,
+      validatedParams.ignoreMcpignore,
       context,
     );
 
@@ -355,16 +413,53 @@ export async function geminiCodebaseAnalyzerLogic(
       throw new Error("No readable files found in the project directory");
     }
 
+    // Extract git diff if includeChanges is provided
+    // Note: The Zod schema already validates that includeChanges requires analysisMode='review'
+    let changesData: string = "";
+    if (validatedParams.includeChanges) {
+      logger.info("Extracting git diff for review", {
+        ...context,
+        revision: validatedParams.includeChanges.revision,
+        count: validatedParams.includeChanges.count,
+      });
+
+      const diffParams: ExtractGitDiffParams = {
+        revision: validatedParams.includeChanges.revision,
+        count: validatedParams.includeChanges.count,
+      };
+
+      const diffResult = await extractGitDiff(normalizedPath, diffParams, context);
+      changesData = JSON.stringify(diffResult, null, 2);
+
+      logger.info("Git diff extracted successfully", {
+        ...context,
+        filesModified: diffResult.summary.filesModified,
+        insertions: diffResult.summary.insertions,
+        deletions: diffResult.summary.deletions,
+      });
+    }
+
     // Create the mega prompt using mode-specific system prompt
-    const analysisMode = params.analysisMode || "general";
+    const analysisMode = validatedParams.analysisMode || "general";
     const systemPrompt = getSystemPrompt(analysisMode);
-    const megaPrompt = `${systemPrompt}
+    
+    // Build prompt with optional changes section
+    let megaPrompt = `${systemPrompt}
 
 PROJECT CONTEXT:
-${fullContext}
+${fullContext}`;
+
+    if (changesData) {
+      megaPrompt += `
+
+CODE CHANGES TO REVIEW:
+${changesData}`;
+    }
+
+    megaPrompt += `
 
 CODING AI QUESTION:
-${params.question}`;
+${validatedParams.question}`;
 
     logger.info("Sending request to Gemini AI", {
       ...context,
@@ -387,7 +482,7 @@ ${params.question}`;
       filesProcessed: fullContext.split("--- File:").length - 1,
       totalCharacters: fullContext.length,
       projectPath: normalizedPath,
-      question: params.question,
+      question: validatedParams.question,
     };
   } catch (error) {
     logger.error("Gemini codebase analysis failed", {

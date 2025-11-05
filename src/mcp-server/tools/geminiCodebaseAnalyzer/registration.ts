@@ -17,7 +17,7 @@ import {
 import { config } from "../../../config/index.js";
 import {
   GeminiCodebaseAnalyzerInput,
-  GeminiCodebaseAnalyzerInputSchema,
+  GeminiCodebaseAnalyzerInputSchemaBase,
   geminiCodebaseAnalyzerLogic,
 } from "./logic.js";
 
@@ -32,7 +32,10 @@ export const registerGeminiCodebaseAnalyzer = async (
 ): Promise<void> => {
   const toolName = "gemini_codebase_analyzer";
   const toolDescription =
-    "Analyzes an entire project codebase. WARNING: May cause performance issues or timeouts on very large projects. For large codebases, please use the 'project_orchestrator_create' and 'project_orchestrator_analyze' tools for a more stable, multi-step analysis.";
+    "Analyzes an entire project codebase. Supports multiple analysis modes (general, security, performance, review, etc.). " +
+    "For code review, use analysisMode='review' with includeChanges parameter to analyze git diffs alongside the codebase. " +
+    "WARNING: May cause performance issues or timeouts on very large projects. " +
+    "For large codebases, please use the 'project_orchestrator_create' and 'project_orchestrator_analyze' tools for a more stable, multi-step analysis.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({
@@ -47,7 +50,7 @@ export const registerGeminiCodebaseAnalyzer = async (
       server.tool(
         toolName,
         toolDescription,
-        GeminiCodebaseAnalyzerInputSchema.shape,
+        GeminiCodebaseAnalyzerInputSchemaBase.shape,
         async (
           params: GeminiCodebaseAnalyzerInput,
         ): Promise<CallToolResult> => {
