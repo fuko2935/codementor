@@ -11,35 +11,7 @@ import { createGeminiProvider } from "ai-sdk-provider-gemini-cli";
 import { logger } from "../../utils/index.js";
 import { requestContextService } from "../../utils/index.js";
 import { config } from "../../config/index.js";
-
-/**
- * Simple mutex lock to prevent concurrent stdout override operations.
- * This prevents race conditions when multiple gemini CLI calls happen simultaneously.
- */
-class AsyncLock {
-  private locked = false;
-  private waitQueue: Array<() => void> = [];
-
-  async acquire(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      if (!this.locked) {
-        this.locked = true;
-        resolve();
-      } else {
-        this.waitQueue.push(resolve);
-      }
-    });
-  }
-
-  release(): void {
-    const next = this.waitQueue.shift();
-    if (next) {
-      next();
-    } else {
-      this.locked = false;
-    }
-  }
-}
+import { AsyncLock } from "../../utils/index.js";
 
 // Global lock instance to serialize gemini CLI stdout operations
 const stdoutLock = new AsyncLock();

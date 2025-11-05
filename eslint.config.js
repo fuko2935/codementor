@@ -9,7 +9,7 @@ const trimmedGlobals = Object.fromEntries(
 
 export default [
   {
-    ignores: ["dist/**", "node_modules/**"],
+    ignores: ["dist/**", "dist-test/**", "node_modules/**"],
   },
   { languageOptions: { globals: trimmedGlobals } },
   pluginJs.configs.recommended,
