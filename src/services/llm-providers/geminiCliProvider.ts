@@ -12,6 +12,38 @@ import { logger } from "../../utils/index.js";
 import { requestContextService } from "../../utils/index.js";
 import { config } from "../../config/index.js";
 
+/**
+ * Simple mutex lock to prevent concurrent stdout override operations.
+ * This prevents race conditions when multiple gemini CLI calls happen simultaneously.
+ */
+class AsyncLock {
+  private locked = false;
+  private waitQueue: Array<() => void> = [];
+
+  async acquire(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      if (!this.locked) {
+        this.locked = true;
+        resolve();
+      } else {
+        this.waitQueue.push(resolve);
+      }
+    });
+  }
+
+  release(): void {
+    const next = this.waitQueue.shift();
+    if (next) {
+      next();
+    } else {
+      this.locked = false;
+    }
+  }
+}
+
+// Global lock instance to serialize gemini CLI stdout operations
+const stdoutLock = new AsyncLock();
+
 export interface GeminiCliProviderOptions {
   apiKey?: string;
   baseURL?: string;
@@ -194,6 +226,10 @@ export function createGeminiCliModel(
 
   return {
     async generateContent(prompt: string) {
+      // Acquire lock to ensure only one gemini CLI call modifies stdout at a time
+      // This prevents race conditions in concurrent scenarios
+      await stdoutLock.acquire();
+      
       // Suppress all console output during gemini CLI execution when using stdio transport
       // This prevents gemini CLI's "Loaded cache" messages from corrupting JSON-RPC protocol
       const originalConsoleLog = console.log;
@@ -240,6 +276,9 @@ export function createGeminiCliModel(
         console.debug = originalConsoleDebug;
         console.info = originalConsoleInfo;
         process.stdout.write = originalStdoutWrite;
+        
+        // Release lock to allow next waiting operation to proceed
+        stdoutLock.release();
       }
     },
   };
