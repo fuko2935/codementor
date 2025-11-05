@@ -1,6 +1,6 @@
 {
   "name": "gemini-mcp-local",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Local-first Gemini MCP tool for stdio or HTTP transports using environment-supplied provider credentials.",
   "main": "dist/index.js",
   "bin": {
