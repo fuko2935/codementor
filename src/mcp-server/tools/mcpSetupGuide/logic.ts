@@ -8,7 +8,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
-import { logger, type RequestContext } from "../../../utils/index.js";
+import {
+  logger,
+  requestContextService,
+  type RequestContext,
+} from "../../../utils/index.js";
 import {
   CLIENT_PROFILES,
   type ClientName,
@@ -58,36 +62,133 @@ export interface McpSetupGuideResponse {
   action: "created" | "updated" | "skipped";
 }
 
+function buildLogContext(
+  context: RequestContext | undefined,
+  additional: Record<string, unknown>,
+  defaultOperation: string,
+): RequestContext {
+  if (context) {
+    return { ...context, ...additional };
+  }
+
+  return requestContextService.createRequestContext({
+    operation: defaultOperation,
+    ...additional,
+  });
+}
+
 /**
  * Generates the MCP usage guide content by reading the template file
  * This content will be injected between the markers
  */
 async function generateMcpGuideContent(context?: RequestContext): Promise<string> {
-  try {
-    const templatePath = path.join(__dirname, "templates", "mcp-guide.md");
-    const content = await fs.readFile(templatePath, "utf-8");
-    return content;
-  } catch (error) {
-    // CRITICAL: Template file is now a required asset
-    // If missing, this indicates a critical build/packaging issue
-    if (context) {
-      logger.error("MCP guide template file not found - critical error", {
-        ...context,
-        templatePath: path.join(__dirname, "templates", "mcp-guide.md"),
-        error: error instanceof Error ? error.message : String(error),
-      });
+  const primaryTemplatePath = path.join(
+    __dirname,
+    "templates",
+    "mcp-guide.md",
+  );
+
+  const projectRootTemplatePath = path.resolve(
+    process.cwd(),
+    "src",
+    "mcp-server",
+    "tools",
+    "mcpSetupGuide",
+    "templates",
+    "mcp-guide.md",
+  );
+
+  const relativeSourceTemplatePath = path.resolve(
+    __dirname,
+    "..",
+    "..",
+    "..",
+    "..",
+    "src",
+    "mcp-server",
+    "tools",
+    "mcpSetupGuide",
+    "templates",
+    "mcp-guide.md",
+  );
+
+  const templateCandidates = [
+    { path: primaryTemplatePath, type: "compiled" as const },
+    { path: projectRootTemplatePath, type: "source" as const },
+    { path: relativeSourceTemplatePath, type: "source" as const },
+  ].filter(
+    (candidate, index, array) =>
+      array.findIndex((other) => other.path === candidate.path) === index,
+  );
+
+  const attemptedPaths: string[] = [];
+
+  for (const candidate of templateCandidates) {
+    attemptedPaths.push(candidate.path);
+
+    try {
+      const content = await fs.readFile(candidate.path, "utf-8");
+
+      if (candidate.type === "source" && candidate.path !== primaryTemplatePath) {
+        logger.warning(
+          "Compiled MCP guide template asset missing - using source template fallback.",
+          buildLogContext(
+            context,
+            {
+              missingAssetPath: primaryTemplatePath,
+              fallbackPath: candidate.path,
+            },
+            "McpSetupGuide.generateMcpGuideContent.fallback",
+          ),
+        );
+      }
+
+      return content;
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+
+      if (nodeError?.code === "ENOENT") {
+        continue;
+      }
+
+      logger.error(
+        "Failed to read MCP guide template file",
+        buildLogContext(
+          context,
+          {
+            templatePath: candidate.path,
+            error: nodeError?.message ?? String(error),
+          },
+          "McpSetupGuide.generateMcpGuideContent.readError",
+        ),
+      );
+
+      throw new McpError(
+        BaseErrorCode.INTERNAL_ERROR,
+        `Failed to read MCP guide template file at ${candidate.path}: ${nodeError?.message ?? String(error)}`,
+        { templatePath: candidate.path },
+      );
     }
-    
-    throw new McpError(
-      BaseErrorCode.INTERNAL_ERROR,
-      `CRITICAL: The MCP guide template file is missing. This indicates a build or packaging issue.
+  }
+
+  logger.error(
+    "MCP guide template file not found in any expected location",
+    buildLogContext(
+      context,
+      { attemptedPaths },
+      "McpSetupGuide.generateMcpGuideContent.missing",
+    ),
+  );
+
+  throw new McpError(
+    BaseErrorCode.INTERNAL_ERROR,
+    `CRITICAL: The MCP guide template file is missing. This indicates a build or packaging issue.
 
 Please report this at: https://github.com/fuko2935/gemini-mcp-local/issues
 
 Expected location: src/mcp-server/tools/mcpSetupGuide/templates/mcp-guide.md`,
-      { templatePath: path.join(__dirname, "templates", "mcp-guide.md") },
-    );
-  }
+    { templatePath: primaryTemplatePath, attemptedPaths },
+  );
 }
 
 // LEGACY FALLBACK CONTENT - NO LONGER USED
