@@ -5,11 +5,10 @@
  * @module src/mcp-server/services/aiGroupingService
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { McpError, BaseErrorCode } from "../../types-global/errors.js";
 import { logger, type RequestContext } from "../../utils/index.js";
 import { config } from "../../config/index.js";
-import { createGeminiCliModel } from "../../services/llm-providers/geminiCliProvider.js";
+import { createModelByProvider } from "../../services/llm-providers/modelFactory.js";
 import type { FileMetadata } from "../utils/codeParser.js";
 
 /**
@@ -22,45 +21,6 @@ export interface ProjectGroup {
   totalTokens: number;
   files: string[];
   metadata: FileMetadata[]; // Metadata for analyze step
-}
-
-/**
- * Creates a Gemini model instance based on the configured provider.
- */
-function createModelByProvider(
-  modelId: string,
-  generationConfig?: {
-    maxOutputTokens?: number;
-    temperature?: number;
-    topK?: number;
-    topP?: number;
-  },
-  apiKey?: string,
-) {
-  const provider = config.llmDefaultProvider as
-    | "gemini"
-    | "google"
-    | "gemini-cli";
-  if (provider === "gemini-cli") {
-    return createGeminiCliModel(modelId, {}, generationConfig);
-  }
-  const key =
-    apiKey ||
-    config.geminiApiKey ||
-    config.googleApiKey ||
-    process.env.GEMINI_API_KEY ||
-    "";
-  if (!key) {
-    throw new McpError(
-      BaseErrorCode.CONFIGURATION_ERROR,
-      "Missing Gemini API key. Provide geminiApiKey or set GEMINI_API_KEY.",
-    );
-  }
-  const genAI = new GoogleGenerativeAI(key);
-  return genAI.getGenerativeModel({
-    model: modelId,
-    generationConfig: generationConfig || {},
-  });
 }
 
 /**

@@ -126,6 +126,81 @@ Each tool validates input with Zod schemas and automatically records structured 
 
 ---
 
+## Code Review with Git Diff Analysis
+
+The `gemini_codebase_analyzer` tool now supports code review mode with git diff integration:
+
+### Review Uncommitted Changes
+
+```json
+{
+  "projectPath": "./",
+  "question": "Review my changes for security issues and code quality",
+  "analysisMode": "review",
+  "includeChanges": { "revision": "." }
+}
+```
+
+### Review Specific Commit
+
+```json
+{
+  "projectPath": "./",
+  "question": "Analyze this commit for potential bugs",
+  "analysisMode": "review",
+  "includeChanges": { "revision": "a1b2c3d" }
+}
+```
+
+### Review Last N Commits
+
+```json
+{
+  "projectPath": "./",
+  "question": "Review recent changes",
+  "analysisMode": "review",
+  "includeChanges": { "count": 5 }
+}
+```
+
+### Review Features
+
+- **Specialized AI Prompt**: Expert code reviewer persona with focus on security, performance, and best practices
+- **Structured JSON Diff**: AI receives changes in a machine-readable format
+- **Full Context**: Changes analyzed alongside entire codebase
+- **Edge Case Handling**: Works with initial commits, binary files, and empty diffs
+
+### Analysis Modes
+
+The `analysisMode` parameter supports the following modes:
+
+- `general` - Comprehensive project analysis
+- `implementation` - Feature implementation guidance
+- `refactoring` - Code quality improvements
+- `explanation` - Educational explanations
+- `debugging` - Bug identification and fixes
+- `audit` - Complete code audit
+- `security` - Security vulnerability assessment
+- `performance` - Performance optimization
+- `testing` - Test strategy and creation
+- `documentation` - Documentation generation
+- **`review`** - Code change review with git diff analysis ⭐ NEW
+
+---
+
+## Security
+
+### Git Command Execution
+
+The review mode executes git commands to extract diffs. Security measures:
+
+- All revision strings are validated against a strict regex
+- Shell metacharacters are blocked
+- Uses `simple-git` library to prevent command injection
+- Path traversal protection via `validateSecurePath`
+
+---
+
 ## .mcpignore Support
 
 Optimize MCP context by excluding files beyond `.gitignore`. The `.mcpignore` file works **on top of** `.gitignore` (additive) to allow you to exclude test files, documentation, and other files from AI analysis without modifying your `.gitignore`.

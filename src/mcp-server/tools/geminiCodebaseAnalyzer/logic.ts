@@ -6,14 +6,13 @@
  */
 
 import { z } from "zod";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { promises as fs } from "fs";
 import path from "path";
 import { glob } from "glob";
 import { logger, type RequestContext, createIgnoreInstance } from "../../../utils/index.js";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { config } from "../../../config/index.js";
-import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliProvider.js";
+import { createModelByProvider } from "../../../services/llm-providers/modelFactory.js";
 import { getSystemPrompt } from "../../prompts.js";
 import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
@@ -156,46 +155,6 @@ export interface GeminiCodebaseAnalyzerResponse {
  * Maximum allowed total file size in bytes (100 MB).
  */
 const MAX_TOTAL_SIZE = 100 * 1024 * 1024;
-
-/**
- * Creates a model instance based on the configured provider.
- * Supports both gemini-cli (OAuth) and direct API key authentication.
- */
-function createModelByProvider(
-  modelId: string,
-  generationConfig?: {
-    maxOutputTokens?: number;
-    temperature?: number;
-    topK?: number;
-    topP?: number;
-  },
-  apiKey?: string,
-) {
-  const provider = config.llmDefaultProvider as
-    | "gemini"
-    | "google"
-    | "gemini-cli";
-  if (provider === "gemini-cli") {
-    return createGeminiCliModel(modelId, {}, generationConfig);
-  }
-  const key =
-    apiKey ||
-    config.geminiApiKey ||
-    config.googleApiKey ||
-    process.env.GEMINI_API_KEY ||
-    "";
-  if (!key) {
-    throw new McpError(
-      BaseErrorCode.CONFIGURATION_ERROR,
-      "Missing Gemini API key. Provide geminiApiKey or set GEMINI_API_KEY.",
-    );
-  }
-  const genAI = new GoogleGenerativeAI(key);
-  return genAI.getGenerativeModel({
-    model: modelId,
-    generationConfig: generationConfig || {},
-  });
-}
 
 /**
  * Maximum allowed number of files to process.

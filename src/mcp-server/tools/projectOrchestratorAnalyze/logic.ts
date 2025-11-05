@@ -1,9 +1,8 @@
 import { z } from "zod";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { logger, type RequestContext } from "../../../utils/index.js";
 import { config } from "../../../config/index.js";
-import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliProvider.js";
+import { createModelByProvider } from "../../../services/llm-providers/modelFactory.js";
 import { getSystemPrompt } from "../../prompts.js";
 
 // Common interface for LLM models (both Google AI and gemini-cli)
@@ -48,42 +47,6 @@ export type ProjectOrchestratorAnalyzeInput = z.infer<
 export interface ProjectOrchestratorAnalyzeResponse {
   projectPath: string;
   analysis: string;
-}
-
-function createModelByProvider(
-  modelId: string,
-  generationConfig?: {
-    maxOutputTokens?: number;
-    temperature?: number;
-    topK?: number;
-    topP?: number;
-  },
-  apiKey?: string,
-): LLMModel {
-  const provider = config.llmDefaultProvider as
-    | "gemini"
-    | "google"
-    | "gemini-cli";
-  if (provider === "gemini-cli") {
-    return createGeminiCliModel(modelId, {}, generationConfig);
-  }
-  const key =
-    apiKey ||
-    config.geminiApiKey ||
-    config.googleApiKey ||
-    process.env.GEMINI_API_KEY ||
-    "";
-  if (!key) {
-    throw new McpError(
-      BaseErrorCode.CONFIGURATION_ERROR,
-      "Missing Gemini API key. Provide geminiApiKey or set GEMINI_API_KEY.",
-    );
-  }
-  const genAI = new GoogleGenerativeAI(key);
-  return genAI.getGenerativeModel({
-    model: modelId,
-    generationConfig: generationConfig || {},
-  });
 }
 
 /**

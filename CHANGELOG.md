@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.5.0] - 2025-11-05
+
+### Added
+
+- **Code Review Mode**: New `review` analysis mode with specialized AI prompt for comprehensive code reviews
+- **Git Diff Integration**: `includeChanges` parameter for analyzing code changes alongside codebase
+  - Support for uncommitted changes (`revision: "."`)
+  - Single commit analysis (`revision: "commit-hash"`)
+  - Commit range analysis (`revision: "base..head"`)
+  - Last N commits analysis (`count: 5`)
+- **Security**: Enhanced revision validation to prevent command injection attacks
+- **Edge Cases**: Robust handling of initial commits with empty tree fallback
+
+### Fixed
+
+- Initial commit diff now works correctly with empty tree fallback
+- Type safety improved with proper type guards for diff file processing
+- Binary files are now correctly filtered from diff results
+
+### Changed
+
+- Centralized model provider initialization to reduce code duplication
+
 ## [2.4.2] - 2025-11-05
 
 ### Fixed

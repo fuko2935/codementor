@@ -2,11 +2,10 @@ import { promises as fs } from "fs";
 import path from "path";
 import { glob } from "glob";
 import { z } from "zod";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { type RequestContext, createIgnoreInstance } from "../../../utils/index.js";
 import { config } from "../../../config/index.js";
-import { createGeminiCliModel } from "../../../services/llm-providers/geminiCliProvider.js";
+import { createModelByProvider } from "../../../services/llm-providers/modelFactory.js";
 import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
 
@@ -31,42 +30,6 @@ export interface DynamicExpertCreateResponse {
   filesProcessed: number;
   totalCharacters: number;
   expertPrompt: string;
-}
-
-function createModelByProvider(
-  modelId: string,
-  generationConfig?: {
-    maxOutputTokens?: number;
-    temperature?: number;
-    topK?: number;
-    topP?: number;
-  },
-  apiKey?: string,
-) {
-  const provider = config.llmDefaultProvider as
-    | "gemini"
-    | "google"
-    | "gemini-cli";
-  if (provider === "gemini-cli") {
-    return createGeminiCliModel(modelId, {}, generationConfig);
-  }
-  const key =
-    apiKey ||
-    config.geminiApiKey ||
-    config.googleApiKey ||
-    process.env.GEMINI_API_KEY ||
-    "";
-  if (!key) {
-    throw new McpError(
-      BaseErrorCode.CONFIGURATION_ERROR,
-      "Missing Gemini API key. Provide geminiApiKey or set GEMINI_API_KEY.",
-    );
-  }
-  const genAI = new GoogleGenerativeAI(key);
-  return genAI.getGenerativeModel({
-    model: modelId,
-    generationConfig: generationConfig || {},
-  });
 }
 
 async function prepareFullContext(
