@@ -207,15 +207,21 @@ const EnvSchema = z.object({
   ).optional(),
 }).refine(
   (data) => {
-    // If auth is not disabled and mode is jwt, the secret key MUST be present.
-    if (!data.MCP_DISABLE_AUTH && data.MCP_AUTH_MODE === "jwt" && !data.MCP_AUTH_SECRET_KEY) {
+    // JWT secret key is only required for HTTP transport with JWT auth mode
+    // STDIO transport doesn't use authentication at all
+    if (
+      data.MCP_TRANSPORT_TYPE === "http" && 
+      !data.MCP_DISABLE_AUTH && 
+      data.MCP_AUTH_MODE === "jwt" && 
+      !data.MCP_AUTH_SECRET_KEY
+    ) {
       return false;
     }
     return true;
   },
   {
     message:
-      "MCP_AUTH_SECRET_KEY must be set when MCP_AUTH_MODE is 'jwt' and MCP_DISABLE_AUTH is not true.",
+      "MCP_AUTH_SECRET_KEY must be set when using HTTP transport with JWT auth mode (unless MCP_DISABLE_AUTH is true).",
     path: ["MCP_AUTH_SECRET_KEY"],
   },
 );

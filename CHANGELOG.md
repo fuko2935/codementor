@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.4.1] - 2025-11-05
+
+### Fixed
+
+- **Critical**: Fixed config validation error on STDIO transport startup. The v2.4.0 validation was too strict and required `MCP_AUTH_SECRET_KEY` even for STDIO transport (which doesn't use authentication). Now validation only requires the secret key for HTTP transport with JWT auth mode.
+
 ## [2.4.0] - 2025-11-05
 
 ### Security & Enhancement Release

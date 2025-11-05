@@ -26,17 +26,18 @@ import { BaseErrorCode, McpError } from "../../../../../types-global/errors.js";
 import { authContext } from "../../core/authContext.js";
 
 // Startup Validation: Validate secret key presence on module load.
-if (config.mcpAuthMode === "jwt") {
+// Only validate for HTTP transport - STDIO doesn't use authentication
+if (config.mcpTransportType === "http" && config.mcpAuthMode === "jwt") {
   if (config.mcpDisableAuth) {
     logger.warning(
       "MCP_DISABLE_AUTH is enabled. Authentication is completely bypassed (DEVELOPMENT ONLY).",
     );
   } else if (!config.mcpAuthSecretKey) {
     logger.fatal(
-      "CRITICAL: MCP_AUTH_SECRET_KEY is not set for JWT auth. Authentication cannot proceed securely.",
+      "CRITICAL: MCP_AUTH_SECRET_KEY is not set for JWT auth with HTTP transport. Authentication cannot proceed securely.",
     );
     throw new Error(
-      "MCP_AUTH_SECRET_KEY must be set when MCP_AUTH_MODE is 'jwt' and MCP_DISABLE_AUTH is not true.",
+      "MCP_AUTH_SECRET_KEY must be set when using HTTP transport with JWT auth mode (unless MCP_DISABLE_AUTH is true).",
     );
   }
 }
