@@ -16,6 +16,7 @@ import { groupFilesWithAI, type ProjectGroup } from "../../services/aiGroupingSe
 import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { config } from "../../../config/index.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
+import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
 
 export const ProjectOrchestratorCreateInputSchema = z.object({
   projectPath: z.string().min(1),
@@ -106,6 +107,9 @@ export async function projectOrchestratorCreateLogic(
   params: ProjectOrchestratorCreateInput,
   context: RequestContext,
 ): Promise<ProjectOrchestratorCreateResponse> {
+  // Validate MCP configuration exists before orchestration
+  await validateMcpConfigExists(params.projectPath, context);
+
   // Validate and secure the project path
   const normalizedPath = await validateSecurePath(params.projectPath, process.cwd(), context);
 

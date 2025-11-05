@@ -17,6 +17,7 @@ import { getSystemPrompt } from "../../prompts.js";
 import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
 import { extractGitDiff, type ExtractGitDiffParams } from "../../utils/gitDiffAnalyzer.js";
+import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
 
 /**
  * Base Zod schema for the `gemini_codebase_analyzer` tool (before refinements).
@@ -310,6 +311,9 @@ export async function geminiCodebaseAnalyzerLogic(
   params: GeminiCodebaseAnalyzerInput,
   context: RequestContext,
 ): Promise<GeminiCodebaseAnalyzerResponse> {
+  // Validate MCP configuration exists before analysis
+  await validateMcpConfigExists(params.projectPath, context);
+
   logger.info("Starting Gemini codebase analysis", {
     ...context,
     projectPath: params.projectPath,

@@ -19,6 +19,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { config, environment } from "../config/index.js";
 import { ErrorHandler, logger, requestContextService } from "../utils/index.js";
 import { BaseErrorCode } from "../types-global/errors.js";
+import { registerMcpSetupGuide } from "./tools/mcpSetupGuide/index.js";
 import { registerGeminiCodebaseAnalyzer } from "./tools/geminiCodebaseAnalyzer/index.js";
 import { registerDynamicExpertCreate } from "./tools/dynamicExpertCreate/index.js";
 import { registerDynamicExpertAnalyze } from "./tools/dynamicExpertAnalyze/index.js";
@@ -113,6 +114,8 @@ async function createMcpServerInstance(): Promise<McpServer> {
   await ErrorHandler.tryCatch(
     async () => {
       logger.debug("Registering resources and tools...", context);
+      // Register setup guide first - required for other tools
+      await registerMcpSetupGuide(server);
       await registerGeminiCodebaseAnalyzer(server);
       await registerDynamicExpertCreate(server);
       await registerDynamicExpertAnalyze(server);

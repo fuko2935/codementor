@@ -8,6 +8,7 @@ import { config } from "../../../config/index.js";
 import { createModelByProvider } from "../../../services/llm-providers/modelFactory.js";
 import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
+import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
 
 export const DynamicExpertCreateInputSchema = z.object({
   projectPath: z.string().min(1),
@@ -70,6 +71,9 @@ export async function dynamicExpertCreateLogic(
   params: DynamicExpertCreateInput,
   context: RequestContext,
 ): Promise<DynamicExpertCreateResponse> {
+  // Validate MCP configuration exists before expert creation
+  await validateMcpConfigExists(params.projectPath, context);
+
   // Validate and secure the project path
   const normalizedPath = await validateSecurePath(params.projectPath, process.cwd(), context);
 

@@ -4,6 +4,7 @@ import { logger, type RequestContext } from "../../../utils/index.js";
 import { config } from "../../../config/index.js";
 import { createModelByProvider } from "../../../services/llm-providers/modelFactory.js";
 import { getSystemPrompt } from "../../prompts.js";
+import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
 
 // Common interface for LLM models (both Google AI and gemini-cli)
 interface LLMModel {
@@ -292,6 +293,9 @@ export async function projectOrchestratorAnalyzeLogic(
   params: ProjectOrchestratorAnalyzeInput,
   context: RequestContext,
 ): Promise<ProjectOrchestratorAnalyzeResponse> {
+  // Validate MCP configuration exists before orchestration
+  await validateMcpConfigExists(params.projectPath, context);
+
   let groupsBlobUnknown: unknown;
   try {
     groupsBlobUnknown = JSON.parse(params.fileGroupsData);
