@@ -200,6 +200,8 @@ const EnvSchema = z.object({
   OLLAMA_HOST: z.string().optional(),
   /** Maximum allowed project tokens before rejecting LLM API calls. Default: 20,000,000 (20M). */
   MAX_PROJECT_TOKENS: z.coerce.number().int().positive().optional(),
+  /** Maximum allowed git blob size in bytes for diff operations. Default: 4MB. Files exceeding this limit will be skipped. */
+  MAX_GIT_BLOB_SIZE_BYTES: z.coerce.number().int().positive().optional(),
   /** If true, disables authentication completely (DEVELOPMENT ONLY). Should NEVER be true in production. */
   MCP_DISABLE_AUTH: z.preprocess(
     (val) => String(val).toLowerCase() === "true",
@@ -449,6 +451,8 @@ export const config = {
   ollamaHost: providerOptions.ollama.host,
   /** Maximum project tokens limit. From `MAX_PROJECT_TOKENS`. Default: 20,000,000. */
   maxProjectTokens: env.MAX_PROJECT_TOKENS ?? 20_000_000,
+  /** Maximum git blob size in bytes for diff operations. From `MAX_GIT_BLOB_SIZE_BYTES`. Default: 4MB. */
+  maxGitBlobSizeBytes: env.MAX_GIT_BLOB_SIZE_BYTES ?? 4 * 1024 * 1024,
   /** Whether authentication is disabled. From `MCP_DISABLE_AUTH`. Default: false. */
   mcpDisableAuth: env.MCP_DISABLE_AUTH ?? false,
   /** Default LLM provider. From `LLM_DEFAULT_PROVIDER`. */

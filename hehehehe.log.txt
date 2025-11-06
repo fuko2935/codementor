@@ -1,0 +1,145 @@
+2025-11-06 15:13:30.619 [info] Handling ListOfferings action, server stored: false
+2025-11-06 15:13:30.619 [error] No server info found
+2025-11-06 15:13:33.526 [info] Handling ListOfferings action, server stored: false
+2025-11-06 15:13:33.526 [error] No server info found
+2025-11-06 15:13:34.008 [info] Handling ListOfferings action, server stored: false
+2025-11-06 15:13:34.008 [error] No server info found
+2025-11-06 15:13:50.983 [info] Handling CreateClient action
+2025-11-06 15:13:50.983 [info] Starting new stdio process with command: npx -y gemini-mcp-local
+2025-11-06 15:13:51.002 [info] Handling ListOfferings action, server stored: false
+2025-11-06 15:13:51.002 [error] No server info found
+2025-11-06 15:13:51.366 [info] Handling CreateClient action
+2025-11-06 15:13:51.366 [info] Starting new stdio process with command: npx -y gemini-mcp-local
+2025-11-06 15:13:51.368 [info] Handling ListOfferings action, server stored: false
+2025-11-06 15:13:51.368 [error] No server info found
+2025-11-06 15:13:52.186 [info] Handling CreateClient action
+2025-11-06 15:13:52.186 [info] Starting new stdio process with command: npx -y gemini-mcp-local
+2025-11-06 15:13:52.188 [info] Handling ListOfferings action, server stored: false
+2025-11-06 15:13:52.188 [error] No server info found
+2025-11-06 15:13:58.928 [info] Successfully connected to stdio server
+2025-11-06 15:13:58.928 [info] Storing stdio client user-gemini-mcp-local
+2025-11-06 15:13:58.928 [info] CreateClient completed, server stored: true
+2025-11-06 15:13:58.941 [info] Handling ListOfferings action, server stored: true
+2025-11-06 15:13:58.942 [info] Connected to stdio server, fetching offerings
+2025-11-06 15:13:58.942 [info] Handling ListOfferings action, server stored: true
+2025-11-06 15:13:58.942 [info] Connected to stdio server, fetching offerings
+2025-11-06 15:13:58.942 [info] Handling ListOfferings action, server stored: true
+2025-11-06 15:13:58.942 [info] Connected to stdio server, fetching offerings
+2025-11-06 15:13:58.948 [info] Found 7 tools, 0 prompts, and 0 resources
+2025-11-06 15:13:58.950 [info] Found 7 tools, 0 prompts, and 0 resources
+2025-11-06 15:13:58.950 [info] Found 7 tools, 0 prompts, and 0 resources
+2025-11-06 15:13:59.194 [info] Successfully connected to stdio server
+2025-11-06 15:13:59.194 [info] A second client was created while connecting, discarding it.
+2025-11-06 15:13:59.194 [info] CreateClient completed, server stored: true
+2025-11-06 15:13:59.219 [info] Handling ListOfferings action, server stored: true
+2025-11-06 15:13:59.219 [info] Connected to stdio server, fetching offerings
+2025-11-06 15:13:59.219 [info] Handling ListOfferings action, server stored: true
+2025-11-06 15:13:59.219 [info] Connected to stdio server, fetching offerings
+2025-11-06 15:13:59.221 [info] Found 7 tools, 0 prompts, and 0 resources
+2025-11-06 15:13:59.222 [info] Found 7 tools, 0 prompts, and 0 resources
+2025-11-06 15:14:00.085 [info] Successfully connected to stdio server
+2025-11-06 15:14:00.085 [info] A second client was created while connecting, discarding it.
+2025-11-06 15:14:00.085 [info] CreateClient completed, server stored: true
+2025-11-06 15:14:00.107 [info] Handling ListOfferings action, server stored: true
+2025-11-06 15:14:00.107 [info] Connected to stdio server, fetching offerings
+2025-11-06 15:14:00.107 [info] Handling ListOfferings action, server stored: true
+2025-11-06 15:14:00.107 [info] Connected to stdio server, fetching offerings
+2025-11-06 15:14:00.107 [info] Handling ListOfferings action, server stored: true
+2025-11-06 15:14:00.107 [info] Connected to stdio server, fetching offerings
+2025-11-06 15:14:00.108 [info] Handling ListOfferings action, server stored: true
+2025-11-06 15:14:00.108 [info] Connected to stdio server, fetching offerings
+2025-11-06 15:14:00.110 [info] Found 7 tools, 0 prompts, and 0 resources
+2025-11-06 15:14:00.112 [info] Found 7 tools, 0 prompts, and 0 resources
+2025-11-06 15:14:00.114 [info] Found 7 tools, 0 prompts, and 0 resources
+2025-11-06 15:14:00.114 [info] Found 7 tools, 0 prompts, and 0 resources
+2025-11-06 15:16:19.020 [info] Handling CallTool action for tool 'gemini_codebase_analyzer'
+2025-11-06 15:16:19.020 [info] Calling tool 'gemini_codebase_analyzer' with toolCallId: call_36162878
+2025-11-06 15:16:19.046 [info] Successfully called tool 'gemini_codebase_analyzer'
+2025-11-06 15:16:27.450 [info] Handling CallTool action for tool 'mcp_setup_guide'
+2025-11-06 15:16:27.451 [info] Calling tool 'mcp_setup_guide' with toolCallId: call_61284805
+2025-11-06 15:16:27.460 [info] Successfully called tool 'mcp_setup_guide'
+2025-11-06 15:16:29.702 [info] Handling CallTool action for tool 'gemini_codebase_analyzer'
+2025-11-06 15:16:29.702 [info] Calling tool 'gemini_codebase_analyzer' with toolCallId: call_81086896
+2025-11-06 15:25:06.181 [info] Handling CallTool action for tool 'gemini_codebase_analyzer'
+2025-11-06 15:25:06.182 [info] Calling tool 'gemini_codebase_analyzer' with toolCallId: call_43392329
+2025-11-06 15:25:06.224 [info] Successfully called tool 'gemini_codebase_analyzer'
+2025-11-06 15:25:08.769 [info] Handling CallTool action for tool 'gemini_codebase_analyzer'
+2025-11-06 15:25:08.769 [info] Calling tool 'gemini_codebase_analyzer' with toolCallId: call_99099223
+2025-11-06 15:25:08.778 [info] Successfully called tool 'gemini_codebase_analyzer'
+2025-11-06 15:25:11.732 [info] Handling CallTool action for tool 'mcp_setup_guide'
+2025-11-06 15:25:11.732 [info] Calling tool 'mcp_setup_guide' with toolCallId: call_08488315
+2025-11-06 15:25:11.757 [info] Successfully called tool 'mcp_setup_guide'
+2025-11-06 15:25:13.809 [info] Handling CallTool action for tool 'calculate_token_count'
+2025-11-06 15:25:13.809 [info] Calling tool 'calculate_token_count' with toolCallId: call_77232417
+2025-11-06 15:26:06.790 [info] Handling CallTool action for tool 'calculate_token_count'
+2025-11-06 15:26:06.791 [info] Calling tool 'calculate_token_count' with toolCallId: call_53870656
+2025-11-06 15:26:36.988 [error] 
+<--- Last few GCs --->
+
+[36780:000002739CB4A000]   756651 ms: Mark-Compact 4046.1 (4136.4) -> 4036.4 (4142.4) MB, pooled: 0 MB, 4387.01 / 0.00 ms  (average mu = 0.183, current mu = 0.011) allocation failure; scavenge might not succeed
+[36780:000002739CB4A000]   763000 ms: Mark-Compact 4052.5 (4142.6) -> 4042.5 (4148.6) MB, pooled: 0 MB, 6280.49 / 0.00 ms  (average mu = 0.088, current mu = 0.011) allocation failure; scavenge might not succeed
+
+
+<--- JS stacktrace --->
+
+
+2025-11-06 15:26:36.988 [error] 
+<--- Last few GCs --->
+
+[36780:000002739CB4A000]   756651 ms: Mark-Compact 4046.1 (4136.4) -> 4036.4 (4142.4) MB, pooled: 0 MB, 4387.01 / 0.00 ms  (average mu = 0.183, current mu = 0.011) allocation failure; scavenge might not succeed
+[36780:000002739CB4A000]   763000 ms: Mark-Compact 4052.5 (4142.6) -> 4042.5 (4148.6) MB, pooled: 0 MB, 6280.49 / 0.00 ms  (average mu = 0.088, current mu = 0.011) allocation failure; scavenge might not succeed
+
+
+<--- JS stacktrace --->
+
+
+2025-11-06 15:26:36.988 [error] FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+
+2025-11-06 15:26:36.989 [error] FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+
+2025-11-06 15:26:36.989 [error] ----- Native stack trace -----
+
+
+2025-11-06 15:26:36.989 [error] ----- Native stack trace -----
+
+
+2025-11-06 15:26:37.103 [error]  1: 00007FF7E7010CD7 node::SetCppgcReference+16599
+ 2: 00007FF7E6F74568 v8::base::CPU::num_virtual_address_bits+103336
+ 3: 00007FF7E7AE53B1 v8::Isolate::ReportExternalAllocationLimitReached+65
+ 4: 00007FF7E7AD1F36 v8::Function::Experimental_IsNopFunction+3302
+ 5: 00007FF7E792E870 v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+33904
+ 6: 00007FF7E792AEFA v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+19194
+ 7: 00007FF7E794139C v8::Isolate::GetHeapProfiler+7692
+ 8: 00007FF7E7941C1A v8::Isolate::GetHeapProfiler+9866
+ 9: 00007FF7E794CD01 v8::Isolate::GetHeapProfiler+55153
+10: 00007FF7E796087A v8::Isolate::GetHeapProfiler+135914
+11: 00007FF7E7960B53 v8::Isolate::GetHeapProfiler+136643
+
+2025-11-06 15:26:37.104 [error]  1: 00007FF7E7010CD7 node::SetCppgcReference+16599
+ 2: 00007FF7E6F74568 v8::base::CPU::num_virtual_address_bits+103336
+ 3: 00007FF7E7AE53B1 v8::Isolate::ReportExternalAllocationLimitReached+65
+ 4: 00007FF7E7AD1F36 v8::Function::Experimental_IsNopFunction+3302
+ 5: 00007FF7E792E870 v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+33904
+ 6: 00007FF7E792AEFA v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+19194
+ 7: 00007FF7E794139C v8::Isolate::GetHeapProfiler+7692
+ 8: 00007FF7E7941C1A v8::Isolate::GetHeapProfiler+9866
+ 9: 00007FF7E794CD01 v8::Isolate::GetHeapProfiler+55153
+10: 00007FF7E796087A v8::Isolate::GetHeapProfiler+135914
+11: 00007FF7E7960B53 v8::Isolate::GetHeapProfiler+136643
+
+2025-11-06 15:26:37.105 [error] 12: 00007FF7E76FBFF3 v8::MemorySpan<std::basic_string_view<char,std::char_traits<char> > const >::end+128899
+13: 00007FF7E76FCE02 v8::MemorySpan<std::basic_string_view<char,std::char_traits<char> > const >::end+132498
+14: 00007FF7E76FC6F5 v8::MemorySpan<std::basic_string_view<char,std::char_traits<char> > const >::end+130693
+15: 00007FF7E76297CE v8::base::AddressSpaceReservation::AddressSpaceReservation+364062
+16: 00007FF787B6D4BA 
+
+2025-11-06 15:26:37.105 [error] 12: 00007FF7E76FBFF3 v8::MemorySpan<std::basic_string_view<char,std::char_traits<char> > const >::end+128899
+13: 00007FF7E76FCE02 v8::MemorySpan<std::basic_string_view<char,std::char_traits<char> > const >::end+132498
+14: 00007FF7E76FC6F5 v8::MemorySpan<std::basic_string_view<char,std::char_traits<char> > const >::end+130693
+15: 00007FF7E76297CE v8::base::AddressSpaceReservation::AddressSpaceReservation+364062
+16: 00007FF787B6D4BA 
+
+2025-11-06 15:26:37.855 [info] Client closed for command
+2025-11-06 15:26:37.857 [error] Error calling tool 'gemini_codebase_analyzer': MCP error -32000: Connection closed
+2025-11-06 15:26:37.857 [error] Error calling tool 'calculate_token_count': MCP error -32000: Connection closed
+2025-11-06 15:26:37.857 [error] Error calling tool 'calculate_token_count': MCP error -32000: Connection closed

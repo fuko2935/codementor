@@ -142,15 +142,23 @@ const start = async (): Promise<void> => {
   let validatedMcpLogLevel: McpLogLevel = "info";
   if (validMcpLogLevels.includes(initialLogLevelConfig as McpLogLevel)) {
     validatedMcpLogLevel = initialLogLevelConfig as McpLogLevel;
-  } else {
-    if (process.stdout.isTTY) {
-      console.warn(
-        `[Startup Warning] Invalid MCP_LOG_LEVEL "${initialLogLevelConfig}" found in configuration. ` +
-          `Defaulting to log level "info". Valid levels are: ${validMcpLogLevels.join(", ")}.`,
-      );
-    }
   }
+  
   await logger.initialize(validatedMcpLogLevel);
+  
+  // Log warning if log level was invalid (after logger is initialized to avoid STDIO corruption)
+  if (initialLogLevelConfig !== validatedMcpLogLevel) {
+    const loggerInitContext = requestContextService.createRequestContext({
+      operation: "LoggerInitialization",
+      requestId: "logger-init",
+    });
+    logger.warning(
+      `Invalid MCP_LOG_LEVEL "${initialLogLevelConfig}" in configuration. ` +
+      `Defaulted to "info". Valid levels: ${validMcpLogLevels.join(", ")}`,
+      loggerInitContext,
+    );
+  }
+  
   logger.info(
     `Logger has been initialized by start(). Effective MCP logging level set to: ${validatedMcpLogLevel}.`,
   );

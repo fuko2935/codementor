@@ -71,6 +71,7 @@ To switch back to API key-based authentication, set `LLM_DEFAULT_PROVIDER=gemini
 | `LOGS_DIR`             | Directory where `activity.log` and `error.log` are written.    | `./logs`         |
 | `LLM_DEFAULT_PROVIDER` | Default LLM provider (`gemini-cli`, `gemini`, `google`, etc.). | `gemini-cli`     |
 | `LLM_DEFAULT_MODEL`    | Default LLM model.                                             | `gemini-2.5-pro` |
+| `MAX_GIT_BLOB_SIZE_BYTES` | Maximum file size (bytes) for git diff analysis. Files exceeding this limit are skipped. | `4194304` (4MB) |
 
 ### Provider API keys (all optional)
 
@@ -169,6 +170,7 @@ The `gemini_codebase_analyzer` tool now supports code review mode with git diff 
 - **Structured JSON Diff**: AI receives changes in a machine-readable format
 - **Full Context**: Changes analyzed alongside entire codebase
 - **Edge Case Handling**: Works with initial commits, binary files, and empty diffs
+- **Large File Protection**: Files exceeding `MAX_GIT_BLOB_SIZE_BYTES` (default 4MB) are automatically skipped to prevent memory issues. Skipped files are reported in the analysis output.
 
 ### Analysis Modes
 

@@ -386,19 +386,61 @@ export async function geminiCodebaseAnalyzerLogic(
         count: validatedParams.includeChanges.count,
       });
 
+      // Create ignore instance for filtering git diffs (reuse existing ignore patterns)
+      const ig = await createIgnoreInstance({
+        projectPath: normalizedPath,
+        temporaryIgnore: validatedParams.temporaryIgnore,
+        ignoreMcpignore: validatedParams.ignoreMcpignore,
+        context,
+      });
+
       const diffParams: ExtractGitDiffParams = {
         revision: validatedParams.includeChanges.revision,
         count: validatedParams.includeChanges.count,
+        ignoreInstance: ig,
       };
 
       const diffResult = await extractGitDiff(normalizedPath, diffParams, context);
       changesData = JSON.stringify(diffResult, null, 2);
+
+      // Add warning if any files were skipped due to size
+      if (diffResult.skippedFiles && diffResult.skippedFiles.length > 0) {
+        const skippedFilesWarning = `\n\n---
+**WARNING: Large Files Skipped**
+The following files were excluded from the change analysis because their size exceeds the configured limit (${(config.maxGitBlobSizeBytes / 1024 / 1024).toFixed(2)} MB):
+${diffResult.skippedFiles.map(f => `- ${f.path} (${(f.size / 1024 / 1024).toFixed(2)} MB)`).join('\n')}
+
+These files were skipped to prevent memory issues during analysis. To include them, adjust the MAX_GIT_BLOB_SIZE_BYTES environment variable.
+---`;
+        changesData += skippedFilesWarning;
+      }
+
+      // Check diff size to prevent memory overflow
+      const diffSizeBytes = Buffer.byteLength(changesData, "utf-8");
+      const MAX_DIFF_SIZE = 50 * 1024 * 1024; // 50MB
+      
+      if (diffSizeBytes > MAX_DIFF_SIZE) {
+        throw new McpError(
+          BaseErrorCode.VALIDATION_ERROR,
+          `Git diff too large: ${Math.round(diffSizeBytes / (1024 * 1024))}MB (max ${MAX_DIFF_SIZE / (1024 * 1024)}MB). ` +
+            `The changes are too extensive to analyze in one go. Consider: ` +
+            `1) Analyzing specific commits or file ranges instead of large commit counts, ` +
+            `2) Using temporaryIgnore to exclude large generated files, ` +
+            `3) Breaking the review into smaller chunks.`,
+          {
+            diffSize: diffSizeBytes,
+            maxSize: MAX_DIFF_SIZE,
+            filesModified: diffResult.summary.filesModified,
+          },
+        );
+      }
 
       logger.info("Git diff extracted successfully", {
         ...context,
         filesModified: diffResult.summary.filesModified,
         insertions: diffResult.summary.insertions,
         deletions: diffResult.summary.deletions,
+        diffSizeBytes,
       });
     }
 
