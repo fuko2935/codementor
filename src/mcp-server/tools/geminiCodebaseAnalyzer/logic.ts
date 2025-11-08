@@ -203,6 +203,7 @@ async function prepareFullContext(
     logger.info("Found files to process", {
       ...context,
       fileCount: files.length,
+      ignoredFiles: allFiles.length - files.length,
     });
 
     // Check file count limit before processing
@@ -219,7 +220,9 @@ async function prepareFullContext(
       );
     }
 
-    let fullContext = "";
+    // Use array buffer instead of string concatenation to avoid memory waste
+    // Each += operation creates a new string copy, which is inefficient for large content
+    const contextParts: string[] = [];
     let processedFiles = 0;
     let totalSize = 0;
 
@@ -259,9 +262,7 @@ async function prepareFullContext(
           );
         }
 
-        fullContext += `--- File: ${file} ---\n`;
-        fullContext += content;
-        fullContext += "\n\n";
+        contextParts.push(`--- File: ${file} ---\n`, content, "\n\n");
         processedFiles++;
         totalSize += contentSize;
       } catch (error) {
@@ -277,6 +278,16 @@ async function prepareFullContext(
         });
       }
     }
+
+    const fullContext = contextParts.join("");
+
+    logger.debug("File processing completed", {
+      ...context,
+      processedFiles,
+      ignoredFiles: allFiles.length - files.length,
+      totalSizeBytes: totalSize,
+      totalSizeMB: Math.round(totalSize / (1024 * 1024)),
+    });
 
     logger.info("Project context prepared successfully", {
       ...context,

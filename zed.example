@@ -1,0 +1,10 @@
+{
+  "gemini-mcp-local": {
+    "command": "npx",
+    "args": ["-y", "gemini-mcp-local"],
+    "env": {
+      "LLM_DEFAULT_PROVIDER": "gemini-cli",
+      "LLM_DEFAULT_MODEL": "gemini-2.5-pro"
+    }
+  }
+}

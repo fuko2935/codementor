@@ -10,9 +10,16 @@ import path from "path";
 import { glob } from "glob";
 import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
-import { logger, type RequestContext, createIgnoreInstance } from "../../../utils/index.js";
+import {
+  logger,
+  type RequestContext,
+  createIgnoreInstance,
+} from "../../../utils/index.js";
 import { extractMetadata, type FileMetadata } from "../../utils/codeParser.js";
-import { groupFilesWithAI, type ProjectGroup } from "../../services/aiGroupingService.js";
+import {
+  groupFilesWithAI,
+  type ProjectGroup,
+} from "../../services/aiGroupingService.js";
 import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { config } from "../../../config/index.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
@@ -25,7 +32,9 @@ export const ProjectOrchestratorCreateInputSchema = z.object({
     .boolean()
     .optional()
     .default(false)
-    .describe("If true, ignores the .mcpignore file and only uses .gitignore patterns."),
+    .describe(
+      "If true, ignores the .mcpignore file and only uses .gitignore patterns.",
+    ),
   question: z.string().min(1).max(50000).optional(),
   analysisMode: z
     .enum([
@@ -58,6 +67,11 @@ export interface ProjectOrchestratorCreateResponse {
   groupsData: string;
 }
 
+type ProjectOrchestratorCreateOverrides = Partial<{
+  extractMetadata: typeof extractMetadata;
+  groupFilesWithAI: typeof groupFilesWithAI;
+}>;
+
 /**
  * Converts AI-generated ProjectGroup[] to the format expected by projectOrchestratorAnalyze.
  * Includes metadata for enhanced analysis capabilities.
@@ -73,7 +87,9 @@ function convertGroupsToAnalyzeFormat(
   const groups = aiGroups.map((aiGroup) => ({
     files: aiGroup.files.map((filePath) => {
       // Find metadata for this file to get token count
-      const fileMetadata = aiGroup.metadata.find((m) => m.filePath === filePath);
+      const fileMetadata = aiGroup.metadata.find(
+        (m) => m.filePath === filePath,
+      );
       return {
         filePath,
         tokens: fileMetadata?.estimatedTokens || 0,
@@ -106,12 +122,20 @@ function convertGroupsToAnalyzeFormat(
 export async function projectOrchestratorCreateLogic(
   params: ProjectOrchestratorCreateInput,
   context: RequestContext,
+  overrides?: ProjectOrchestratorCreateOverrides,
 ): Promise<ProjectOrchestratorCreateResponse> {
+  const extractMetadataImpl = overrides?.extractMetadata ?? extractMetadata;
+  const groupFilesWithAiImpl = overrides?.groupFilesWithAI ?? groupFilesWithAI;
+
   // Validate MCP configuration exists before orchestration
   await validateMcpConfigExists(params.projectPath, context);
 
   // Validate and secure the project path
-  const normalizedPath = await validateSecurePath(params.projectPath, process.cwd(), context);
+  const normalizedPath = await validateSecurePath(
+    params.projectPath,
+    process.cwd(),
+    context,
+  );
 
   // Validate project size before making LLM API call
   const sizeValidation = await validateProjectSize(
@@ -159,30 +183,47 @@ export async function projectOrchestratorCreateLogic(
   logger.info("Discovered files", {
     ...context,
     fileCount: files.length,
+    ignoredFiles: allFiles.length - files.length,
   });
 
-  // Extract metadata from all files in parallel
-  const metadataPromises = files.map(async (file) => {
-    try {
-      const filePath = path.join(normalizedPath, file);
-      const content = await fs.readFile(filePath, "utf-8");
-      const metadata = await extractMetadata(file, content, context);
-      return metadata;
-    } catch (error) {
-      // Log and skip unreadable files
-      logger.debug("Skipping unreadable file", {
-        ...context,
-        file,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
-  });
+  // Extract metadata from files in batches to prevent memory overflow
+  // Process files in chunks of 50 to avoid loading all files into memory simultaneously
+  const BATCH_SIZE = 50;
+  const metadata: FileMetadata[] = [];
 
-  const metadataResults = await Promise.all(metadataPromises);
-  const metadata: FileMetadata[] = metadataResults.filter(
-    (m): m is FileMetadata => m !== null,
-  );
+  for (let i = 0; i < files.length; i += BATCH_SIZE) {
+    const batch = files.slice(i, i + BATCH_SIZE);
+    const batchPromises = batch.map(async (file) => {
+      try {
+        const filePath = path.join(normalizedPath, file);
+        const content = await fs.readFile(filePath, "utf-8");
+        const metadata = await extractMetadataImpl(file, content, context);
+        return metadata;
+      } catch (error) {
+        // Log and skip unreadable files
+        logger.debug("Skipping unreadable file", {
+          ...context,
+          file,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      }
+    });
+
+    const batchResults = await Promise.all(batchPromises);
+    const validMetadata = batchResults.filter(
+      (m): m is FileMetadata => m !== null,
+    );
+    metadata.push(...validMetadata);
+
+    logger.debug("Processed file batch", {
+      ...context,
+      processed: Math.min(i + BATCH_SIZE, files.length),
+      total: files.length,
+      batchSize: batch.length,
+      validInBatch: validMetadata.length,
+    });
+  }
 
   if (metadata.length === 0) {
     throw new McpError(
@@ -211,7 +252,7 @@ export async function projectOrchestratorCreateLogic(
     totalProjectTokens,
   });
 
-  const aiGroups = await groupFilesWithAI(
+  const aiGroups = await groupFilesWithAiImpl(
     metadata,
     maxPerGroup,
     context,
