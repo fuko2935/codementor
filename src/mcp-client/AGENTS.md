@@ -1,5 +1,7 @@
 # MCP Client Module Guide
 
+> Not: Bu dosya geliştirici içindir; AI asistan kullanım rehberi değildir ve MCP `mcp_setup_guide` tarafından enjekte edilmez.
+
 ## Package Identity
 
 Production-grade MCP (Model Context Protocol) client for connecting to and interacting with MCP servers. Supports both STDIO (spawns processes) and HTTP (network) transports. Designed for agent swarm scenarios where multiple independent agents connect to the same servers without interference.

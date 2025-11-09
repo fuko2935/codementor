@@ -35,7 +35,9 @@ export const registerGeminiCodebaseAnalyzer = async (
     "Analyzes an entire project codebase. Supports multiple analysis modes (general, security, performance, review, etc.). " +
     "For code review, use analysisMode='review' with includeChanges parameter to analyze git diffs alongside the codebase. " +
     "WARNING: May cause performance issues or timeouts on very large projects. " +
-    "For large codebases, please use the 'project_orchestrator_create' and 'project_orchestrator_analyze' tools for a more stable, multi-step analysis.";
+    "For large codebases, please use the 'project_orchestrator_create' and 'project_orchestrator_analyze' tools for a more stable, multi-step analysis. " +
+    "Optionally set 'autoOrchestrate=true' to automatically switch to the project orchestrator when project size approaches the token limit; " +
+    "use 'orchestratorThreshold' (default 0.75) and 'maxTokensPerGroup' to tune behavior.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({

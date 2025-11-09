@@ -1,6 +1,6 @@
 {
   "name": "gemini-mcp-local",
-  "version": "2.10.2",
+  "version": "2.10.4",
   "description": "Local-first Gemini MCP tool for stdio or HTTP transports using environment-supplied provider credentials.",
   "main": "dist/index.js",
   "bin": {
@@ -47,7 +47,8 @@
     "test:integration": "npm run build && node dist/validation/integrationTest.js",
     "test:logger": "npm run validate:startup",
     "test:unit": "tsc --project tsconfig.test.json && node --test dist-test/tests/unit/**/*.test.js",
-    "test:all": "npm run test:unit && npm run test:logger && npm run test:integration"
+    "test:all": "npm run test:unit && npm run test:logger && npm run test:integration",
+    "audit:deps": "npm audit"
   },
   "dependencies": {
     "@babel/parser": "^7.26.3",
@@ -85,7 +86,8 @@
     "tree-sitter-php": "^0.20.3",
     "tree-sitter-python": "^0.20.4",
     "tree-sitter-ruby": "^0.20.3",
-    "tree-sitter-rust": "^0.20.4"
+    "tree-sitter-rust": "^0.20.4",
+    "ioredis": "^5.4.1"
   },
   "keywords": [
     "typescript",

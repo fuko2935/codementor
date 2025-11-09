@@ -18,6 +18,8 @@ import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
 import { extractGitDiff, type ExtractGitDiffParams } from "../../utils/gitDiffAnalyzer.js";
 import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
+import { projectOrchestratorCreateLogic } from "../projectOrchestratorCreate/logic.js";
+import { projectOrchestratorAnalyzeLogic } from "../projectOrchestratorAnalyze/logic.js";
 
 /**
  * Base Zod schema for the `gemini_codebase_analyzer` tool (before refinements).
@@ -105,6 +107,30 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     .optional()
     .describe(
       "Optional Gemini API key (not needed for gemini-cli provider). Your Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)",
+    ),
+  autoOrchestrate: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe(
+      "If true, automatically use project orchestrator when project size approaches or exceeds token limits.",
+    ),
+  orchestratorThreshold: z
+    .number()
+    .min(0.1)
+    .max(0.95)
+    .optional()
+    .default(0.75)
+    .describe(
+      "When tokenCount / maxTokens >= threshold, orchestrator is suggested (or used if autoOrchestrate=true). Default: 0.75",
+    ),
+  maxTokensPerGroup: z
+    .number()
+    .min(100000)
+    .max(950000)
+    .optional()
+    .describe(
+      "Optional max tokens per orchestrator group (default ~900k if not provided).",
     ),
 });
 
@@ -317,6 +343,10 @@ async function prepareFullContext(
  * @param params - The input parameters containing project path, question, and API key
  * @param context - Request context for logging and tracking
  * @returns Promise containing the analysis response
+ *
+ * @remarks This function deliberately integrates project orchestrator tools to provide a seamless
+ *          fallback path for large projects (autoOrchestrate). This coupling is intentional to
+ *          improve user experience and robustness under token/memory constraints.
  */
 export async function geminiCodebaseAnalyzerLogic(
   params: GeminiCodebaseAnalyzerInput,
@@ -348,13 +378,87 @@ export async function geminiCodebaseAnalyzerLogic(
       context,
     );
 
+    const maxTokens = config.maxProjectTokens ?? 20_000_000;
+    const threshold = validatedParams.orchestratorThreshold ?? 0.75;
+    const tokenCount = sizeValidation.tokenCount;
+    const shouldSuggest =
+      typeof tokenCount === "number" ? tokenCount / maxTokens >= threshold : false;
+
     if (!sizeValidation.valid) {
+      if (validatedParams.autoOrchestrate) {
+        logger.info("Auto-orchestrating due to project size exceeding token limit", {
+          ...context,
+          tokenCount: sizeValidation.tokenCount,
+          maxTokens,
+        });
+
+        // Step 1: Create groups
+        const createRes = await projectOrchestratorCreateLogic(
+          {
+            projectPath: normalizedPath,
+            temporaryIgnore: validatedParams.temporaryIgnore,
+            ignoreMcpignore: validatedParams.ignoreMcpignore,
+            question: validatedParams.question,
+            analysisMode: (validatedParams.analysisMode && validatedParams.analysisMode !== "review") ? validatedParams.analysisMode : "general",
+            maxTokensPerGroup: validatedParams.maxTokensPerGroup,
+            geminiApiKey: params.geminiApiKey,
+          },
+          context,
+        );
+
+        // Derive file count from groups blob if available
+        let filesProcessed = 0;
+        try {
+          const blob = JSON.parse(createRes.groupsData) as {
+            totalFiles?: number;
+          };
+          filesProcessed = blob.totalFiles ?? 0;
+        } catch {
+          // ignore parse issues; keep defaults
+        }
+
+        // Step 2: Analyze groups
+        const analyzeRes = await projectOrchestratorAnalyzeLogic(
+          {
+            projectPath: normalizedPath,
+            temporaryIgnore: validatedParams.temporaryIgnore,
+            question: validatedParams.question,
+            analysisMode: (validatedParams.analysisMode && validatedParams.analysisMode !== "review") ? validatedParams.analysisMode : "general",
+            fileGroupsData: createRes.groupsData,
+            maxTokensPerGroup: validatedParams.maxTokensPerGroup,
+            geminiApiKey: params.geminiApiKey,
+          },
+          context,
+        );
+
+        let headerNote =
+          `⚠ Orchestrator fallback used automatically.\n` +
+          `Reason: Project size exceeded token limits (${(sizeValidation.tokenCount ?? 0).toLocaleString()} tokens, limit ${maxTokens.toLocaleString()}).\n` +
+          `The analysis below is synthesized from grouped batches.\n`;
+        if (validatedParams.analysisMode === "review") {
+          headerNote += `Note: 'review' mode is not yet supported in orchestrator fallback; switched to 'general'.\n`;
+        }
+        headerNote += `\n`;
+
+        return {
+          analysis: headerNote + analyzeRes.analysis,
+          filesProcessed,
+          totalCharacters: 0,
+          projectPath: normalizedPath,
+          question: validatedParams.question,
+        };
+      }
+
+      // Not auto orchestrating: throw with helpful guidance
+      const guidance =
+        `\n\nÖneri: Büyük projeler için 'project_orchestrator_create' ve 'project_orchestrator_analyze' araçlarını kullanın ` +
+        `veya bu aracı 'autoOrchestrate=true' ile çağırın. Eşik ayarı için 'orchestratorThreshold' (varsayılan 0.75).`;
       throw new McpError(
         BaseErrorCode.VALIDATION_ERROR,
-        sizeValidation.error || "Project size exceeds token limit",
+        (sizeValidation.error || "Project size exceeds token limit") + guidance,
         {
           tokenCount: sizeValidation.tokenCount,
-          maxTokens: config.maxProjectTokens ?? 20_000_000,
+          maxTokens,
         },
       );
     }
@@ -488,13 +592,28 @@ ${validatedParams.question}`;
     const response = await result.response;
     const analysis = response.text();
 
+    // Prepend recommendation note if near threshold (but not auto-orchestrating)
+    let finalAnalysis = analysis;
+    if (shouldSuggest && !validatedParams.autoOrchestrate) {
+      const ratioPct =
+        typeof tokenCount === "number"
+          ? Math.round((tokenCount / maxTokens) * 100)
+          : undefined;
+      const note =
+        `ℹ Recommendation: Project size is near the token limit` +
+        (typeof ratioPct === "number" ? ` (~${ratioPct}%)` : "") +
+        `. Consider using project orchestrator (set autoOrchestrate=true) ` +
+        `or adjust orchestratorThreshold (default 0.75).`;
+      finalAnalysis = `${note}\n\n${analysis}`;
+    }
+
     logger.info("Gemini analysis completed successfully", {
       ...context,
-      responseLength: analysis.length,
+      responseLength: finalAnalysis.length,
     });
 
     return {
-      analysis,
+      analysis: finalAnalysis,
       filesProcessed: fullContext.split("--- File:").length - 1,
       totalCharacters: fullContext.length,
       projectPath: normalizedPath,

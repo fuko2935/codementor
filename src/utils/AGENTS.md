@@ -1,5 +1,7 @@
 # Utils Module Guide
 
+> Not: Bu dosya geliştirici içindir; AI asistan kullanım rehberi değildir ve MCP `mcp_setup_guide` tarafından enjekte edilmez.
+
 ## Package Identity
 
 Shared utilities for logging, error handling, metrics, security, parsing, and network operations. Used across both MCP server and client modules. Provides structured logging with RequestContext, centralized error handling, and common helpers.

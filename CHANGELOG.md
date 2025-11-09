@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.10.4] - 2025-11-09
+
+### Documentation
+- Compact MCP-first guide synchronized into template and injected block:
+  - Template updated: src/mcp-server/tools/mcpSetupGuide/templates/mcp-guide.md
+  - Injection verified with mcp_setup_guide into AGENTS.md
+- Clarified mcp_setup_guide `force=true` behavior: only replaces content between markers; preserves content outside markers.
+- README updated to document `autoOrchestrate` and `orchestratorThreshold` usage in `gemini_codebase_analyzer`.
+- Architecture notes updated to mention optional SessionCoordinator (InMemory/Redis) for sticky sessions.
+
+### Testing
+- Added unit tests for SessionCoordinator (InMemory/Redis), including key sanitization and TTL behavior:
+  - tests/unit/mcp-server/transports/sessionStore.test.ts
+
+### Release
+- Published gemini-mcp-local@2.10.4 to npm.
+
 ## [2.10.0] - 2025-11-05
 
 ### 🔥 CRITICAL FIX: Git Diff Memory Overflow (FINAL FIX)

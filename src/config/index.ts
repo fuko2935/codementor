@@ -114,6 +114,12 @@ const EnvSchema = z.object({
   MCP_HTTP_PORT: z.coerce.number().int().positive().default(3010),
   /** HTTP server host (if MCP_TRANSPORT_TYPE is "http"). Default: "127.0.0.1". */
   MCP_HTTP_HOST: z.string().default("127.0.0.1"),
+  /** Session store type for HTTP transport. Default: "memory". Options: "memory", "redis". */
+  MCP_SESSION_STORE: z.enum(["memory", "redis"]).default("memory"),
+  /** Redis connection URL for session coordination (e.g., redis://localhost:6379). */
+  REDIS_URL: z.string().optional(),
+  /** Redis key prefix for session ownership records. Default: "mcp:sessions:". */
+  REDIS_PREFIX: z.string().optional(),
   /** Optional. Comma-separated allowed origins for CORS (HTTP transport). */
   MCP_ALLOWED_ORIGINS: z.string().optional(),
   /** Optional. Secret key (min 32 chars) for auth tokens (HTTP transport). CRITICAL for production. */
@@ -399,6 +405,12 @@ export const config = {
   mcpHttpPort: env.MCP_HTTP_PORT,
   /** HTTP server host (if http transport). From `MCP_HTTP_HOST` env var. Default: "127.0.0.1". */
   mcpHttpHost: env.MCP_HTTP_HOST,
+  /** HTTP session store mode ('memory' | 'redis'). From `MCP_SESSION_STORE`. */
+  sessionStore: env.MCP_SESSION_STORE,
+  /** Redis URL for session coordination. From `REDIS_URL`. */
+  redisUrl: env.REDIS_URL,
+  /** Redis prefix for session ownership keys. From `REDIS_PREFIX`. */
+  redisPrefix: env.REDIS_PREFIX,
   /** Array of allowed CORS origins (http transport). From `MCP_ALLOWED_ORIGINS` (comma-separated). */
   mcpAllowedOrigins: env.MCP_ALLOWED_ORIGINS?.split(",")
     .map((origin) => origin.trim())

@@ -1,5 +1,7 @@
 # Gemini MCP Local Tool
 
+Languages: English | Türkçe (README.tr.md)
+
 Gemini MCP Local is a lightweight Model Context Protocol (MCP) server that you can run directly on your machine or launch ad-hoc with `npx`. It exposes the same rich analysis workflow used in the original Smithery-compatible server without the Supabase, DuckDB, or agent dependencies. Bring your own API keys via environment variables, pick a transport (`stdio` by default, `http` when you need it), and you are ready to connect from Claude Desktop or any MCP-compliant client.
 
 ---
@@ -111,6 +113,24 @@ Set whichever providers you plan to call; the shared resolver looks at request p
 
 Logs for both transports land in `logs/activity.log` and `logs/error.log`. Delete the directory to reset.
 
+### HTTP Session Store (optional Redis)
+
+By default, HTTP sessions are tracked in-memory, which is suitable for single-process deployments. For multi-instance or clustered deployments that require session stickiness behind a load balancer, enable Redis-backed session coordination:
+
+```bash
+# Enable Redis-backed session ownership tracking
+export MCP_SESSION_STORE=redis
+export REDIS_URL="redis://localhost:6379"
+# Optional key prefix (defaults to mcp:sessions:)
+export REDIS_PREFIX="mcp:sessions:"
+```
+
+Notes:
+- Only session ownership metadata is persisted (instance ID), not transport objects.
+- This enables routing layers to implement stickiness based on owner instance.
+- If Redis is unavailable, fallbacks to in-memory when `MCP_SESSION_STORE=memory`.
+- `ioredis` is declared as an optional dependency; install it only when enabling Redis session coordination (`MCP_SESSION_STORE=redis`). It is not required for the default in-memory mode.
+
 ---
 
 ## Tool Highlights
@@ -172,6 +192,12 @@ The `gemini_codebase_analyzer` tool now supports code review mode with git diff 
 - **Edge Case Handling**: Works with initial commits, binary files, and empty diffs
 - **Large File Protection**: Files exceeding `MAX_GIT_BLOB_SIZE_BYTES` (default 4MB) are automatically skipped to prevent memory issues. Skipped files are reported in the analysis output.
 
+#### Auto-Orchestration (large projects)
+
+- Set `autoOrchestrate=true` on `gemini_codebase_analyzer` to automatically fall back to the project orchestrator when token limits are exceeded.
+- `orchestratorThreshold` (default `0.75`) controls when to suggest/fallback based on `tokenCount / maxTokens`.
+- In fallback, `analysisMode: "review"` is not supported; the flow switches to `analysisMode: "general"` and synthesizes results from grouped batches.
+- Prefer `.mcpignore` to trim context; for very large repositories use `project_orchestrator_create` → `project_orchestrator_analyze`.
 ### Analysis Modes
 
 The `analysisMode` parameter supports the following modes:
@@ -191,6 +217,9 @@ The `analysisMode` parameter supports the following modes:
 ---
 
 ## Security
+
+Security Hardening Guide:
+See the comprehensive production hardening recommendations in [docs/security-hardening.md](docs/security-hardening.md:1).
 
 ### Git Command Execution
 
@@ -328,6 +357,16 @@ src/
 ```
 
 Legacy agent, Supabase, DuckDB, and deployment artefacts have been removed. If you need them, check the Git history before the `2.0.0` release.
+
+## Architecture Overview
+
+For high-level component map, request flows, dependency layers, security and performance considerations, see the architecture document:
+- [docs/architecture.md](docs/architecture.md:1)
+
+- Component map and dependency layers
+- HTTP (streamable) and STDIO sequence diagrams
+- Security surfaces and controls
+- Performance considerations
 
 ---
 

@@ -34,6 +34,7 @@ import {
 } from "../../utils/index.js";
 import { jwtAuthMiddleware, oauthMiddleware } from "./auth/index.js";
 import { httpErrorHandler } from "./httpErrorHandler.js";
+import { createSessionCoordinator, generateInstanceId } from "./sessionStore.js";
 
 const HTTP_PORT = config.mcpHttpPort;
 const HTTP_HOST = config.mcpHttpHost;
@@ -46,6 +47,8 @@ const MAX_PORT_RETRIES = 15;
 // For a scalable deployment, this would need to be replaced with a distributed
 // store like Redis or Memcached.
 const transports: Record<string, StreamableHTTPServerTransport> = {};
+// Unique identifier for this server instance (used for session ownership)
+const INSTANCE_ID = generateInstanceId();
 
 async function isPortInUse(
   port: number,
@@ -142,6 +145,13 @@ export async function startHttpTransport(
     component: "HttpTransportSetup",
   });
 
+  // Initialize session coordinator (memory by default, Redis if configured)
+  const coordinator = await createSessionCoordinator({
+    sessionStore: config.sessionStore === "redis" ? "redis" : "memory",
+    redisUrl: config.redisUrl,
+    redisPrefix: config.redisPrefix || "mcp:sessions:",
+  });
+
   app.use(
     "*",
     cors({
@@ -212,6 +222,14 @@ export async function startHttpTransport(
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (newId) => {
           transports[newId] = newTransport;
+          // record ownership for sticky-session in multi-instance deployments
+          Promise.resolve(coordinator.setOwner(newId, INSTANCE_ID, 3600)).catch((err) => {
+            logger.warning("Failed to record session ownership in coordinator", {
+              ...postContext,
+              newSessionId: newId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
           logger.info(`HTTP Session created: ${newId}`, {
             ...postContext,
             newSessionId: newId,
@@ -224,6 +242,14 @@ export async function startHttpTransport(
         const closedSessionId = newTransport.sessionId;
         if (closedSessionId && transports[closedSessionId]) {
           delete transports[closedSessionId];
+          // cleanup ownership record
+          Promise.resolve(coordinator.deleteOwner(closedSessionId)).catch((err) => {
+            logger.warning("Failed to cleanup session ownership in coordinator", {
+              ...postContext,
+              closedSessionId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
           logger.info(`HTTP Session closed: ${closedSessionId}`, {
             ...postContext,
             closedSessionId,
@@ -255,6 +281,24 @@ export async function startHttpTransport(
     const transport = sessionId ? transports[sessionId] : undefined;
 
     if (!transport) {
+      // Hint for multi-instance: session may belong to another instance
+      if (sessionId) {
+        try {
+          const owner = await coordinator.getOwner(sessionId);
+          if (owner && owner !== INSTANCE_ID) {
+            logger.info("Session ownership belongs to another instance", {
+              ...requestContextService.createRequestContext({
+                operation: "handleSessionRequest",
+              }),
+              sessionId,
+              ownerInstance: owner,
+              thisInstance: INSTANCE_ID,
+            });
+          }
+        } catch {
+          // ignore coordinator errors here; continue with NOT_FOUND
+        }
+      }
       throw new McpError(
         BaseErrorCode.NOT_FOUND,
         "Session not found or expired.",

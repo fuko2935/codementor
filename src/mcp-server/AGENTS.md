@@ -1,5 +1,7 @@
 # MCP Server Module Guide
 
+> Not: Bu dosya geliştirici içindir; AI asistan kullanım rehberi değildir ve MCP `mcp_setup_guide` tarafından enjekte edilmez.
+
 ## Package Identity
 
 MCP (Model Context Protocol) server implementation providing tools, resources, and transport layers (stdio/HTTP). Built on `@modelcontextprotocol/sdk`, supports both STDIO (for local processes) and HTTP (for network services). All tools and resources register with a transport-agnostic `McpServer` instance created in `server.ts`.
