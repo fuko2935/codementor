@@ -15,6 +15,7 @@ import {
   type RequestContext,
   createIgnoreInstance,
 } from "../../../utils/index.js";
+import { BASE_DIR } from "../../../index.js";
 import { extractMetadata, type FileMetadata } from "../../utils/codeParser.js";
 import {
   groupFilesWithAI,
@@ -127,15 +128,15 @@ export async function projectOrchestratorCreateLogic(
   const extractMetadataImpl = overrides?.extractMetadata ?? extractMetadata;
   const groupFilesWithAiImpl = overrides?.groupFilesWithAI ?? groupFilesWithAI;
 
-  // Validate MCP configuration exists before orchestration
-  await validateMcpConfigExists(params.projectPath, context);
-
-  // Validate and secure the project path
+  // Validate and secure the project path against the central BASE_DIR (SEC-01)
   const normalizedPath = await validateSecurePath(
     params.projectPath,
-    process.cwd(),
+    BASE_DIR,
     context,
   );
+
+  // Validate MCP configuration exists before orchestration (using normalized path)
+  await validateMcpConfigExists(normalizedPath, context);
 
   // Validate project size before making LLM API call
   const sizeValidation = await validateProjectSize(

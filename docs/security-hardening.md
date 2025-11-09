@@ -2,6 +2,255 @@
 
 Bu doküman, Gemini MCP Local projesini prod ortamlarında güvenli ve dayanıklı şekilde çalıştırmak için önerilen sertleştirme adımlarını içerir. Aşağıdaki pratikler HTTP/STDIO transportları, kimlik doğrulama, giriş doğrulama/sanitizasyon, kaynak sınırları ve tedarik zinciri güvenliğini kapsar.
 
+## SEC-01) Logging & Sanitization
+
+Bu bölüm, loglarda hassas veri sızıntısını önlemek ve XSS benzeri vektörlerin log/sanitizasyon katmanları üzerinden sisteme geri sokulmamasını sağlamak için zorunlu pratikleri tanımlar.
+
+### Hassas Alan Redaksiyonu
+
+Log sanitizasyon katmanı, anahtar isimlerini case-insensitive ve substring bazlı olarak eşler ve ilgili değerleri `[REDACTED]` ile maskeler. Hem düz JSON gövdeleri hem de nested objeler ve header map yapıları için geçerlidir.
+
+Varsayılan hassas alan kapsamı:
+
+- password
+- token
+- secret
+- key
+- apiKey
+- access_key
+- secret_key
+- api_token
+- authorization
+- jwt
+
+Örnek JSON log girişi:
+
+```json
+{
+  "userId": "123",
+  "password": "plain-text",
+  "api_token": "secret-token",
+  "profile": {
+    "jwt": "eyJhbGciOi",
+    "note": "ok"
+  }
+}
+```
+
+Sanitize edilmiş log çıktısı:
+
+```json
+{
+  "userId": "123",
+  "password": "[REDACTED]",
+  "api_token": "[REDACTED]",
+  "profile": {
+    "jwt": "[REDACTED]",
+    "note": "ok"
+  }
+}
+```
+
+Headers.Authorization ve benzeri başlıklar da aynı mantıkla maskelenir:
+
+```json
+{
+  "headers": {
+    "authorization": "[REDACTED]",
+    "x-api-key": "[REDACTED]"
+  }
+}
+```
+
+Notlar:
+
+- Redaksiyon sadece key bazlıdır; değer içeriğine göre pattern eşleme yapılmaz.
+- Yeni hassas alanlar eklemek için sanitizasyon yardımcılarının hassas alan listesi genişletilebilir; bu, uygulama boyunca merkezi olarak devreye girer.
+- XSS benzeri payload’lar loglanırken sanitizasyon katmanı yeni bir XSS vektörü eklemez; HTML sanitize fonksiyonları script, event attributeleri ve `javascript:` URI şemalarını etkisizleştirir.
+
+İlgili dosyalar:
+
+- src/utils/security/[sanitization.ts](src/utils/security/sanitization.ts:1)
+- tests/unit/utils/[sanitization.test.ts](tests/unit/utils/sanitization.test.ts:1)
+
+## SEC-02) Path Security & BASE_DIR
+
+Dosya sistemi ve depo erişimlerinde tüm path işlemleri merkezi bir taban dizin üzerinden sınırlandırılır.
+
+### BASE_DIR Konsepti
+
+- `BASE_DIR`, proje kökünü temsil eden merkezi referanstır.
+- Tüm dosya/dizin erişimleri `BASE_DIR` altında kalacak şekilde tasarlanmalıdır.
+- Bu yaklaşım, path traversal girişimlerini ve proje dışına yetkisiz erişimleri engellemek için temel güvenlik sınırını oluşturur.
+
+### Güvenli Path Doğrulama
+
+- `validateSecurePath` benzeri yardımcılar, verilen path’in:
+  - Boş veya sadece whitespace olmadığını,
+  - Null byte içermediğini,
+  - Mutlak path olarak gelmediğini,
+  - `..` gibi traversal denemeleriyle `BASE_DIR` dışına taşmadığını doğrular.
+- Geçersiz path girişimleri güvenli hata türleri ile sonuçlanır; kullanıcıya sınırlı ve bilgi sızdırmayan mesaj döndürülmelidir.
+
+### BASE_DIR Kullanan Bileşenler
+
+Aşağıdaki araç ve modüller path güvenliğini sağlamak için `BASE_DIR` ve secure path doğrulama mantığını kullanır:
+
+- src/index.ts içindeki `BASE_DIR` export’u
+- src/mcp-server/utils/[securePathValidator.ts](src/mcp-server/utils/securePathValidator.ts:1)
+- src/mcp-server/tools/geminiCodebaseAnalyzer/[logic.ts](src/mcp-server/tools/geminiCodebaseAnalyzer/logic.ts:1)
+- src/mcp-server/tools/projectOrchestratorCreate/[logic.ts](src/mcp-server/tools/projectOrchestratorCreate/logic.ts:1)
+- src/mcp-server/tools/projectOrchestratorAnalyze/[logic.ts](src/mcp-server/tools/projectOrchestratorAnalyze/logic.ts:1)
+
+Geliştirici rehberi:
+
+- Yeni dosya/payload path alanları eklerken:
+  - Her zaman `BASE_DIR` referansını kullanın.
+  - Mutlaka `validateSecurePath` benzeri güvenli doğrulama yardımcılarını entegre edin.
+  - `BASE_DIR` dışına çıkmayı gerektiren bir senaryo varsa, bu açıkça belgelenmeli ve ek kontrol (allowlist vb.) ile sınırlandırılmalıdır.
+
+İlgili dosyalar:
+
+- src/[index.ts](src/index.ts:1)
+- src/mcp-server/utils/[securePathValidator.ts](src/mcp-server/utils/securePathValidator.ts:1)
+- tests/unit/mcp-server/utils/[securePathValidator.test.ts](tests/unit/mcp-server/utils/securePathValidator.test.ts:1)
+
+## SEC-03) Authorization Scopes
+
+Bu bölüm, MCP araç ve blueprint’leri için yetkilendirme kapsamlarının (scopes) nasıl enforce edildiğini özetler.
+
+### Scope Tabanlı Yetkilendirme Modeli
+
+- Her kritik tool/blueprint, `withRequiredScopes` aracılığıyla açık şekilde tanımlanmış scope setleri ile korunur.
+- İstemci, çağırdığı işlev için ilgili scope’lara sahip değilse işlem reddedilir.
+- Böylece tek bir genel token ile tüm yüksek yetkili özelliklere erişim engellenir; minimum yetki ilkesi uygulanır.
+
+Örnek scope atamaları:
+
+- geminiCodebaseAnalyzer → `analysis:read`, `codebase:read`
+- projectOrchestratorCreate → `orchestration:write`
+- projectOrchestratorAnalyze → `orchestration:read`
+- mcpSetupGuide → `config:read`
+- dynamicExpertCreate → `expert:create`
+- dynamicExpertAnalyze → `expert:analyze`
+- calculateTokenCount → `analysis:read`
+- echoResource / echoTool / catFactFetcher / imageTest → ilgili minimal ve sınırlı okuma scope’ları
+
+### Hata Davranışı
+
+Merkezi testler ile aşağıdaki davranış garanti altına alınmıştır:
+
+- Eksik veya yetersiz scope:
+  - İstek, yetkilendirme katmanında engellenir.
+  - Dışarıya 403/`FORBIDDEN` semantiğinde yanıt döndürülür.
+- Eksik auth context (beklenen kimlik bilgisi yok, yanlış bağlam):
+  - Bu durum konfigürasyon veya entegrasyon hatası olarak değerlendirilir.
+  - Dışarıya 500 serisi / `INTERNAL_ERROR` semantiğinde güvenli bir hata döner; hassas iç detaylar loglarda da redakte edilir.
+
+İlgili dosyalar:
+
+- tests/unit/mcp-server/transports/[authorizationScopes.test.ts](tests/unit/mcp-server/transports/authorizationScopes.test.ts:1)
+- İlgili tool ve blueprint registration dosyaları (scope tanımları)
+
+## SEC-04) Rate Limiting
+
+Bu bölüm, kimlik-temelli ve IP-aware rate limiting stratejisini açıklar.
+
+### Kimlik Temelli Anahtar Stratejisi
+
+Rate limiter, istek bağlamından kimlik bilgilerini okuyarak adil ve güvenli bir sınırlama uygular:
+
+- userId mevcutsa → `id:{userId}`
+- clientId mevcutsa → `client:{clientId}`
+- Yalnızca IP mevcutsa → `ip:{address}`
+- Auth yok, IP yok veya belirsiz konteks → `anon:global`
+  - Bu bucket daha sıkı limitler ile yapılandırılmalıdır.
+
+`anon:global` modeli:
+
+- Kimliği olmayan istemciler paylaşılan ve kısıtlı bir kovayı paylaşır.
+- Böylece kimliksiz taramalar, kimliği doğrulanmış üretim trafiğini tüketemez.
+
+### HTTP Transport Entegrasyonu
+
+- src/mcp-server/transports/[httpTransport.ts](src/mcp-server/transports/httpTransport.ts:1) içinde:
+  - authContext ve istemci IP’sinden `RequestContextLike` türetilir.
+  - `RateLimiter.check("http:mcp", context)` çağrısı ile kimlik/IP-aware limit uygulanır.
+- Limit aşıldığında:
+  - `RATE_LIMITED` sonucu HTTP 429 Too Many Requests olarak map edilir.
+  - Yanıt ve log formatı `httpErrorHandler` ile tutarlıdır.
+
+### Konfigürasyon
+
+Rate limiting parametreleri [.env.example](.env.example:1) içinde örneklendirilmiştir:
+
+- `RATE_LIMIT_WINDOW_MS`: pencere süresi
+- `RATE_LIMIT_MAX_REQUESTS`: pencere başına izin verilen istek sayısı
+
+Operasyon notları:
+
+- Üretim ortamında bu değerler yük profiline göre ayarlanmalı ve gözlemlenebilirlik metrikleri ile izlenmelidir.
+- Rate limit olayları loglanırken, kimlik/anahtar bilgileri sanitizasyon katmanı tarafından redakte edilir.
+
+İlgili dosyalar:
+
+- src/utils/security/[rateLimiter.ts](src/utils/security/rateLimiter.ts:1)
+- src/mcp-server/transports/[httpTransport.ts](src/mcp-server/transports/httpTransport.ts:1)
+- tests/unit/utils/[rateLimiter.test.ts](tests/unit/utils/rateLimiter.test.ts:1)
+
+## SEC-05) CI & Supply Chain Security
+
+Bu bölüm, CI süreçleri ve tedarik zinciri güvenliğinin, kod kalitesi ve bağımlılık güvenliği ile birlikte nasıl işletildiğini açıklar.
+
+### CI Pipeline Sertleştirmeleri
+
+- [.github/workflows/ci.yml](.github/workflows/ci.yml:1):
+  - Lint, build, unit ve integration testleri zorunlu.
+  - Build sonrasında `npm audit --production --audit-level=high` çalıştırılır.
+  - Ayrı CodeQL job’ı:
+    - `github/codeql-action/init`, `autobuild`, `analyze` adımları ile statik kod analizi.
+  - GitHub Actions izinleri minimal tutulmuştur.
+  - Haftalık schedule ile periyodik güvenlik taramaları tetiklenir.
+
+### Publish Pipeline
+
+- [.github/workflows/publish.yml](.github/workflows/publish.yml:1):
+  - Pre-publish aşamasında yüksek seviye odaklı `npm audit` kontrolü.
+  - Sadece gerekli izinlerle minimal permission set.
+  - Sadece `NPM_TOKEN` kullanımı; gereksiz secret’lar pipeline’a verilmez.
+
+### Dependabot ve Bağımlılık Yönetimi
+
+- [.github/dependabot.yml](.github/dependabot.yml:1):
+  - `npm` ve `github-actions` ekosistemleri için günlük tarama.
+  - Güvenlik yamaları ve güncellemeler için otomatik PR üretimi.
+
+### Log Redaksiyonu ile Entegrasyon
+
+- Dependabot, CodeQL, npm audit ve benzeri araçların ürettiği bulgular:
+  - Merkezi loglama altyapısına aktarılırken sanitizasyon katmanı devrededir.
+  - Gizli anahtarlar, token’lar ve hassas yapılandırma değerleri rapor/log çıktılarında `[REDACTED]` olarak maskelenir.
+- Böylece:
+  - Tedarik zinciri ve güvenlik uyarılarının görünürlüğü korunur.
+  - Aynı zamanda operasyon loglarında ek bir veri sızıntısı yüzeyi oluşmaz.
+
+## SEC-06) İzleme, Olay Tepkisi ve Dağıtım Topolojisi
+
+- Log seviyeleri (`MCP_LOG_LEVEL`) prod’da `info`/`warning` aralığında tutulmalıdır.
+- Error korelasyonu için:
+  - İstek kimliği, kullanıcı/scope bilgisi ve zaman damgası loglarda yer almalı, içerik ise sanitize edilmiş olmalıdır.
+- Olay tepkisi:
+  - Yetkisiz erişim (401/403), eksik scope, INTERNAL_ERROR, rate limit isabetleri ve path/sanitizasyon validasyon hataları:
+    - Metriklenmeli,
+    - Alarm ve dashboard’larla izlenmelidir.
+- Önerilen dağıtım:
+  - MCP HTTP servisi → Reverse proxy (CSP/HSTS/ek rate limit) → Özel ağ → OAuth/JWKS.
+  - STDIO sadece kapalı/yerel IDE/desktop senaryolarında kullanılmalıdır.
+
+# Güvenlik Sertleştirme Rehberi
+
+Bu doküman, Gemini MCP Local projesini prod ortamlarında güvenli ve dayanıklı şekilde çalıştırmak için önerilen sertleştirme adımlarını içerir. Aşağıdaki pratikler HTTP/STDIO transportları, kimlik doğrulama, giriş doğrulama/sanitizasyon, kaynak sınırları ve tedarik zinciri güvenliğini kapsar.
+
 ## 1) Kimlik Doğrulama ve Yetkilendirme
 
 - HTTP transportta auth’u zorunlu tutun:

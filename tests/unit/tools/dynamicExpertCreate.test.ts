@@ -1,22 +1,83 @@
 /**
- * @fileoverview Tests for dynamicExpertCreate limits (file count & size).
+ * @fileoverview Tests for dynamicExpertCreate limits (file count & size)
+ * and authorization behavior for the gemini_dynamic_expert_create tool.
  */
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
 import { promises as fs } from "fs";
 import path from "path";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
 import {
   dynamicExpertCreateLogic,
   type DynamicExpertCreateInput,
 } from "../../../src/mcp-server/tools/dynamicExpertCreate/logic.js";
+import { registerDynamicExpertCreate } from "../../../src/mcp-server/tools/dynamicExpertCreate/registration.js";
 import { requestContextService } from "../../../src/utils/index.js";
 import {
   MCP_CONTENT_END_MARKER,
   MCP_CONTENT_START_MARKER,
 } from "../../../src/mcp-server/tools/mcpSetupGuide/logic.js";
+import {
+  McpError,
+  BaseErrorCode,
+} from "../../../src/types-global/errors.js";
+import { authContext } from "../../../src/mcp-server/transports/auth/core/authContext.js";
 
 const TEST_ROOT = path.join(process.cwd(), ".test-temp");
+
+class TestMcpServer extends McpServer {
+  public registeredTools: Map<
+    string,
+    {
+      description: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      inputSchema: any;
+      handler: (params: unknown) => Promise<CallToolResult>;
+    }
+  > = new Map();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tool(name: string, description: string, inputSchema: any, handler: any): void {
+    this.registeredTools.set(name, {
+      description,
+      inputSchema,
+      handler,
+    });
+  }
+}
+
+// Helper to invoke the registered tool handler under a given auth context.
+async function callWithAuthContext(
+  scopes: string[] | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handler: (params: any) => Promise<CallToolResult>,
+) {
+  const params: DynamicExpertCreateInput = {
+    projectPath: ".",
+    expertiseHint: "Test expert",
+    ignoreMcpignore: false,
+    temporaryIgnore: [],
+  };
+
+  if (scopes) {
+    return await authContext.run(
+      {
+        authInfo: {
+          clientId: "test-client",
+          subject: "test-subject",
+          scopes,
+        },
+      },
+      async () => handler(params),
+    );
+  }
+
+  // No auth context at all
+  return handler(params);
+}
 
 async function createSequentialFiles(
   directory: string,
@@ -60,6 +121,91 @@ describe("dynamicExpertCreateLogic limits", () => {
     await seedMcpGuide(testDir);
     context = requestContextService.createRequestContext({
       operation: "dynamicExpertCreateTest",
+    });
+  });
+  
+  describe("gemini_dynamic_expert_create authorization scopes", () => {
+    it("rejects with FORBIDDEN when required expert:create scope is missing", async () => {
+      const server = new TestMcpServer();
+      await registerDynamicExpertCreate(server);
+  
+      const tool = server.registeredTools.get("gemini_dynamic_expert_create");
+      assert.ok(tool, "gemini_dynamic_expert_create tool should be registered");
+  
+      await assert.rejects(
+        () => callWithAuthContext(["some:other"], tool!.handler),
+        (error: unknown) => {
+          assert.ok(error instanceof McpError, "Error should be McpError");
+          assert.strictEqual(
+            error.code,
+            BaseErrorCode.FORBIDDEN,
+            "Missing expert:create scope should yield FORBIDDEN",
+          );
+          return true;
+        },
+      );
+    });
+  
+    it("rejects with INTERNAL_ERROR when auth context is missing", async () => {
+      const server = new TestMcpServer();
+      await registerDynamicExpertCreate(server);
+  
+      const tool = server.registeredTools.get("gemini_dynamic_expert_create");
+      assert.ok(tool, "gemini_dynamic_expert_create tool should be registered");
+  
+      await assert.rejects(
+        () => callWithAuthContext(null, tool!.handler),
+        (error: unknown) => {
+          assert.ok(error instanceof McpError, "Error should be McpError");
+          assert.strictEqual(
+            error.code,
+            BaseErrorCode.INTERNAL_ERROR,
+            "Missing auth context should be treated as INTERNAL_ERROR",
+          );
+          return true;
+        },
+      );
+    });
+  
+    it("allows execution when expert:create scope is present", async () => {
+      const server = new TestMcpServer();
+      await registerDynamicExpertCreate(server);
+  
+      const tool = server.registeredTools.get("gemini_dynamic_expert_create");
+      assert.ok(tool, "gemini_dynamic_expert_create tool should be registered");
+  
+      let caught: unknown | null = null;
+      try {
+        const result = await callWithAuthContext(
+          ["expert:create"],
+          tool!.handler,
+        );
+        assert.ok(result, "Expected a CallToolResult-like response");
+        // If it somehow returns isError FORBIDDEN, treat as failure
+        if ("isError" in result && result.isError === true) {
+          const text =
+            Array.isArray(result.content) && result.content[0]?.type === "text"
+              ? result.content[0].text
+              : "";
+          assert.ok(
+            !/FORBIDDEN/i.test(text),
+            "Result should not indicate FORBIDDEN when expert:create is present",
+          );
+        }
+      } catch (err) {
+        caught = err;
+      }
+  
+      if (caught) {
+        assert.ok(caught instanceof Error);
+        if (caught instanceof McpError) {
+          assert.notStrictEqual(
+            caught.code,
+            BaseErrorCode.FORBIDDEN,
+            "Should not throw FORBIDDEN when expert:create scope is present",
+          );
+        }
+      }
     });
   });
 

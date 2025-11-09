@@ -125,4 +125,63 @@ describe("projectOrchestratorCreateLogic batching", () => {
     assert.strictEqual(groupingCalls.length, 1);
     assert.strictEqual(groupingCalls[0].length, fileCount);
   });
+
+describe("projectOrchestratorCreate security (scope enforcement)", () => {
+  it("throws INTERNAL_ERROR when auth context is missing", () => {
+    // withRequiredScopes will throw INTERNAL_ERROR when auth context/store is missing.
+    const { withRequiredScopes } = require("../../../src/mcp-server/transports/auth/core/authUtils.js");
+    try {
+      withRequiredScopes(["orchestration:write"]);
+      assert.fail("Expected withRequiredScopes to throw due to missing auth context");
+    } catch (error: any) {
+      assert.strictEqual(error?.code, "INTERNAL_ERROR");
+    }
+  });
+
+  it("throws FORBIDDEN when required orchestration:write scope is missing", () => {
+    const { authContext } = require("../../../src/mcp-server/transports/auth/core/authContext.js");
+    const { withRequiredScopes } = require("../../../src/mcp-server/transports/auth/core/authUtils.js");
+    const { McpError, BaseErrorCode } = require("../../../src/types-global/errors.js");
+
+    const store = {
+      authInfo: {
+        clientId: "test-client",
+        subject: "test-subject",
+        scopes: ["orchestration:read"], // missing orchestration:write
+      },
+    };
+
+    authContext.run(store, () => {
+      try {
+        withRequiredScopes(["orchestration:write"]);
+        assert.fail("Expected withRequiredScopes to throw FORBIDDEN when scope is missing");
+      } catch (error: any) {
+        assert.ok(error instanceof McpError);
+        assert.strictEqual(error.code, BaseErrorCode.FORBIDDEN);
+      }
+    });
+  });
+
+  it("allows execution when orchestration:write scope is present", () => {
+    const { authContext } = require("../../../src/mcp-server/transports/auth/core/authContext.js");
+    const { withRequiredScopes } = require("../../../src/mcp-server/transports/auth/core/authUtils.js");
+    const { McpError } = require("../../../src/types-global/errors.js");
+
+    const store = {
+      authInfo: {
+        clientId: "test-client",
+        subject: "test-subject",
+        scopes: ["orchestration:write"],
+      },
+    };
+
+    authContext.run(store, () => {
+      try {
+        withRequiredScopes(["orchestration:write"]);
+      } catch (error: any) {
+        assert.fail(`Did not expect withRequiredScopes to throw, but got: ${error?.message}`);
+      }
+    });
+  });
+});
 });

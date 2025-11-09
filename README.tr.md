@@ -171,6 +171,68 @@ Son N commit:
 
 ---
 
+## Güvenlik ve Mimari Öne Çıkanlar
+
+### Scope Tabanlı Yetkilendirme (BREAKING CHANGE)
+
+Tüm MCP araç ve kaynakları artık açık, scope tabanlı yetki modeliyle korunur. İstemciler, kimliklerine bağlı uygun scope setlerini göndermelidir; yetkisiz scope talepleri transport katmanında reddedilir.
+
+Örnek scope'lar:
+- `analysis:read` – analiz akışları ve raporlara erişim
+- `codebase:read` – depo/içerik okuma & inceleme
+- `orchestration:*` – proje orkestratör araçları
+- `tools:invoke` – MCP araç çağrıları
+- `resources:read` – MCP kaynak erişimi
+
+Tam scope listesi ve kırıcı değişiklik detayları için ilgili sürümün [CHANGELOG](CHANGELOG.md:1) girdisine bakın.
+
+### Güvenli Yol Yönetimi (BASE_DIR + validateSecurePath)
+
+Tüm dosya sistemi erişimleri, tanımlı bir proje köküne (`BASE_DIR`) sabitlenir. [`validateSecurePath`](src/mcp-server/utils/securePathValidator.ts:1) benzeri yardımcılar path traversal girişimlerini engeller ve araçların proje kökü dışına çıkmasını önler. Bu yaklaşım; kod analizi, diff okuma ve dosya tabanlı MCP kaynakları için tutarlı şekilde uygulanır.
+
+### Rate Limiting ve Redis Desteği
+
+Sunucu, upstream LLM sağlayıcılarını ve yerel kaynaklarınızı korumak için hız sınırlama katmanına sahiptir.
+
+- Varsayılan: Bellek içi (lokal/single-node senaryolar için).
+- Redis backend etkinleştirme:
+  - `MCP_RATE_LIMIT_STORE=redis`
+  - `REDIS_URL=redis://user:pass@host:6379/0`
+- Anahtar kimlik öncelik sırası:
+  1. `userId`
+  2. `clientId`
+  3. `ip`
+  4. `anon:global`
+
+Bu model, farklı istemciler arasında adil kullanım ve suiistimal koruması sağlar.
+
+### Oturum Deposu (Session Store)
+
+HTTP oturum sahipliği ve koordinasyonu benzer esnek yapıyı kullanır:
+
+- Varsayılan: Bellek içi (basit dağıtımlar için).
+- Redis: `MCP_SESSION_STORE=redis` ile etkinleştirildiğinde çoklu instance senaryolarında tutarlı yönlendirme ve stickiness desteği sağlar.
+
+### CI/CD Güvenliği
+
+Tavsiye edilen yayın hattı, güvenli yayın ve bağımlılık hijyenini hedefler:
+
+- Üretim bağımlılıkları için `npm audit --production --audit-level=high` çalıştırılması,
+- CodeQL (veya eşdeğer) statik analiz ile güvenlik regresyonlarının yakalanması,
+- Dependabot benzeri araçlarla otomatik güvenlik güncellemeleri,
+- `publish.yml` iş akışının yalnızca SemVer etiketleri (`v*.*.*`) ile tetiklenmesi; böylece yayınların izlenebilir olması.
+
+### Log Maskeleme (Redaction)
+
+Log çıktılarında hassas değerler agresif şekilde maskelenir.
+
+- `MCP_REDACT_KEYS` ile (virgülle ayrılmış) ek redaksiyon anahtarları tanımlanabilir.
+- Bu anahtarlara uyan değerler dahili logger tarafından üretilen yapılandırılmış loglarda otomatik gizlenir.
+
+> Not: README.tr, İngilizce README ile senkron tutulur. Gelecekte planlanan `translate-readme` workflow'u, iki dil arasındaki drift'i minimumda tutmak için kullanılacaktır.
+
+---
+
 ## Güvenlik
 
 Üretim ortamı için sertleştirme rehberi: `docs/security-hardening.md`

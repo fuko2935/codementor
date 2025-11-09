@@ -25,10 +25,17 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import http from "http"; // Import http module
+import { fileURLToPath } from "node:url";
 import { config, environment } from "./config/index.js";
 import { initializeAndStartServer } from "./mcp-server/server.js";
 import { requestContextService } from "./utils/index.js";
 import { logger, McpLogLevel } from "./utils/internal/logger.js";
+
+/**
+ * Central application base directory for secure path validations (SEC-01).
+ * Resolves to the trusted project root directory.
+ */
+export const BASE_DIR: string = fileURLToPath(new URL("..", import.meta.url));
 
 /**
  * Holds the main MCP server instance, primarily for STDIO transport.

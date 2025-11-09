@@ -2,6 +2,10 @@
 
 ## [2.10.4] - 2025-11-09
 
+### Security / Breaking Changes
+- BREAKING CHANGE: All MCP tools, resources, and transports now enforce fine-grained authorization scopes. Requests that previously succeeded without explicit scopes may now receive `403 Forbidden` responses.
+- Clients MUST include appropriate scopes in their tokens (for example: `analysis:read`, `codebase:read`, `codebase:write`, `orchestration:*`, `tools:invoke`, `resources:read`) to access corresponding capabilities. Update your token scope configuration before upgrading to this version.
+
 ### Documentation
 - Compact MCP-first guide synchronized into template and injected block:
   - Template updated: src/mcp-server/tools/mcpSetupGuide/templates/mcp-guide.md

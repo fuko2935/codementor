@@ -5,10 +5,18 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+  # Weekly scheduled security scan (npm audit high+ and CodeQL) - SEC-03
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       NODE_ENV: test
       MCP_AUTH_SECRET_KEY: ci-secret-key-ci-secret-key-ci-secret-key-123456
@@ -25,6 +33,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run npm audit
+        run: npm audit --production --audit-level=high
+
       - name: Lint
         run: npm run lint
 
@@ -39,3 +50,29 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      matrix:
+        language: [ 'javascript-typescript' ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'

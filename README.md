@@ -216,6 +216,66 @@ The `analysisMode` parameter supports the following modes:
 
 ---
 
+## Security & Architecture Highlights
+
+### Scope-based Authorization (BREAKING CHANGE)
+
+All MCP tools and resources now enforce explicit, least-privilege scopes. Clients must send appropriate scopes tied to their identity; unauthorized scopes are rejected at the transport layer.
+
+Example scopes:
+- `analysis:read` – access to analysis flows and reports
+- `codebase:read` – repository/content inspection
+- `orchestration:*` – project orchestrator helpers
+- `tools:invoke` – execution of registered MCP tools
+- `resources:read` – access to MCP resources
+
+For exact scope names and migration details, see the [CHANGELOG](CHANGELOG.md:1) entry for this release.
+
+### Secure Path Handling (BASE_DIR + validateSecurePath)
+
+All filesystem access is constrained to a well-defined project root (`BASE_DIR`). Helper utilities (such as [`validateSecurePath`](src/mcp-server/utils/securePathValidator.ts:1)) prevent path traversal and disallow resolving files outside this base directory. This applies to codebase analysis, diff loading, and any file-backed MCP resources.
+
+### Rate Limiting & Redis Support
+
+The server includes a defensive rate limiter to protect upstream LLM APIs and your infrastructure.
+
+- Default store: in-memory (suitable for local/single-node use).
+- Redis backend: enable with:
+  - `MCP_RATE_LIMIT_STORE=redis`
+  - `REDIS_URL=redis://user:pass@host:6379/0`
+- Identity hierarchy for keys (most specific wins):
+  1. `userId`
+  2. `clientId`
+  3. `ip`
+  4. `anon:global`
+
+This allows fair usage and abuse protection across heterogeneous clients.
+
+### Session Store
+
+HTTP session ownership metadata follows the same pluggable pattern:
+
+- In-memory (default) for simple/local setups.
+- Redis-backed when `MCP_SESSION_STORE=redis` is set, enabling consistent routing and stickiness across multiple instances.
+
+### CI/CD Security Controls
+
+The recommended pipeline is hardened around secure publishing:
+
+- Dependency scanning (e.g. `npm audit --production --audit-level=high`) on critical paths.
+- CodeQL (or equivalent) static analysis for security regressions.
+- Automated dependency updates (e.g. Dependabot) for timely patching.
+- `publish.yml` gated on semantic version tags (`v*.*.*`) to keep releases auditable.
+
+### Log Redaction
+
+Sensitive values are aggressively redacted from logs.
+
+- Configure redaction via `MCP_REDACT_KEYS` (comma-separated).
+- Secrets matching these keys are masked in structured logs produced by the internal logger.
+
+---
+
 ## Security
 
 Security Hardening Guide:

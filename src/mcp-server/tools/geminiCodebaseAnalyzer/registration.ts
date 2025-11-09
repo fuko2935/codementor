@@ -14,6 +14,7 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
+import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
 import { config } from "../../../config/index.js";
 import {
   GeminiCodebaseAnalyzerInput,
@@ -56,6 +57,10 @@ export const registerGeminiCodebaseAnalyzer = async (
         async (
           params: GeminiCodebaseAnalyzerInput,
         ): Promise<CallToolResult> => {
+          // Enforce required authorization scopes before processing the request.
+          // This will throw McpError(BaseErrorCode.FORBIDDEN, ...) if scopes are insufficient.
+          withRequiredScopes(["analysis:read", "codebase:read"]);
+
           const toolContext: RequestContext =
             requestContextService.createRequestContext({
               operation: "GeminiCodebaseAnalysis",

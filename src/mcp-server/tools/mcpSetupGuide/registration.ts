@@ -7,6 +7,7 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
+import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
 
 import {
   McpSetupGuideInputSchema,
@@ -44,6 +45,11 @@ export const registerMcpSetupGuide = async (
           params: McpSetupGuideInput,
           _mcpContext,
         ): Promise<CallToolResult> => {
+          // Enforce required authorization scopes for this tool.
+          // - Missing auth context -> McpError(BaseErrorCode.INTERNAL_ERROR)
+          // - Missing required scopes -> McpError(BaseErrorCode.FORBIDDEN)
+          withRequiredScopes(["config:read"]);
+
           const handlerContext: RequestContext =
             requestContextService.createRequestContext({
               parentRequestId: registrationContext.requestId,

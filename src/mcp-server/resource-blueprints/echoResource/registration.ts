@@ -20,6 +20,7 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
+import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
 import { EchoResourceParams, echoResourceLogic } from "./echoResourceLogic.js";
 
 /**
@@ -69,6 +70,13 @@ export const registerEchoResource = async (
           uri: URL,
           params: EchoResourceParams,
         ): Promise<ReadResourceResult> => {
+          // Enforce required authorization scope for reading resources.
+          // Throws:
+          // - McpError(BaseErrorCode.INTERNAL_ERROR) if auth context is missing (misconfiguration).
+          // - McpError(BaseErrorCode.FORBIDDEN) if "resource:read" scope is not granted.
+          // - Continues execution unchanged when the required scope is present.
+          withRequiredScopes(["resource:read"]);
+
           const handlerContext: RequestContext =
             requestContextService.createRequestContext({
               parentRequestId: registrationContext.requestId,

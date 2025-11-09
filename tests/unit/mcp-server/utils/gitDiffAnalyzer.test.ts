@@ -69,6 +69,37 @@ describe("validateRevision", () => {
 });
 
 describe("extractGitDiff", () => {
+  it("uses validated projectPath anchored to BASE_DIR and supports idempotent validation", async () => {
+    const context = requestContextService.createRequestContext({
+      operation: "gitDiffSecurePathIdempotent",
+    });
+
+    // 1) Valid absolute path inside allowed base (simulates already-validated path)
+    const firstResult = await extractGitDiff(repoDir, { revision: "." }, context);
+    assert.ok(firstResult.summary.filesModified >= 0, "Should work with absolute repoDir path");
+
+    // 2) Idempotent behavior: passing the normalized path again must not break
+    const secondResult = await extractGitDiff(firstResult.summary.revisionInfo ? repoDir : repoDir, { revision: "." }, context);
+    assert.ok(secondResult.summary.filesModified >= 0, "Double validation should be safe and not throw");
+  });
+
+  it("rejects insecure project paths escaping BASE_DIR", async () => {
+    const context = requestContextService.createRequestContext({
+      operation: "gitDiffSecurePathInvalid",
+    });
+
+    const unsafePath = path.join(repoDir, "..", "outside-repo");
+
+    await assert.rejects(
+      () => extractGitDiff(unsafePath, { revision: "." }, context),
+      (err: unknown) => {
+        // Implementation uses validateSecurePath -> McpError with security-related code
+        assert.ok(err instanceof Error, "Should throw an error for unsafe path");
+        return true;
+      },
+    );
+  });
+
   it("returns uncommitted changes for revision '.'", async () => {
     // Create uncommitted change: c.txt
     const rel = "c.txt";

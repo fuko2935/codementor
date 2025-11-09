@@ -2,9 +2,11 @@ import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { logger, type RequestContext } from "../../../utils/index.js";
 import { config } from "../../../config/index.js";
+import { BASE_DIR } from "../../../index.js";
 import { createModelByProvider } from "../../../services/llm-providers/modelFactory.js";
 import { getSystemPrompt } from "../../prompts.js";
 import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
+import { validateSecurePath } from "../../utils/securePathValidator.js";
 
 // Common interface for LLM models (both Google AI and gemini-cli)
 interface LLMModel {
@@ -293,8 +295,15 @@ export async function projectOrchestratorAnalyzeLogic(
   params: ProjectOrchestratorAnalyzeInput,
   context: RequestContext,
 ): Promise<ProjectOrchestratorAnalyzeResponse> {
-  // Validate MCP configuration exists before orchestration
-  await validateMcpConfigExists(params.projectPath, context);
+  // Validate and secure the project path against the central BASE_DIR (SEC-01)
+  const normalizedProjectPath = await validateSecurePath(
+    params.projectPath,
+    BASE_DIR,
+    context,
+  );
+
+  // Validate MCP configuration exists before orchestration (using normalized path)
+  await validateMcpConfigExists(normalizedProjectPath, context);
 
   let groupsBlobUnknown: unknown;
   try {
@@ -410,5 +419,6 @@ export async function projectOrchestratorAnalyzeLogic(
     groups: groups.length,
   });
 
-  return { projectPath: params.projectPath, analysis };
+  // Return normalized project path to reflect validated, secure path
+  return { projectPath: normalizedProjectPath, analysis };
 }

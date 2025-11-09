@@ -11,6 +11,8 @@ import path from "path";
 import { logger, type RequestContext } from "../../utils/index.js";
 import { McpError, BaseErrorCode } from "../../types-global/errors.js";
 import { config } from "../../config/index.js";
+import { BASE_DIR } from "../../index.js";
+import { validateSecurePath } from "./securePathValidator.js";
 
 /**
  * Type guard to check if a diff file is a text file (has insertions/deletions).
@@ -194,7 +196,11 @@ export async function extractGitDiff(
   params: ExtractGitDiffParams,
   context: RequestContext,
 ): Promise<DiffResultData> {
-  const git: SimpleGit = simpleGit(projectPath);
+  // Enforce secure, idempotent project path validation before any git operations.
+  // - Uses BASE_DIR as the trusted repository root anchor.
+  // - Safe for double invocation: validateSecurePath is idempotent and returns a normalized path.
+  const validatedProjectPath = await validateSecurePath(projectPath, BASE_DIR, context);
+  const git: SimpleGit = simpleGit(validatedProjectPath);
 
   try {
     let diffSummary: DiffResult["files"];

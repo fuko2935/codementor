@@ -12,6 +12,7 @@ import { glob } from "glob";
 import { logger, type RequestContext, createIgnoreInstance } from "../../../utils/index.js";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { config } from "../../../config/index.js";
+import { BASE_DIR } from "../../../index.js";
 import { createModelByProvider } from "../../../services/llm-providers/modelFactory.js";
 import { getSystemPrompt } from "../../prompts.js";
 import { validateProjectSize } from "../../utils/projectSizeValidator.js";
@@ -366,8 +367,12 @@ export async function geminiCodebaseAnalyzerLogic(
     // Validate with refined schema (includes check that includeChanges requires review mode)
     const validatedParams = GeminiCodebaseAnalyzerInputSchema.parse(params);
 
-    // Validate and secure the project path
-    const normalizedPath = await validateSecurePath(validatedParams.projectPath, process.cwd(), context);
+    // Validate and secure the project path against the central BASE_DIR
+    const normalizedPath = await validateSecurePath(
+      validatedParams.projectPath,
+      BASE_DIR,
+      context,
+    );
 
     // Validate project size before making LLM API call
     const sizeValidation = await validateProjectSize(

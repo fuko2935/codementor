@@ -91,7 +91,49 @@ export class Sanitization {
     "card",
     "cvv",
     "authorization",
+    "access_key",
+    "secret_key",
+    "api_token",
   ];
+
+  /**
+   * Returns the effective sensitive fields list combining:
+   * - built-in defaults (this.sensitiveFields)
+   * - optional MCP_REDACT_KEYS env configuration (comma-separated)
+   *
+   * Env davranışı:
+   * - Tanımlı değilse: sadece mevcut davranış (hardcoded liste) kullanılır.
+   * - Tanımlıysa:
+   *   - Değer virgülle bölünür.
+   *   - Her öğe trim + lowercase ile normalize edilir.
+   *   - Boş kayıtlar atılır.
+   *   - Hardcoded liste ile birlikte tekil bir birleşim oluşturulur.
+   *
+   * Redaksiyon mantığıyla uyumlu olması için tüm değerler lowercase saklanır
+   * ve redactSensitiveFields içinde olduğu gibi case-insensitive substring
+   * eşleşmesine uygun formatta döndürülür.
+   *
+   * @private
+   */
+  private getEffectiveSensitiveFields(): string[] {
+    const base = this.sensitiveFields.map((field) => field.toLowerCase());
+
+    const env = process.env.MCP_REDACT_KEYS;
+    if (!env) {
+      return base;
+    }
+
+    const extra = env
+      .split(",")
+      .map((part) => part.trim().toLowerCase())
+      .filter((part) => part.length > 0);
+
+    if (extra.length === 0) {
+      return base;
+    }
+
+    return [...new Set([...base, ...extra])];
+  }
 
   /**
    * Default configuration for HTML sanitization.
@@ -583,11 +625,13 @@ export class Sanitization {
       return;
     }
 
+    const effectiveSensitiveFields = this.getEffectiveSensitiveFields();
+
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
         const value = (obj as Record<string, unknown>)[key];
         const lowerKey = key.toLowerCase();
-        const isSensitive = this.sensitiveFields.some((field) =>
+        const isSensitive = effectiveSensitiveFields.some((field) =>
           lowerKey.includes(field),
         );
 

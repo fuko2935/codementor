@@ -28,11 +28,12 @@ import { config } from "../../config/index.js";
 import { BaseErrorCode, McpError } from "../../types-global/errors.js";
 import {
   logger,
-  rateLimiter,
   RequestContext,
   requestContextService,
 } from "../../utils/index.js";
+import { createRateLimiter } from "../../utils/security/rateLimiter.js";
 import { jwtAuthMiddleware, oauthMiddleware } from "./auth/index.js";
+import { authContext } from "./auth/core/authContext.js";
 import { httpErrorHandler } from "./httpErrorHandler.js";
 import { createSessionCoordinator, generateInstanceId } from "./sessionStore.js";
 
@@ -49,6 +50,10 @@ const MAX_PORT_RETRIES = 15;
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 // Unique identifier for this server instance (used for session ownership)
 const INSTANCE_ID = generateInstanceId();
+
+// HTTP transport için pluggable rate limiter (memory/redis).
+// Seçim mantığı src/utils/security/rateLimiter.ts içindeki createRateLimiter tarafından yönetilir.
+const httpRateLimiter = createRateLimiter();
 
 async function isPortInUse(
   port: number,
@@ -173,17 +178,49 @@ export async function startHttpTransport(
   });
 
   app.use(MCP_ENDPOINT_PATH, async (c: Context, next: Next) => {
-    // NOTE (Security): The 'x-forwarded-for' header is used for rate limiting.
-    // This is only secure if the server is run behind a trusted proxy that
-    // correctly sets or validates this header.
-    const clientIp =
-      c.req.header("x-forwarded-for")?.split(",")[0].trim() || "unknown_ip";
-    const context = requestContextService.createRequestContext({
-      operation: "httpRateLimitCheck",
-      ipAddress: clientIp,
-    });
-    // Let the centralized error handler catch rate limit errors
-    rateLimiter.check(clientIp, context);
+    /**
+     * Identity-aware rate limiting for HTTP MCP requests.
+     *
+     * Strategy:
+     * - Build a minimal RequestContextLike compatible object:
+     *   - authInfo: resolved from AsyncLocalStorage-based authContext (if set by auth middleware)
+     *   - ip: best-effort client IP resolution
+     * - Use a stable base key for HTTP transport ("http:mcp").
+     * - Delegate identity/IP specific key derivation to RateLimiter.resolveRateLimitKey.
+     *
+     * NOTE:
+     * - x-forwarded-for is only trustworthy behind a trusted proxy; we only use
+     *   the first value as a best-effort signal and otherwise fall back to req.ip.
+     */
+    const forwardedFor = c.req.header("x-forwarded-for");
+    const ipFromHeader = forwardedFor
+      ? forwardedFor.split(",")[0].trim()
+      : undefined;
+    const ip =
+      (ipFromHeader && ipFromHeader.length > 0 ? ipFromHeader : c.req.raw?.socket?.remoteAddress) ||
+      undefined;
+
+    // Read auth info from the AsyncLocalStorage, if populated by upstream auth middleware.
+    const store = authContext.getStore();
+    const authInfo = store?.authInfo
+      ? {
+          userId: store.authInfo.userId,
+          clientId: store.authInfo.clientId,
+        }
+      : undefined;
+
+    const rateLimitContext = {
+      authInfo,
+      ip,
+      path: c.req.path,
+      method: c.req.method,
+    };
+
+    const baseKey = "http:mcp";
+
+    // Will throw McpError(BaseErrorCode.RATE_LIMITED, ...) on violation.
+    await httpRateLimiter.check(baseKey, rateLimitContext);
+
     await next();
   });
 

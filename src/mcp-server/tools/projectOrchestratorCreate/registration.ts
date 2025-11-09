@@ -7,7 +7,8 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
- 
+import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
+
 import {
   ProjectOrchestratorCreateInputSchema,
   projectOrchestratorCreateLogic,
@@ -37,6 +38,12 @@ export const registerProjectOrchestratorCreate = async (
         async (
           params: ProjectOrchestratorCreateInput,
         ): Promise<CallToolResult> => {
+          // Enforce required authorization scope for this tool.
+          // Throws:
+          // - McpError(BaseErrorCode.INTERNAL_ERROR) if auth context is missing.
+          // - McpError(BaseErrorCode.FORBIDDEN) if required scope is not present.
+          withRequiredScopes(["orchestration:write"]);
+
           const toolContext: RequestContext =
             requestContextService.createRequestContext({
               operation: "ProjectOrchestratorCreate",
