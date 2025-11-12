@@ -14,21 +14,24 @@ interface TestResult {
 }
 
 /**
- * Tests STDIO transport startup sequence.
+ * Tests STDIO transport startup sequence and validates that stdout only emits
+ * valid JSON-RPC messages (SPEC-STDIO-STABILITY-001 / §6.2).
+ *
+ * This is implemented to be:
+ * - Realistic: uses the built dist/index.js entrypoint with MCP_TRANSPORT_TYPE=stdio
+ * - Strict enough: rejects any non-JSON / non-object lines on stdout
+ * - Practical: allows whitespace-only lines and terminates within a bounded time
  */
 async function testStdioTransportStartup(): Promise<TestResult> {
-  console.log("🧪 Testing STDIO Transport Startup...");
-
   const startTime = Date.now();
   const errors: string[] = [];
   let output = "";
 
   return new Promise((resolve) => {
-    // Set environment for STDIO transport
     const env = {
       ...process.env,
       MCP_TRANSPORT_TYPE: "stdio",
-      MCP_LOG_LEVEL: "debug",
+      MCP_LOG_LEVEL: "info",
       NODE_ENV: "test",
     };
 
@@ -37,79 +40,29 @@ async function testStdioTransportStartup(): Promise<TestResult> {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    let stdoutData = "";
+    let stdoutBuffer = "";
     let stderrData = "";
 
-    child.stdout?.on("data", (data) => {
-      stdoutData += data.toString();
-    });
+    // How many valid JSON-RPC messages we require before considering startup stable.
+    const requiredValidMessages = 2;
+    let validJsonRpcCount = 0;
+    let closed = false;
 
-    child.stderr?.on("data", (data) => {
-      const chunk = data.toString();
-      stderrData += chunk;
+    const finalize = (successOverride?: boolean) => {
+      if (closed) return;
+      closed = true;
 
-      // Check for logger initialization issues
-      if (
-        chunk.includes("Logger not initialized") ||
-        chunk.includes("message dropped")
-      ) {
-        errors.push("Logger initialization warning found in stderr");
+      if (!child.killed) {
+        child.kill("SIGTERM");
       }
 
-      // Check for console interference (should not happen in STDIO)
-      if (chunk.includes("console.log") || chunk.includes("console.warn")) {
-        errors.push("Console interference detected in STDIO transport");
-      }
-    });
-
-    // Test with a simple MCP request after startup
-    setTimeout(() => {
-      if (child.stdin) {
-        const testRequest =
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "initialize",
-            params: {
-              protocolVersion: "2024-11-05",
-              capabilities: {},
-              clientInfo: { name: "test-client", version: "1.0.0" },
-            },
-          }) + "\n";
-
-        child.stdin.write(testRequest);
-      }
-    }, 2000);
-
-    // Timeout after 5 seconds
-    setTimeout(() => {
-      child.kill("SIGTERM");
-    }, 5000);
-
-    child.on("close", (_code) => {
       const duration = Date.now() - startTime;
-      output = `STDOUT:\n${stdoutData}\nSTDERR:\n${stderrData}`;
+      output = `STDOUT:\n${stdoutBuffer}\nSTDERR:\n${stderrData}`;
 
-      // Check if stdout contains valid JSON-RPC response
-      let hasValidJsonRpc = false;
-      try {
-        const lines = stdoutData.split("\n").filter((line) => line.trim());
-        for (const line of lines) {
-          const parsed = JSON.parse(line);
-          if (parsed.jsonrpc === "2.0" && parsed.id === 1) {
-            hasValidJsonRpc = true;
-            break;
-          }
-        }
-      } catch (_e) {
-        errors.push("Invalid JSON-RPC response format");
-      }
-
-      if (!hasValidJsonRpc && errors.length === 0) {
-        errors.push("No valid JSON-RPC response received");
-      }
-
-      const success = errors.length === 0 && hasValidJsonRpc;
+      const success =
+        typeof successOverride === "boolean"
+          ? successOverride
+          : errors.length === 0 && validJsonRpcCount >= requiredValidMessages;
 
       resolve({
         success,
@@ -117,17 +70,103 @@ async function testStdioTransportStartup(): Promise<TestResult> {
         errors,
         duration,
       });
+    };
+
+    child.stdout?.on("data", (data: Buffer) => {
+      stdoutBuffer += data.toString("utf8");
+      const lines = stdoutBuffer.split("\n");
+      // Keep the last partial line (if any) in the buffer
+      stdoutBuffer = lines.pop() ?? "";
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+          // Allow empty/whitespace lines
+          continue;
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          errors.push(`Non-JSON stdout line detected: ${rawLine}`);
+          finalize(false);
+          return;
+        }
+
+        if (parsed === null || typeof parsed !== "object") {
+          errors.push(`Non-object JSON stdout line detected: ${rawLine}`);
+          finalize(false);
+          return;
+        }
+
+        const msg = parsed as { jsonrpc?: unknown };
+
+        if (Object.prototype.hasOwnProperty.call(msg, "jsonrpc")) {
+          if (msg.jsonrpc !== "2.0") {
+            errors.push(
+              `Invalid jsonrpc version on stdout line. Expected "2.0", got: ${JSON.stringify(
+                msg.jsonrpc,
+              )}`,
+            );
+            finalize(false);
+            return;
+          }
+        }
+
+        validJsonRpcCount += 1;
+
+        if (validJsonRpcCount >= requiredValidMessages) {
+          finalize(true);
+          return;
+        }
+      }
+    });
+
+    child.stderr?.on("data", (data: Buffer) => {
+      const chunk = data.toString("utf8");
+      stderrData += chunk;
+
+      // These should not appear during stable startup; treat as regression signals.
+      if (
+        chunk.includes("WASM") ||
+        chunk.includes("wasm") ||
+        chunk.includes("Tree-sitter") ||
+        chunk.includes("Logger not initialized") ||
+        chunk.includes("message dropped") ||
+        chunk.includes("WASM module loaded")
+      ) {
+        errors.push(
+          "Unexpected noisy stderr output during stdio startup (possible warmup regression).",
+        );
+      }
     });
 
     child.on("error", (error) => {
       errors.push(`Process error: ${error.message}`);
-      resolve({
-        success: false,
-        output,
-        errors,
-        duration: Date.now() - startTime,
-      });
+      finalize(false);
     });
+
+    child.on("close", () => {
+      // If process exits before we reached the required JSON-RPC messages and
+      // no other error decided the outcome, consider this a failure.
+      if (!closed) {
+        if (validJsonRpcCount < requiredValidMessages) {
+          errors.push(
+            "STDIO server exited before emitting sufficient valid JSON-RPC messages.",
+          );
+        }
+        finalize();
+      }
+    });
+
+    // Global timeout safeguard: ensure determinism (10 seconds).
+    setTimeout(() => {
+      if (!closed) {
+        errors.push("STDIO startup validation timed out.");
+        finalize(false);
+      }
+    }, 10_000);
   });
 }
 

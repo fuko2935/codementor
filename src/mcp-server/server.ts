@@ -20,6 +20,7 @@ import { config, environment } from "../config/index.js";
 import { ErrorHandler, logger, requestContextService } from "../utils/index.js";
 import { BaseErrorCode } from "../types-global/errors.js";
 import { registerMcpSetupGuide } from "./tools/mcpSetupGuide/index.js";
+import { registerProjectBootstrap } from "./tools/projectBootstrap/index.js";
 import { registerGeminiCodebaseAnalyzer } from "./tools/geminiCodebaseAnalyzer/index.js";
 import { registerDynamicExpertCreate } from "./tools/dynamicExpertCreate/index.js";
 import { registerDynamicExpertAnalyze } from "./tools/dynamicExpertAnalyze/index.js";
@@ -29,6 +30,7 @@ import { registerProjectOrchestratorAnalyze } from "./tools/projectOrchestratorA
 import { startHttpTransport } from "./transports/httpTransport.js";
 import { connectStdioTransport } from "./transports/stdioTransport.js";
 import { warmupTreeSitter } from "./utils/codeParser.js";
+import { executeUnderStdioSilence } from "./utils/stdioSilence.js";
 
 /**
  * Creates and configures a new instance of the `McpServer`.
@@ -49,58 +51,6 @@ async function createMcpServerInstance(): Promise<McpServer> {
     environment,
   });
 
-  // Pre-initialize Tree-sitter WASM and all supported grammars at startup
-  // This prevents WASM loading latency on first request and improves performance
-  try {
-    logger.info("Pre-warming Tree-sitter grammars at startup...", context);
-    
-    // Temporarily suppress console output during Tree-sitter initialization
-    // CRITICAL: The web-tree-sitter library and its underlying Emscripten WASM module
-    // write initialization messages directly to stdout/stderr, which corrupts the JSON-RPC
-    // stream in STDIO transport mode. We temporarily override console methods to prevent
-    // this pollution. This is a necessary workaround until web-tree-sitter provides a
-    // configuration option to suppress these messages. The console methods are restored
-    // immediately after warmup completes.
-    const originalLog = console.log;
-    const originalInfo = console.info;
-    const originalWarn = console.warn;
-    const originalError = console.error;
-    
-    console.log = () => {};
-    console.info = () => {};
-    console.warn = () => {};
-    console.error = () => {};
-    
-    try {
-      // Pre-load all supported Tree-sitter grammars
-      const allSupportedLanguages: Array<"java" | "python" | "javascript" | "typescript" | "go" | "rust" | "csharp" | "ruby" | "php"> = [
-        "java",
-        "python",
-        "javascript",
-        "typescript",
-        "go",
-        "rust",
-        "csharp",
-        "ruby",
-        "php",
-      ];
-      await warmupTreeSitter(allSupportedLanguages);
-      logger.info("Tree-sitter grammars pre-warmed successfully.", context);
-    } finally {
-      // Restore console methods
-      console.log = originalLog;
-      console.info = originalInfo;
-      console.warn = originalWarn;
-      console.error = originalError;
-    }
-  } catch (error) {
-    // Non-critical - Tree-sitter will be initialized on first use (lazy loading)
-    logger.warning("Failed to pre-warm all Tree-sitter grammars. They will be loaded on-demand.", {
-      ...context,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
   const server = new McpServer(
     { name: config.mcpServerName, version: config.mcpServerVersion },
     {
@@ -113,19 +63,52 @@ async function createMcpServerInstance(): Promise<McpServer> {
 
   await ErrorHandler.tryCatch(
     async () => {
-      logger.debug("Registering resources and tools...", context);
-      // Register setup guide first - required for other tools
-      await registerMcpSetupGuide(server);
-      await registerGeminiCodebaseAnalyzer(server);
-      await registerDynamicExpertCreate(server);
-      await registerDynamicExpertAnalyze(server);
-      await registerCalculateTokenCount(server);
-      await registerProjectOrchestratorCreate(server);
-      await registerProjectOrchestratorAnalyze(server);
-      logger.info("Resources and tools registered successfully", context);
+      await executeUnderStdioSilence(async () => {
+        logger.info("Pre-warming Tree-sitter grammars at startup...", context);
+
+        const allSupportedLanguages: Array<
+          | "java"
+          | "python"
+          | "javascript"
+          | "typescript"
+          | "go"
+          | "rust"
+          | "csharp"
+          | "ruby"
+          | "php"
+        > = [
+          "java",
+          "python",
+          "javascript",
+          "typescript",
+          "go",
+          "rust",
+          "csharp",
+          "ruby",
+          "php",
+        ];
+
+        await warmupTreeSitter(allSupportedLanguages);
+
+        logger.info("Tree-sitter grammars pre-warmed successfully.", context);
+
+        logger.debug("Registering resources and tools...", context);
+
+        // Register setup guide first - required for other tools
+        await registerMcpSetupGuide(server);
+        await registerProjectBootstrap(server);
+        await registerGeminiCodebaseAnalyzer(server);
+        await registerDynamicExpertCreate(server);
+        await registerDynamicExpertAnalyze(server);
+        await registerCalculateTokenCount(server);
+        await registerProjectOrchestratorCreate(server);
+        await registerProjectOrchestratorAnalyze(server);
+
+        logger.info("Resources and tools registered successfully", context);
+      });
     },
     {
-      operation: "registerAllCapabilities",
+      operation: "initializeCapabilitiesUnderStdioSilence",
       context,
       errorCode: BaseErrorCode.INITIALIZATION_FAILED,
       critical: true,

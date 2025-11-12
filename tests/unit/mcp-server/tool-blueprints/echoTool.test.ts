@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { authContext } from "../../../../../src/mcp-server/transports/auth/core/authContext.js";
+
 import {
   BaseErrorCode,
   McpError,
@@ -33,91 +33,32 @@ function getRegisteredToolHandler(server: McpServer, name: string): ToolHandler 
   return toolDef.handler as ToolHandler;
 }
 
-test("echoTool - missing required scope results in FORBIDDEN McpError", async () => {
+/**
+ * Bu testler, echoTool kaydının auth bağımlılığı olmadan çalıştığını ve
+ * MCP hatalarının doğru yüzeylendiğini doğrular.
+ * Araç, varsayılan olarak serbestçe çağrılabilir; üretimde harici koruma önerilir.
+ */
+
+test("echoTool - registers and echoes a basic message", async () => {
   const server = new McpServer();
   await registerEchoTool(server);
 
   const handler = getRegisteredToolHandler(server, "echo_message");
 
-  const store = {
-    authInfo: {
-      clientId: "test-client",
-      subject: "test-subject",
-      scopes: ["some:other"],
+  const result = await handler(
+    {
+      message: "hello",
+      repeat: 1,
     },
-  };
-
-  await assert.rejects(
-    async () => {
-      await authContext.run(store, async () => {
-        await handler(
-          {
-            message: "hello",
-          },
-          {},
-        );
-      });
-    },
-    (error: unknown) => {
-      assert.ok(error instanceof McpError);
-      assert.equal(error.code, BaseErrorCode.FORBIDDEN);
-      return true;
-    },
+    {},
   );
-});
 
-test("echoTool - missing auth context results in INTERNAL_ERROR McpError", async () => {
-  const server = new McpServer();
-  await registerEchoTool(server);
-
-  const handler = getRegisteredToolHandler(server, "echo_message");
-
-  await assert.rejects(
-    async () => {
-      await handler(
-        {
-          message: "hello",
-        },
-        {},
-      );
-    },
-    (error: unknown) => {
-      assert.ok(error instanceof McpError);
-      assert.equal(error.code, BaseErrorCode.INTERNAL_ERROR);
-      return true;
-    },
-  );
-});
-
-test("echoTool - with utility:use scope succeeds and preserves echo behavior", async () => {
-  const server = new McpServer();
-  await registerEchoTool(server);
-
-  const handler = getRegisteredToolHandler(server, "echo_message");
-
-  const store = {
-    authInfo: {
-      clientId: "test-client",
-      subject: "test-subject",
-      scopes: ["utility:use"],
-    },
-  };
-
-  const result = await authContext.run(store, async () => {
-    return handler(
-      {
-        message: "hello",
-        repeat: 1,
-      },
-      {},
-    );
-  });
-
-  assert.ok(result);
+  assert.ok(result, "Expected a result from echo tool");
   assert.equal(result.isError, false);
 
   const textContent = Array.isArray(result.content)
     ? result.content.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (c: any) => c && c.type === "text" && typeof c.text === "string",
       )?.text
     : undefined;
@@ -131,5 +72,29 @@ test("echoTool - with utility:use scope succeeds and preserves echo behavior", a
   assert.ok(
     parsed && (parsed.message || parsed.output || parsed.result),
     "Echo behavior should be preserved in the response structure",
+  );
+});
+
+test("echoTool - surfaces McpError for invalid input", async () => {
+  const server = new McpServer();
+  await registerEchoTool(server);
+
+  const handler = getRegisteredToolHandler(server, "echo_message");
+
+  await assert.rejects(
+    async () => {
+      // Beklenen şemaya uymayan bir payload ile çağır.
+      await handler(
+        {
+          // message alanını bilerek eksik bırakıyoruz.
+          repeat: -1,
+        },
+        {},
+      );
+    },
+    (error: unknown) => {
+      assert.ok(error instanceof McpError || error instanceof Error);
+      return true;
+    },
   );
 });

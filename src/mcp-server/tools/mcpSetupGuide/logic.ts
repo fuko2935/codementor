@@ -15,14 +15,16 @@ import {
   getAllClientNames,
 } from "../../../config/clientProfiles.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
+import {
+  MCP_CONTENT_START_MARKER,
+  MCP_CONTENT_END_MARKER,
+  refreshMcpConfigCache,
+} from "../../utils/mcpConfigValidator.js";
 
 // ESM __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Marker constants for content injection
-export const MCP_CONTENT_START_MARKER = "<!-- MCP:GEMINI-MCP-LOCAL:START -->";
-export const MCP_CONTENT_END_MARKER = "<!-- MCP:GEMINI-MCP-LOCAL:END -->";
 
 // Re-export for backward compatibility
 export { CLIENT_PROFILES, type ClientName };
@@ -334,105 +336,6 @@ project_orchestrator_analyze({
 `;
 */
 
-// In-memory cache for config existence check
-// This prevents file system scan on every tool call
-const configCache = new Map<string, { exists: boolean; filePath?: string; client?: ClientName; timestamp: number }>();
-const CACHE_TTL_MS = 60000; // 60 seconds - refresh periodically
-
-/**
- * Checks if MCP configuration exists in project
- * Uses in-memory cache to avoid repeated file system scans
- */
-export async function mcpConfigExists(
-  projectPath: string,
-  context: RequestContext,
-  forceRefresh = false,
-): Promise<{ exists: boolean; filePath?: string; client?: ClientName }> {
-  // SECURITY: Validate and normalize path FIRST before any file operations
-  const normalizedPath = await validateSecurePath(projectPath, process.cwd(), context);
-  const now = Date.now();
-  
-  // Check cache (skip if forceRefresh or expired)
-  if (!forceRefresh) {
-    const cached = configCache.get(normalizedPath);
-    if (cached && (now - cached.timestamp) < CACHE_TTL_MS) {
-      logger.debug("MCP config check: using cache", {
-        ...context,
-        projectPath: normalizedPath,
-        cachedResult: cached.exists,
-      });
-      return { exists: cached.exists, filePath: cached.filePath, client: cached.client };
-    }
-  }
-  
-  // Check all possible client config files with optimized file operations
-  for (const [clientName, profile] of Object.entries(CLIENT_PROFILES)) {
-    const fullPath = profile.directory
-      ? path.join(normalizedPath, profile.directory, profile.file)
-      : path.join(normalizedPath, profile.file);
-
-    try {
-      // 1. Check file existence first (faster than reading)
-      await fs.access(fullPath, fs.constants.R_OK);
-      
-      // 2. Read first 500 bytes to check for START marker (performance optimization)
-      // If START marker is found, we'll read the full file to verify END marker
-      const fileHandle = await fs.open(fullPath, 'r');
-      const buffer = Buffer.alloc(500);
-      let bytesRead = 0;
-      try {
-        const result = await fileHandle.read(buffer, 0, 500, 0);
-        bytesRead = result.bytesRead;
-      } finally {
-        await fileHandle.close();
-      }
-      
-      // Only check if we actually read some content
-      if (bytesRead > 0) {
-        const partialContent = buffer.toString('utf-8', 0, bytesRead);
-        
-        // Check for START marker in first 500 bytes
-        // If found, read full file to verify END marker (template is ~2700 bytes)
-        if (partialContent.includes(MCP_CONTENT_START_MARKER)) {
-          // START marker found - read full file to verify END marker exists
-          const fullContent = await fs.readFile(fullPath, "utf-8");
-          
-          // Verify both markers exist in full content
-          if (
-            fullContent.includes(MCP_CONTENT_START_MARKER) &&
-            fullContent.includes(MCP_CONTENT_END_MARKER)
-          ) {
-            const result = {
-              exists: true,
-              filePath: fullPath,
-              client: clientName as ClientName,
-            };
-            
-            // Cache the positive result
-            configCache.set(normalizedPath, { ...result, timestamp: now });
-            
-            logger.debug("MCP config found", {
-              ...context,
-              filePath: fullPath,
-              client: clientName,
-            });
-            
-            return result;
-          }
-        }
-      }
-    } catch (_error) {
-      // File doesn't exist or can't be read, continue checking
-      continue;
-    }
-  }
-
-  // Cache the negative result
-  const result = { exists: false };
-  configCache.set(normalizedPath, { ...result, timestamp: now });
-  
-  return result;
-}
 
 /**
  * Core logic for MCP setup guide tool
@@ -499,15 +402,14 @@ export async function mcpSetupGuideLogic(
 
       if (existingContent === newContent && !params.force) {
         logger.info("MCP content already up to date", { ...context, filePath });
-        
-        // Update cache even when skipping to prevent stale negative cache
-        configCache.set(normalizedPath, {
+
+        // Refresh global MCP config cache on no-op to prevent stale negatives
+        refreshMcpConfigCache(normalizedPath, {
           exists: true,
           filePath,
           client: params.client,
-          timestamp: Date.now(),
         });
-        
+
         return {
           success: true,
           message: `MCP configuration is already up to date in ${profile.file}`,
@@ -518,15 +420,14 @@ export async function mcpSetupGuideLogic(
 
       await fs.writeFile(filePath, newContent, "utf-8");
       logger.info("Updated MCP content", { ...context, filePath });
-      
-      // Invalidate cache after successful write
-      configCache.set(normalizedPath, {
+
+      // Refresh global MCP config cache after successful write
+      refreshMcpConfigCache(normalizedPath, {
         exists: true,
         filePath,
         client: params.client,
-        timestamp: Date.now(),
       });
-      
+
       return {
         success: true,
         message: `Successfully updated MCP configuration in ${profile.file}`,
@@ -541,15 +442,14 @@ export async function mcpSetupGuideLogic(
         ...context,
         filePath,
       });
-      
-      // Invalidate cache after successful write
-      configCache.set(normalizedPath, {
+
+      // Refresh global MCP config cache after successful write
+      refreshMcpConfigCache(normalizedPath, {
         exists: true,
         filePath,
         client: params.client,
-        timestamp: Date.now(),
       });
-      
+
       return {
         success: true,
         message: `Successfully added MCP configuration to existing ${profile.file}`,
@@ -562,15 +462,14 @@ export async function mcpSetupGuideLogic(
     const newContent = `# AI Assistant Configuration\n\n${wrappedContent}\n`;
     await fs.writeFile(filePath, newContent, "utf-8");
     logger.info("Created new file with MCP content", { ...context, filePath });
-    
-    // Invalidate cache after successful write
-    configCache.set(normalizedPath, {
+
+    // Refresh global MCP config cache after successful write
+    refreshMcpConfigCache(normalizedPath, {
       exists: true,
       filePath,
       client: params.client,
-      timestamp: Date.now(),
     });
-    
+
     return {
       success: true,
       message: `Successfully created ${profile.file} with MCP configuration`,

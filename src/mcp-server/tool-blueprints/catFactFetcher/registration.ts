@@ -14,7 +14,6 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
-import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
 import {
   CatFactFetcherInput,
   CatFactFetcherInputSchema,
@@ -56,9 +55,6 @@ export const registerCatFactFetcherTool = async (
           // Throws:
           // - McpError(BaseErrorCode.INTERNAL_ERROR) if auth context is missing (misconfiguration).
           // - McpError(BaseErrorCode.FORBIDDEN) if "external:fetch" scope is not granted.
-          // - Continues execution unchanged when the required scope is present.
-          withRequiredScopes(["external:fetch"]);
-
           const handlerContext: RequestContext =
             requestContextService.createRequestContext({
               parentRequestId: registrationContext.requestId,

@@ -216,20 +216,18 @@ The `analysisMode` parameter supports the following modes:
 
 ---
 
+## Access Model
+
+- HTTP and STDIO MCP endpoints provided by this project do not implement any built-in authentication or scope-based authorization.
+- This server is intended for local and controlled environments (e.g., running alongside your editor or behind your own infrastructure).
+- In production or shared environments, you MUST protect access using external mechanisms such as:
+  - Reverse proxy with JWT/OIDC validation
+  - mTLS
+  - IP allowlists / network segmentation
+  - API gateways or WAF
+- Tools and resources are callable without server-side scope checks; any `withRequiredScopes` helper is a no-op kept only for backwards-compatible imports and MUST NOT be treated as a security control.
+
 ## Security & Architecture Highlights
-
-### Scope-based Authorization (BREAKING CHANGE)
-
-All MCP tools and resources now enforce explicit, least-privilege scopes. Clients must send appropriate scopes tied to their identity; unauthorized scopes are rejected at the transport layer.
-
-Example scopes:
-- `analysis:read` – access to analysis flows and reports
-- `codebase:read` – repository/content inspection
-- `orchestration:*` – project orchestrator helpers
-- `tools:invoke` – execution of registered MCP tools
-- `resources:read` – access to MCP resources
-
-For exact scope names and migration details, see the [CHANGELOG](CHANGELOG.md:1) entry for this release.
 
 ### Secure Path Handling (BASE_DIR + validateSecurePath)
 
@@ -279,7 +277,10 @@ Sensitive values are aggressively redacted from logs.
 ## Security
 
 Security Hardening Guide:
-See the comprehensive production hardening recommendations in [docs/security-hardening.md](docs/security-hardening.md:1).
+See [docs/security-hardening.md](docs/security-hardening.md:1) for comprehensive production hardening recommendations.
+In particular:
+- Treat this MCP server as an internal component.
+- Terminate TLS, perform authentication/authorization, and enforce network boundaries at a dedicated gateway or reverse proxy.
 
 ### Git Command Execution
 

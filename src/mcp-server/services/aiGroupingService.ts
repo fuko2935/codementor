@@ -86,10 +86,7 @@ You MUST respond with ONLY a single JSON array of group objects, with no extra t
     "name": "Authentication Services",
     "description": "Handles user authentication, token validation, and session management.",
     "totalTokens": 750,
-    "files": [
-      "src/services/auth/jwtMiddleware.ts",
-      "src/services/auth/authContext.ts"
-    ],
+    "files": [],
     "metadata": [
       {
         "filePath": "src/services/auth/jwtMiddleware.ts",

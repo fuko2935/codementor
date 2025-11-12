@@ -7,7 +7,6 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
-import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
 
 import {
   CalculateTokenCountInputSchema,
@@ -36,13 +35,6 @@ export const registerCalculateTokenCount = async (
         toolDescription,
         CalculateTokenCountInputSchema.shape,
         async (params: CalculateTokenCountInput): Promise<CallToolResult> => {
-          // Enforce required authorization scope for token counting.
-          // Throws:
-          // - McpError(BaseErrorCode.INTERNAL_ERROR) if auth context is missing (misconfiguration).
-          // - McpError(BaseErrorCode.FORBIDDEN) if "analysis:read" scope is not granted.
-          // - Continues execution unchanged when the required scope is present.
-          withRequiredScopes(["analysis:read"]);
-
           const toolContext: RequestContext =
             requestContextService.createRequestContext({
               operation: "CalculateTokenCount",

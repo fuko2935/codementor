@@ -3,7 +3,7 @@
  * This module integrates the `@modelcontextprotocol/sdk`'s `StreamableHTTPServerTransport`
  * into a Hono web server. Its responsibilities include:
  * - Creating a Hono server instance.
- * - Applying and configuring middleware for CORS, rate limiting, and authentication (JWT/OAuth).
+ * - Applying and configuring middleware for CORS and rate limiting.
  * - Defining the routes (`/mcp` endpoint for POST, GET, DELETE) to handle the MCP lifecycle.
  * - Orchestrating session management by mapping session IDs to SDK transport instances.
  * - Implementing port-binding logic with automatic retry on conflicts.
@@ -32,8 +32,6 @@ import {
   requestContextService,
 } from "../../utils/index.js";
 import { createRateLimiter } from "../../utils/security/rateLimiter.js";
-import { jwtAuthMiddleware, oauthMiddleware } from "./auth/index.js";
-import { authContext } from "./auth/core/authContext.js";
 import { httpErrorHandler } from "./httpErrorHandler.js";
 import { createSessionCoordinator, generateInstanceId } from "./sessionStore.js";
 
@@ -166,7 +164,6 @@ export async function startHttpTransport(
         "Content-Type",
         "Mcp-Session-Id",
         "Last-Event-ID",
-        "Authorization",
       ],
       credentials: true,
     }),
@@ -179,38 +176,24 @@ export async function startHttpTransport(
 
   app.use(MCP_ENDPOINT_PATH, async (c: Context, next: Next) => {
     /**
-     * Identity-aware rate limiting for HTTP MCP requests.
+     * Rate limiting for HTTP MCP requests without authentication context.
      *
      * Strategy:
-     * - Build a minimal RequestContextLike compatible object:
-     *   - authInfo: resolved from AsyncLocalStorage-based authContext (if set by auth middleware)
-     *   - ip: best-effort client IP resolution
+     * - Resolve client IP best-effort from x-forwarded-for or socket remote address.
      * - Use a stable base key for HTTP transport ("http:mcp").
-     * - Delegate identity/IP specific key derivation to RateLimiter.resolveRateLimitKey.
-     *
-     * NOTE:
-     * - x-forwarded-for is only trustworthy behind a trusted proxy; we only use
-     *   the first value as a best-effort signal and otherwise fall back to req.ip.
+     * - Let the rate limiter derive a key from IP/path/method only.
      */
     const forwardedFor = c.req.header("x-forwarded-for");
     const ipFromHeader = forwardedFor
       ? forwardedFor.split(",")[0].trim()
       : undefined;
     const ip =
-      (ipFromHeader && ipFromHeader.length > 0 ? ipFromHeader : c.req.raw?.socket?.remoteAddress) ||
+      (ipFromHeader && ipFromHeader.length > 0
+        ? ipFromHeader
+        : ((c.req.raw as any)?.socket?.remoteAddress as string | undefined)) ||
       undefined;
 
-    // Read auth info from the AsyncLocalStorage, if populated by upstream auth middleware.
-    const store = authContext.getStore();
-    const authInfo = store?.authInfo
-      ? {
-          userId: store.authInfo.userId,
-          clientId: store.authInfo.clientId,
-        }
-      : undefined;
-
     const rateLimitContext = {
-      authInfo,
       ip,
       path: c.req.path,
       method: c.req.method,
@@ -223,12 +206,6 @@ export async function startHttpTransport(
 
     await next();
   });
-
-  if (config.mcpAuthMode === "oauth") {
-    app.use(MCP_ENDPOINT_PATH, oauthMiddleware);
-  } else {
-    app.use(MCP_ENDPOINT_PATH, jwtAuthMiddleware);
-  }
 
   // Centralized Error Handling
   app.onError(httpErrorHandler);

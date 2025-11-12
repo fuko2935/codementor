@@ -7,31 +7,34 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
-
 import {
-  McpSetupGuideInputSchema,
-  mcpSetupGuideLogic,
-  type McpSetupGuideInput,
-  CLIENT_PROFILES,
+  ProjectBootstrapInputSchema,
+  projectBootstrapLogic,
+  type ProjectBootstrapInput,
 } from "./logic.js";
 
-export const registerMcpSetupGuide = async (
+/**
+ * Registers the `project_bootstrap` tool.
+ *
+ * This is the REQUIRED FIRST STEP for all MCP workflows:
+ * - Generates/updates AI client configuration files (AGENTS.md / client docs)
+ * - Injects the canonical MCP usage guide and workflow
+ * - Embeds project-specific rules (Project-Specific Rules block)
+ * - Documents .gitignore + .mcpignore based context control
+ */
+export const registerProjectBootstrap = async (
   server: McpServer,
 ): Promise<void> => {
-  const toolName = "mcp_setup_guide";
-  const clientList = Object.keys(CLIENT_PROFILES).join(", ");
+  const toolName = "project_bootstrap";
   const toolDescription =
-    `🔧 MCP SETUP GUIDE - REQUIRED FIRST STEP: Creates AI client configuration file with MCP tool usage guide. ` +
-    `This tool generates a comprehensive usage guide for AI assistants in the format specific to your AI client. ` +
-    `Supported clients: ${clientList}. ` +
-    `**IMPORTANT:** Other MCP tools will not work until this setup is completed. ` +
-    `The generated file contains tool descriptions, workflows, best practices, and examples for effective MCP usage.`;
+    "🔧 PROJECT BOOTSTRAP - REQUIRED FIRST STEP: Creates or updates AI client configuration with MCP usage guide, project-specific rules, and context control. Run this once per project before using analysis tools.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({
       operation: "RegisterTool",
       toolName,
     });
+
   logger.info(`Registering tool: '${toolName}'`, registrationContext);
 
   await ErrorHandler.tryCatch(
@@ -39,11 +42,12 @@ export const registerMcpSetupGuide = async (
       server.tool(
         toolName,
         toolDescription,
-        McpSetupGuideInputSchema.shape,
+        ProjectBootstrapInputSchema.shape,
         async (
-          params: McpSetupGuideInput,
+          params: ProjectBootstrapInput,
           _mcpContext,
         ): Promise<CallToolResult> => {
+          // Enforce required authorization scopes for this tool.
           const handlerContext: RequestContext =
             requestContextService.createRequestContext({
               parentRequestId: registrationContext.requestId,
@@ -57,7 +61,10 @@ export const registerMcpSetupGuide = async (
               handlerContext,
             );
 
-            const result = await mcpSetupGuideLogic(params, handlerContext);
+            const result = await projectBootstrapLogic(
+              params,
+              handlerContext,
+            );
 
             logger.info(`Tool '${toolName}' executed successfully`, {
               ...handlerContext,
@@ -75,19 +82,17 @@ export const registerMcpSetupGuide = async (
               isError: false,
             };
           } catch (error) {
-            // Use central error handler for consistent error processing
             const handledError = ErrorHandler.handleError(error, {
               operation: `${toolName}_handler`,
               context: handlerContext,
             });
 
-            // Convert to McpError if needed
             const mcpError =
               handledError instanceof McpError
                 ? handledError
                 : new McpError(
                     BaseErrorCode.INTERNAL_ERROR,
-                    "An unexpected error occurred during setup",
+                    "An unexpected error occurred during project_bootstrap",
                     { originalError: String(error) },
                   );
 
@@ -126,4 +131,3 @@ export const registerMcpSetupGuide = async (
     },
   );
 };
-

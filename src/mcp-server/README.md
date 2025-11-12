@@ -6,29 +6,20 @@ The server is designed for extensibility, leveraging the high-level abstractions
 
 ---
 
-## 🔐 Authentication
+## 🔐 Authentication / Access Control
 
-The HTTP transport supports two authentication modes, configurable via the `MCP_AUTH_MODE` environment variable:
+This MCP server no longer provides built-in authentication or scope-based authorization for HTTP or stdio transports.
 
-- **`jwt` (default):** A simple, self-contained JWT mode for development or internal use. It uses the `MCP_AUTH_SECRET_KEY` to sign and verify tokens.
-- **`oauth`:** A production-ready OAuth 2.1 mode where the server acts as a Resource Server. It validates Bearer tokens issued by an external Authorization Server. This mode requires the following environment variables to be set:
-  - `OAUTH_ISSUER_URL`: The issuer URL of your authorization server (e.g., `https://your-auth-server.com/`).
-  - `OAUTH_AUDIENCE`: The audience identifier for this MCP server.
-  - `OAUTH_JWKS_URI` (optional): The JWKS endpoint URL. If not provided, it will be discovered from the issuer URL.
+- The `/mcp` HTTP endpoint is open by default (subject only to rate limiting and CORS configuration).
+- All tools and resources are callable without server-side token or scope checks.
+- `withRequiredScopes` exists only as a backward-compatible no-op helper; it MUST NOT be relied on for security.
 
-When using `oauth` mode, you can protect tools and resources by checking for specific scopes in the access token. Use the `withRequiredScopes` utility within your tool/resource handlers:
+For production deployments, you are expected to enforce access control externally, for example:
 
-```typescript
-import { withRequiredScopes } from "../../transports/auth/index.js";
-
-// Inside a tool handler...
-async (params: ToolInput): Promise<CallToolResult> => {
-  // This will throw a FORBIDDEN error if the token lacks the 'facts:read' scope.
-  withRequiredScopes(["facts:read"]);
-
-  // ... rest of the tool logic
-};
-```
+- HTTP reverse proxy with authentication/authorization
+- mTLS between trusted clients and this server
+- Network-level controls (IP allowlists, private networks, service mesh policies)
+- WAF or API gateway in front of the MCP HTTP endpoint
 
 ---
 

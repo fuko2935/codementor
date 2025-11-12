@@ -1,19 +1,18 @@
 /**
- * @fileoverview Authorization tests for gemini_codebase_analyzer tool registration.
+ * @fileoverview Registration and basic behavior tests for
+ * gemini_codebase_analyzer tool.
  *
- * Covers:
- * - Missing/insufficient scopes: expect McpError with FORBIDDEN (403 semantics).
- * - Sufficient scopes: handler executes underlying logic successfully.
+ * Note:
+ * - Built-in auth/scope enforcement has been removed.
+ * - These tests only verify registration and successful handler invocation.
  */
 
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolRequest, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { registerGeminiCodebaseAnalyzer } from "../../src/mcp-server/tools/geminiCodebaseAnalyzer/registration.js";
-import { McpError, BaseErrorCode } from "../../src/types-global/errors.js";
-import { authContext } from "../../src/mcp-server/transports/auth/core/authContext.js";
 
 // Minimal fake server implementation to capture the registered handler
 class TestMcpServer extends McpServer {
@@ -38,113 +37,29 @@ class TestMcpServer extends McpServer {
   }
 }
 
-// Helper to invoke the tool handler with a given auth context
-async function callWithAuthContext(
-  scopes: string[] | null,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Helper to invoke the tool handler with standard params
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callTool(
   handler: (params: any) => Promise<CallToolResult>,
 ) {
-  if (scopes) {
-    return await authContext.run(
-      {
-        authInfo: {
-          clientId: "test-client",
-          scopes,
-        },
-      },
-      async () => {
-        return handler({
-          projectPath: ".",
-          question: "What does this project do?",
-        });
-      },
-    );
-  }
-
-  // No auth context at all
   return handler({
     projectPath: ".",
     question: "What does this project do?",
   });
 }
 
-describe("gemini_codebase_analyzer authorization scopes", () => {
-  it("should reject when required scopes are missing", async () => {
+describe("gemini_codebase_analyzer registration (no built-in auth)", () => {
+  it("registers the tool with a callable handler", async () => {
     const server = new TestMcpServer();
     await registerGeminiCodebaseAnalyzer(server);
 
     const tool = server.registeredTools.get("gemini_codebase_analyzer");
     assert.ok(tool, "gemini_codebase_analyzer tool should be registered");
+    assert.ok(typeof tool.handler === "function", "handler must be a function");
 
-    // Missing both required scopes
-    await assert.rejects(
-      () => callWithAuthContext(["some:other"], tool!.handler),
-      (error: unknown) => {
-        assert.ok(error instanceof McpError, "Error should be McpError");
-        assert.strictEqual(
-          error.code,
-          BaseErrorCode.FORBIDDEN,
-          "Error code should be FORBIDDEN for missing scopes",
-        );
-        return true;
-      },
-    );
-  });
-
-  it("should reject when auth context is absent", async () => {
-    const server = new TestMcpServer();
-    await registerGeminiCodebaseAnalyzer(server);
-
-    const tool = server.registeredTools.get("gemini_codebase_analyzer");
-    assert.ok(tool, "gemini_codebase_analyzer tool should be registered");
-
-    // No authContext.run wrapper: triggers INTERNAL_ERROR from withRequiredScopes
-    await assert.rejects(
-      () => callWithAuthContext(null, tool!.handler),
-      (error: unknown) => {
-        assert.ok(error instanceof McpError, "Error should be McpError");
-        assert.strictEqual(
-          error.code,
-          BaseErrorCode.INTERNAL_ERROR,
-          "Missing auth context should be treated as INTERNAL_ERROR",
-        );
-        return true;
-      },
-    );
-  });
-
-  it("should allow when required scopes are present", async () => {
-    const server = new TestMcpServer();
-    await registerGeminiCodebaseAnalyzer(server);
-
-    const tool = server.registeredTools.get("gemini_codebase_analyzer");
-    assert.ok(tool, "gemini_codebase_analyzer tool should be registered");
-
-    // Provide both required scopes; expect handler to run without throwing McpError(FORBIDDEN).
-    // We do not assert on the full result shape to keep this test stable;
-    // success is "no FORBIDDEN due to scope check".
-    let errorCaught: unknown | null = null;
-    try {
-      const result = await callWithAuthContext(
-        ["analysis:read", "codebase:read"],
-        tool!.handler,
-      );
-      // Result should be a CallToolResult-like object or at least not throw FORBIDDEN.
-      assert.ok(result, "Expected a successful result when scopes are valid");
-    } catch (err) {
-      errorCaught = err;
-    }
-
-    if (errorCaught) {
-      // If something failed, ensure it is NOT due to forbidden scopes.
-      assert.ok(errorCaught instanceof Error);
-      if (errorCaught instanceof McpError) {
-        assert.notStrictEqual(
-          errorCaught.code,
-          BaseErrorCode.FORBIDDEN,
-          "Should not fail with FORBIDDEN when required scopes are present",
-        );
-      }
-    }
+    // Smoke test: calling the handler should not throw synchronously and should
+    // return a CallToolResult-like object or a promise thereof.
+    const result = await callTool(tool.handler);
+    assert.ok(result, "Expected handler to return a result");
   });
 });

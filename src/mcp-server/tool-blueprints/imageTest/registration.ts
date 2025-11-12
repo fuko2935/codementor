@@ -17,7 +17,6 @@ import {
   FetchImageTestInputSchema,
   fetchImageTestLogic,
 } from "./logic.js";
-import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
 
 /**
  * Registers the fetch_image_test tool with the MCP server.
@@ -42,13 +41,6 @@ export function registerFetchImageTestTool(server: McpServer): void {
           input: FetchImageTestInput,
           mcpProvidedContext: unknown,
         ): Promise<CallToolResult> => {
-          // Enforce required authorization scope for performing image analysis operations.
-          // Throws:
-          // - McpError(BaseErrorCode.INTERNAL_ERROR) if auth context is missing (misconfiguration).
-          // - McpError(BaseErrorCode.FORBIDDEN) if "image:analyze" scope is not granted.
-          // - Continues execution unchanged when the required scope is present.
-          withRequiredScopes(["image:analyze"]);
-
           const parentRequestId =
             mcpProvidedContext &&
             typeof mcpProvidedContext === "object" &&

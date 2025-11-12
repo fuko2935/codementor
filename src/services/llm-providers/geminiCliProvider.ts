@@ -198,38 +198,12 @@ export function createGeminiCliModel(
 
   return {
     async generateContent(prompt: string) {
-      // Acquire lock to ensure only one gemini CLI call modifies stdout at a time
-      // This prevents race conditions in concurrent scenarios
+      // Acquire lock to ensure only one gemini CLI call executes at a time
+      // This prevents race conditions in concurrent scenarios; stdout handling
+      // is managed centrally via executeUnderStdioSilence.
       await stdoutLock.acquire();
-      
-      // Suppress all console output during gemini CLI execution when using stdio transport
-      // This prevents gemini CLI's "Loaded cache" messages from corrupting JSON-RPC protocol
-      const originalConsoleLog = console.log;
-      const originalConsoleDebug = console.debug;
-      const originalConsoleInfo = console.info;
-      const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-      
+
       try {
-        // When using stdio transport, redirect all output to stderr or suppress
-        // to prevent corruption of JSON-RPC messages on stdout
-        if (config.mcpTransportType === 'stdio') {
-          console.log = (...args: unknown[]) => process.stderr.write(args.join(' ') + '\n');
-          console.debug = () => {}; // Suppress debug
-          console.info = () => {};  // Suppress info
-          
-          // Override stdout.write to redirect to stderr
-          // This catches output from child processes like gemini CLI
-          process.stdout.write = ((chunk: string | Uint8Array) => {
-            // If it's a JSON-RPC message, allow it through
-            const str = String(chunk);
-            if (str.includes('"jsonrpc"') || str.includes('"method"') || str.includes('"result"')) {
-              return originalStdoutWrite(chunk);
-            }
-            // Otherwise redirect to stderr
-            return process.stderr.write(chunk);
-          }) as typeof process.stdout.write;
-        }
-        
         const result = await generateTextWithGeminiCli(provider, {
           modelId,
           messages: [{ role: "user", content: prompt }],
@@ -243,12 +217,6 @@ export function createGeminiCliModel(
           },
         };
       } finally {
-        // Restore original console methods and stdout
-        console.log = originalConsoleLog;
-        console.debug = originalConsoleDebug;
-        console.info = originalConsoleInfo;
-        process.stdout.write = originalStdoutWrite;
-        
         // Release lock to allow next waiting operation to proceed
         stdoutLock.release();
       }

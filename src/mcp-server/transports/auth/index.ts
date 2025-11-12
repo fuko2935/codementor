@@ -1,12 +1,8 @@
 /**
- * @fileoverview Barrel file for the auth module.
- * Exports core utilities and middleware strategies for easier imports.
- * @module src/mcp-server/transports/auth/index
+ * Backward-compatible auth shim.
+ *
+ * Internal authentication and scope enforcement have been removed as part of
+ * SPEC-AUTH-REMOVE-001. The only remaining export is `withRequiredScopes`,
+ * implemented as a no-op helper for existing integrations.
  */
-
-export { authContext } from "./core/authContext.js";
 export { withRequiredScopes } from "./core/authUtils.js";
-export type { AuthInfo } from "./core/authTypes.js";
-
-export { mcpAuthMiddleware as jwtAuthMiddleware } from "./strategies/jwt/jwtMiddleware.js";
-export { oauthMiddleware } from "./strategies/oauth/oauthMiddleware.js";

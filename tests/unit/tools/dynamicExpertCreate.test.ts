@@ -24,7 +24,6 @@ import {
   McpError,
   BaseErrorCode,
 } from "../../../src/types-global/errors.js";
-import { authContext } from "../../../src/mcp-server/transports/auth/core/authContext.js";
 
 const TEST_ROOT = path.join(process.cwd(), ".test-temp");
 
@@ -49,10 +48,9 @@ class TestMcpServer extends McpServer {
   }
 }
 
-// Helper to invoke the registered tool handler under a given auth context.
-async function callWithAuthContext(
-  scopes: string[] | null,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Helper to invoke the registered tool handler with standard params.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callTool(
   handler: (params: any) => Promise<CallToolResult>,
 ) {
   const params: DynamicExpertCreateInput = {
@@ -61,21 +59,6 @@ async function callWithAuthContext(
     ignoreMcpignore: false,
     temporaryIgnore: [],
   };
-
-  if (scopes) {
-    return await authContext.run(
-      {
-        authInfo: {
-          clientId: "test-client",
-          subject: "test-subject",
-          scopes,
-        },
-      },
-      async () => handler(params),
-    );
-  }
-
-  // No auth context at all
   return handler(params);
 }
 
@@ -124,88 +107,17 @@ describe("dynamicExpertCreateLogic limits", () => {
     });
   });
   
-  describe("gemini_dynamic_expert_create authorization scopes", () => {
-    it("rejects with FORBIDDEN when required expert:create scope is missing", async () => {
+  describe("gemini_dynamic_expert_create registration (no built-in auth)", () => {
+    it("registers the tool with a callable handler", async () => {
       const server = new TestMcpServer();
       await registerDynamicExpertCreate(server);
-  
+
       const tool = server.registeredTools.get("gemini_dynamic_expert_create");
       assert.ok(tool, "gemini_dynamic_expert_create tool should be registered");
-  
-      await assert.rejects(
-        () => callWithAuthContext(["some:other"], tool!.handler),
-        (error: unknown) => {
-          assert.ok(error instanceof McpError, "Error should be McpError");
-          assert.strictEqual(
-            error.code,
-            BaseErrorCode.FORBIDDEN,
-            "Missing expert:create scope should yield FORBIDDEN",
-          );
-          return true;
-        },
-      );
-    });
-  
-    it("rejects with INTERNAL_ERROR when auth context is missing", async () => {
-      const server = new TestMcpServer();
-      await registerDynamicExpertCreate(server);
-  
-      const tool = server.registeredTools.get("gemini_dynamic_expert_create");
-      assert.ok(tool, "gemini_dynamic_expert_create tool should be registered");
-  
-      await assert.rejects(
-        () => callWithAuthContext(null, tool!.handler),
-        (error: unknown) => {
-          assert.ok(error instanceof McpError, "Error should be McpError");
-          assert.strictEqual(
-            error.code,
-            BaseErrorCode.INTERNAL_ERROR,
-            "Missing auth context should be treated as INTERNAL_ERROR",
-          );
-          return true;
-        },
-      );
-    });
-  
-    it("allows execution when expert:create scope is present", async () => {
-      const server = new TestMcpServer();
-      await registerDynamicExpertCreate(server);
-  
-      const tool = server.registeredTools.get("gemini_dynamic_expert_create");
-      assert.ok(tool, "gemini_dynamic_expert_create tool should be registered");
-  
-      let caught: unknown | null = null;
-      try {
-        const result = await callWithAuthContext(
-          ["expert:create"],
-          tool!.handler,
-        );
-        assert.ok(result, "Expected a CallToolResult-like response");
-        // If it somehow returns isError FORBIDDEN, treat as failure
-        if ("isError" in result && result.isError === true) {
-          const text =
-            Array.isArray(result.content) && result.content[0]?.type === "text"
-              ? result.content[0].text
-              : "";
-          assert.ok(
-            !/FORBIDDEN/i.test(text),
-            "Result should not indicate FORBIDDEN when expert:create is present",
-          );
-        }
-      } catch (err) {
-        caught = err;
-      }
-  
-      if (caught) {
-        assert.ok(caught instanceof Error);
-        if (caught instanceof McpError) {
-          assert.notStrictEqual(
-            caught.code,
-            BaseErrorCode.FORBIDDEN,
-            "Should not throw FORBIDDEN when expert:create scope is present",
-          );
-        }
-      }
+      assert.ok(typeof tool.handler === "function", "handler must be a function");
+
+      const result = await callTool(tool.handler);
+      assert.ok(result, "Expected a CallToolResult-like response");
     });
   });
 

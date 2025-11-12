@@ -14,7 +14,6 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
-import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
 import { EchoToolInput, EchoToolInputSchema, echoToolLogic } from "./logic.js";
 
 /**
@@ -50,8 +49,6 @@ export const registerEchoTool = async (server: McpServer): Promise<void> => {
           // Throws:
           // - McpError(BaseErrorCode.INTERNAL_ERROR) if auth context is missing (misconfiguration).
           // - McpError(BaseErrorCode.FORBIDDEN) if "utility:use" scope is not granted.
-          // - Continues execution unchanged when the required scope is present.
-          withRequiredScopes(["utility:use"]);
           const handlerContext: RequestContext =
             requestContextService.createRequestContext({
               parentRequestId: registrationContext.requestId,

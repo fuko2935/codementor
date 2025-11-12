@@ -169,46 +169,9 @@ export class TreeSitterLoader implements LanguageLoader {
     }
 
     try {
-      // In STDIO mode, suppress console output during WASM initialization
-      // CRITICAL: The web-tree-sitter library and its underlying Emscripten WASM module
-      // write initialization messages directly to stdout/stderr, which corrupts the JSON-RPC
-      // stream in STDIO transport mode. We temporarily override console methods to prevent
-      // this pollution. This is a necessary workaround until web-tree-sitter provides a
-      // configuration option to suppress these messages. The console methods are restored
-      // immediately after initialization completes.
-      const isStdioMode = process.env.MCP_TRANSPORT_TYPE === "stdio";
-      let consoleOverride = false;
-      let originalLog: typeof console.log;
-      let originalInfo: typeof console.info;
-      let originalWarn: typeof console.warn;
-      let originalError: typeof console.error;
-
-      if (isStdioMode) {
-        consoleOverride = true;
-        originalLog = console.log;
-        originalInfo = console.info;
-        originalWarn = console.warn;
-        originalError = console.error;
-        
-        console.log = () => {};
-        console.info = () => {};
-        console.warn = () => {};
-        console.error = () => {};
-      }
-
-      try {
-        await TreeSitter.Parser.init();
-        this.parser = new TreeSitter.Parser();
-        this.initialized = true;
-      } finally {
-        // Restore console methods if they were overridden
-        if (consoleOverride) {
-          console.log = originalLog!;
-          console.info = originalInfo!;
-          console.warn = originalWarn!;
-          console.error = originalError!;
-        }
-      }
+      await TreeSitter.Parser.init();
+      this.parser = new TreeSitter.Parser();
+      this.initialized = true;
     } catch (error) {
       const logContext: RequestContext = {
         requestId: "tree-sitter-loader",
@@ -307,52 +270,21 @@ export class TreeSitterLoader implements LanguageLoader {
     }
 
     try {
-      // In STDIO mode, suppress console output during WASM loading
-      const isStdioMode = process.env.MCP_TRANSPORT_TYPE === "stdio";
-      let consoleOverride = false;
-      let originalLog: typeof console.log;
-      let originalInfo: typeof console.info;
-      let originalWarn: typeof console.warn;
-      let originalError: typeof console.error;
+      // Load language from WASM file
+      const Language = (await import("web-tree-sitter")).Language;
+      const language = await Language.load(wasmPath);
 
-      if (isStdioMode) {
-        consoleOverride = true;
-        originalLog = console.log;
-        originalInfo = console.info;
-        originalWarn = console.warn;
-        originalError = console.error;
-        
-        console.log = () => {};
-        console.info = () => {};
-        console.warn = () => {};
-        console.error = () => {};
-      }
+      // Set language on parser
+      this.parser.setLanguage(language);
 
-      try {
-        // Load language from WASM file
-        const Language = (await import("web-tree-sitter")).Language;
-        const language = await Language.load(wasmPath);
+      // Cache the language
+      const treeSitterLang: TreeSitterLanguage = {
+        language,
+        name: lang,
+      };
+      this.languageCache.set(lang, treeSitterLang);
 
-        // Set language on parser
-        this.parser.setLanguage(language);
-
-        // Cache the language
-        const treeSitterLang: TreeSitterLanguage = {
-          language,
-          name: lang,
-        };
-        this.languageCache.set(lang, treeSitterLang);
-
-        return treeSitterLang;
-      } finally {
-        // Restore console methods if they were overridden
-        if (consoleOverride) {
-          console.log = originalLog!;
-          console.info = originalInfo!;
-          console.warn = originalWarn!;
-          console.error = originalError!;
-        }
-      }
+      return treeSitterLang;
     } catch (error) {
       const logContext: RequestContext = {
         requestId: "tree-sitter-loader",

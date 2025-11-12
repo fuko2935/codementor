@@ -7,7 +7,6 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
-import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
 
 import {
   DynamicExpertAnalyzeInputSchema,
@@ -36,12 +35,6 @@ export const registerDynamicExpertAnalyze = async (
         toolDescription,
         DynamicExpertAnalyzeInputSchema.shape,
         async (params: DynamicExpertAnalyzeInput): Promise<CallToolResult> => {
-          // Enforce authorization scope for dynamic expert analysis.
-          // This will throw McpError with:
-          // - BaseErrorCode.INTERNAL_ERROR when auth context is missing (server misconfiguration).
-          // - BaseErrorCode.FORBIDDEN when the required scope is absent.
-          withRequiredScopes(["expert:analyze"]);
-
           const toolContext: RequestContext =
             requestContextService.createRequestContext({
               operation: "DynamicExpertAnalyze",

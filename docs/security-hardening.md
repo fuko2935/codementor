@@ -115,42 +115,25 @@ Geliştirici rehberi:
 - src/mcp-server/utils/[securePathValidator.ts](src/mcp-server/utils/securePathValidator.ts:1)
 - tests/unit/mcp-server/utils/[securePathValidator.test.ts](tests/unit/mcp-server/utils/securePathValidator.test.ts:1)
 
-## SEC-03) Authorization Scopes
+## SEC-03) Dış Katman Erişim Kontrolleri (Önerilen Model)
 
-Bu bölüm, MCP araç ve blueprint’leri için yetkilendirme kapsamlarının (scopes) nasıl enforce edildiğini özetler.
+Bu proje, yerleşik bir kimlik doğrulama veya scope tabanlı yetkilendirme mekanizması sağlamaz.
+Tasarım hedefi, MCP sunucusunu yerel/güvenli ağ içinde hafif bir bileşen olarak kullanmak ve
+erişim kontrollerini aşağıdaki dış katmanlara devretmektir:
 
-### Scope Tabanlı Yetkilendirme Modeli
+- Reverse proxy (Nginx/Envoy/Traefik vb.) ile:
+  - JWT/OIDC doğrulaması
+  - IP allowlist / ağ segmentasyonu
+  - Oran sınırlama (rate limiting) ve WAF kuralları
+- mTLS ile karşılıklı sertifika doğrulaması
+- VPN veya sıfır güven (zero trust) ağ çözümleri
+- IDE/desktop istemcilerinin yalnızca güvenilir yerel süreçleri başlatabilmesi
 
-- Her kritik tool/blueprint, `withRequiredScopes` aracılığıyla açık şekilde tanımlanmış scope setleri ile korunur.
-- İstemci, çağırdığı işlev için ilgili scope’lara sahip değilse işlem reddedilir.
-- Böylece tek bir genel token ile tüm yüksek yetkili özelliklere erişim engellenir; minimum yetki ilkesi uygulanır.
+Önemli notlar:
 
-Örnek scope atamaları:
-
-- geminiCodebaseAnalyzer → `analysis:read`, `codebase:read`
-- projectOrchestratorCreate → `orchestration:write`
-- projectOrchestratorAnalyze → `orchestration:read`
-- mcpSetupGuide → `config:read`
-- dynamicExpertCreate → `expert:create`
-- dynamicExpertAnalyze → `expert:analyze`
-- calculateTokenCount → `analysis:read`
-- echoResource / echoTool / catFactFetcher / imageTest → ilgili minimal ve sınırlı okuma scope’ları
-
-### Hata Davranışı
-
-Merkezi testler ile aşağıdaki davranış garanti altına alınmıştır:
-
-- Eksik veya yetersiz scope:
-  - İstek, yetkilendirme katmanında engellenir.
-  - Dışarıya 403/`FORBIDDEN` semantiğinde yanıt döndürülür.
-- Eksik auth context (beklenen kimlik bilgisi yok, yanlış bağlam):
-  - Bu durum konfigürasyon veya entegrasyon hatası olarak değerlendirilir.
-  - Dışarıya 500 serisi / `INTERNAL_ERROR` semantiğinde güvenli bir hata döner; hassas iç detaylar loglarda da redakte edilir.
-
-İlgili dosyalar:
-
-- tests/unit/mcp-server/transports/[authorizationScopes.test.ts](tests/unit/mcp-server/transports/authorizationScopes.test.ts:1)
-- İlgili tool ve blueprint registration dosyaları (scope tanımları)
+- `withRequiredScopes` yalnızca geriye dönük uyumluluk için bırakılmış no-op bir yardımcıdır;
+  herhangi bir güvenlik garantisi vermez.
+- Güvenlik kritik kurallar her zaman yukarıdaki harici katmanlarda uygulanmalıdır.
 
 ## SEC-04) Rate Limiting
 
@@ -251,26 +234,15 @@ Bu bölüm, CI süreçleri ve tedarik zinciri güvenliğinin, kod kalitesi ve ba
 
 Bu doküman, Gemini MCP Local projesini prod ortamlarında güvenli ve dayanıklı şekilde çalıştırmak için önerilen sertleştirme adımlarını içerir. Aşağıdaki pratikler HTTP/STDIO transportları, kimlik doğrulama, giriş doğrulama/sanitizasyon, kaynak sınırları ve tedarik zinciri güvenliğini kapsar.
 
-## 1) Kimlik Doğrulama ve Yetkilendirme
+## 1) Kimlik Doğrulama ve Yetkilendirme (Dış Katman)
 
-- HTTP transportta auth’u zorunlu tutun:
-  - `MCP_TRANSPORT_TYPE=http` kullanıyorsanız prod’da `MCP_DISABLE_AUTH` kesinlikle `false` olmalı.
-  - `MCP_AUTH_MODE=oauth` tercih edin; `jwt` sadece basit/dev senaryolar içindir.
-- OAuth (önerilir):
-  - `OAUTH_ISSUER_URL`, `OAUTH_JWKS_URI`, `OAUTH_AUDIENCE` değerlerini doğru yapılandırın.
-  - Token doğrulamada issuer ve audience kontrollerini zorunlu kılın.
-- JWT (geliştirme/kapalı ağlar):
-  - `MCP_AUTH_SECRET_KEY` en az 32+ karakter, yüksek entropili bir değer olmalı.
-  - Anahtar rotasyonu planlayın ve eski token’lar için geçici tolerans penceresi oluşturun.
-- İstek bağlamında kimlik:
-  - Auth context `AsyncLocalStorage` ile talep yaşam döngüsünde taşınıyor. Bu bilgiyi yetki kontrolü, log korelasyonu ve rate-limit anahtarı olarak kullanın.
-- Kaynaklar ve araçlar:
-  - Yetki tabanlı erişimi (scope/role) devreye almak için handler seviyesinde kontrol katmanı eklenebilir.
-
-İlgili dosyalar:
-- src/mcp-server/transports/auth/core/[authContext.ts](src/mcp-server/transports/auth/core/authContext.ts:1)
-- src/mcp-server/transports/auth/strategies/jwt/[jwtMiddleware.ts](src/mcp-server/transports/auth/strategies/jwt/jwtMiddleware.ts:1)
-- src/mcp-server/transports/auth/strategies/oauth/[oauthMiddleware.ts](src/mcp-server/transports/auth/strategies/oauth/oauthMiddleware.ts:1)
+- Bu MCP sunucusu, dahili bir JWT/OAuth veya scope enforcement katmanı içermez.
+- Üretim senaryolarında aşağıdakilerden en az birini uygulayın:
+  - Reverse proxy ile JWT/OIDC doğrulaması ve zorunlu TLS
+  - mTLS ile istemci sertifikası doğrulaması
+  - IP allowlist, bastion host veya private network üzerinden erişim
+  - API gateway / WAF üzerinde oran sınırlama ve erişim politikaları
+- MCP sunucusunu doğrudan internet'e açmayın; her zaman ağ ve kimlik katmanları ile sarın.
 
 ## 2) Sır Yönetimi ve Ortam Değişkenleri
 

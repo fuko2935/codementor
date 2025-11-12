@@ -7,7 +7,6 @@ import {
   RequestContext,
   requestContextService,
 } from "../../../utils/index.js";
-import { withRequiredScopes } from "../../transports/auth/core/authUtils.js";
  
 import {
   ProjectOrchestratorAnalyzeInputSchema,
@@ -38,12 +37,6 @@ export const registerProjectOrchestratorAnalyze = async (
         async (
           params: ProjectOrchestratorAnalyzeInput,
         ): Promise<CallToolResult> => {
-          // Enforce required orchestration:read scope before any business logic.
-          // withRequiredScopes:
-          // - Throws BaseErrorCode.INTERNAL_ERROR when auth context is missing (misconfiguration).
-          // - Throws BaseErrorCode.FORBIDDEN when required scopes are missing (403 semantics).
-          withRequiredScopes(["orchestration:read"]);
-
           const toolContext: RequestContext =
             requestContextService.createRequestContext({
               operation: "ProjectOrchestratorAnalyze",

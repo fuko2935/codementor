@@ -2,7 +2,8 @@
  * @fileoverview Unit tests for mcp_setup_guide tool
  * Tests:
  * - File creation, updating, and marker-based content injection
- * - Authorization behavior for mcp_setup_guide tool registration (SEC-02)
+ * - Path validation and safety checks
+ * - No reliance on built-in auth or scope enforcement
  */
 
 import { describe, it, beforeEach, afterEach } from "node:test";
@@ -22,7 +23,6 @@ import {
 import { requestContextService } from "../../../src/utils/index.js";
 import { registerMcpSetupGuide } from "../../../src/mcp-server/tools/mcpSetupGuide/registration.js";
 import { McpError, BaseErrorCode } from "../../../src/types-global/errors.js";
-import { authContext } from "../../../src/mcp-server/transports/auth/core/authContext.js";
 
 // ESM __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -325,7 +325,7 @@ describe("mcpSetupGuide Tool", () => {
       assert.strictEqual(dirExists, true);
     });
     
-    // Minimal fake server implementation mirroring gemini_codebase_analyzer tests
+    // Minimal fake server implementation mirroring other tool tests
     class TestMcpServer extends McpServer {
       public registeredTools: Map<
         string,
@@ -347,107 +347,23 @@ describe("mcpSetupGuide Tool", () => {
       }
     }
     
-    // Helper to invoke the tool handler with a given auth context
-    async function callWithAuthContext(
-      scopes: string[] | null,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      handler: (params: any) => Promise<CallToolResult>,
-    ) {
-      const baseParams: McpSetupGuideInput = {
-        client: "cursor",
-        projectPath: ".",
-        force: true,
-      };
-    
-      if (scopes) {
-        return await authContext.run(
-          {
-            authInfo: {
-              clientId: "test-client",
-              scopes,
-            },
-          },
-          async () => {
-            return handler(baseParams);
-          },
-        );
-      }
-    
-      // No auth context at all
-      return handler(baseParams);
-    }
-    
-    describe("mcp_setup_guide authorization scopes", () => {
-      it("should reject when required scope is missing", async () => {
+    describe("mcp_setup_guide registration (no built-in auth)", () => {
+      it("registers the tool with a callable handler", async () => {
         const server = new TestMcpServer();
         await registerMcpSetupGuide(server);
     
         const tool = server.registeredTools.get("mcp_setup_guide");
         assert.ok(tool, "mcp_setup_guide tool should be registered");
+        assert.ok(typeof tool.handler === "function", "handler must be a function");
     
-        await assert.rejects(
-          () => callWithAuthContext(["some:other"], tool!.handler),
-          (error: unknown) => {
-            assert.ok(error instanceof McpError, "Error should be McpError");
-            assert.strictEqual(
-              error.code,
-              BaseErrorCode.FORBIDDEN,
-              "Error code should be FORBIDDEN when config:read is missing",
-            );
-            return true;
-          },
-        );
-      });
+        const baseParams: McpSetupGuideInput = {
+          client: "cursor",
+          projectPath: ".",
+          force: true,
+        };
     
-      it("should reject when auth context is absent", async () => {
-        const server = new TestMcpServer();
-        await registerMcpSetupGuide(server);
-    
-        const tool = server.registeredTools.get("mcp_setup_guide");
-        assert.ok(tool, "mcp_setup_guide tool should be registered");
-    
-        await assert.rejects(
-          () => callWithAuthContext(null, tool!.handler),
-          (error: unknown) => {
-            assert.ok(error instanceof McpError, "Error should be McpError");
-            assert.strictEqual(
-              error.code,
-              BaseErrorCode.INTERNAL_ERROR,
-              "Missing auth context should be treated as INTERNAL_ERROR",
-            );
-            return true;
-          },
-        );
-      });
-    
-      it("should allow when required scope config:read is present", async () => {
-        const server = new TestMcpServer();
-        await registerMcpSetupGuide(server);
-    
-        const tool = server.registeredTools.get("mcp_setup_guide");
-        assert.ok(tool, "mcp_setup_guide tool should be registered");
-    
-        let caught: unknown | null = null;
-        try {
-          const result = await callWithAuthContext(
-            ["config:read"],
-            tool!.handler,
-          );
-          assert.ok(result, "Expected successful CallToolResult when scope is valid");
-        } catch (err) {
-          caught = err;
-        }
-    
-        if (caught) {
-          assert.ok(caught instanceof Error);
-          if (caught instanceof McpError) {
-            assert.notStrictEqual(
-              caught.code,
-              BaseErrorCode.FORBIDDEN,
-              "Should not fail with FORBIDDEN when config:read is present",
-            );
-          }
-        }
+        const result = await tool.handler(baseParams);
+        assert.ok(result, "Expected successful CallToolResult");
       });
     });
 

@@ -1,75 +1,111 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { glob } from "glob";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const srcDir = path.resolve(__dirname, "../src/mcp-server/tools/mcpSetupGuide/templates");
+const rootDir = path.resolve(__dirname, "..");
 
+// Kaynak: src/mcp-server/tools altındaki tüm **/templates dizinleri
+const srcToolsDir = path.join(rootDir, "src", "mcp-server", "tools");
+
+// Hedefler:
+// - dist/mcp-server/tools
+// - dist-test/src/mcp-server/tools
 const targetDirs = [
-  path.resolve(__dirname, "../dist/mcp-server/tools/mcpSetupGuide/templates"),
-  path.resolve(__dirname, "../dist-test/src/mcp-server/tools/mcpSetupGuide/templates"),
-];
+  path.join(rootDir, "dist", "mcp-server", "tools"),
+  path.join(rootDir, "dist-test", "src", "mcp-server", "tools"),
+] as const;
 
-function copyRecursive(src: string, dest: string): void {
-  fs.mkdirSync(dest, { recursive: true });
+async function copyDirectory(
+  srcDir: string,
+  destDir: string,
+): Promise<void> {
+  await fs.promises.mkdir(destDir, { recursive: true });
 
-  const entries = fs.readdirSync(src, { withFileTypes: true });
+  const entries = await fs.promises.readdir(srcDir, {
+    withFileTypes: true,
+  });
 
   for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
+    const srcPath = path.join(srcDir, entry.name);
+    const destPath = path.join(destDir, entry.name);
 
     if (entry.isDirectory()) {
-      copyRecursive(srcPath, destPath);
+      await copyDirectory(srcPath, destPath);
     } else if (entry.isFile()) {
-      fs.copyFileSync(srcPath, destPath);
+      await fs.promises.copyFile(srcPath, destPath);
     }
   }
 }
 
-function main(): void {
+async function main(): Promise<void> {
   try {
-    if (!fs.existsSync(srcDir)) {
+    // src/mcp-server/tools altındaki tüm templates klasörlerini bul
+    const pattern = path.join(
+      srcToolsDir.replace(/\\/g, "/"),
+      "**",
+      "templates",
+      "/",
+    );
+
+    const templateDirs = await glob(pattern, {
+      onlyDirectories: true,
+      absolute: true,
+    });
+
+    if (templateDirs.length === 0) {
       process.stderr.write(
-        `[copy-assets] Source directory not found: ${srcDir}\n` +
-          "[copy-assets] Ensure templates exist before running this script.\n",
+        `[copy-assets] No templates directories found under: ${srcToolsDir}\n`,
       );
-      process.exitCode = 1;
+      process.exit(1);
       return;
     }
 
-    const entries = fs.readdirSync(srcDir, { withFileTypes: true });
+    for (const srcTemplatesDir of templateDirs) {
+      // src/mcp-server/tools altına göre rölatif yol
+      const relativePath = path.relative(srcToolsDir, srcTemplatesDir);
 
-    if (entries.length === 0) {
-      process.stderr.write(
-        `[copy-assets] Source directory is empty: ${srcDir}\n` +
-          "[copy-assets] No templates to copy.\n",
-      );
-      // Non-fatal: continue to sync (idempotent behaviour).
-    }
+      for (const baseTargetDir of targetDirs) {
+        const targetTemplatesDir = path.join(baseTargetDir, relativePath);
 
-    for (const targetDir of targetDirs) {
-      try {
-        copyRecursive(srcDir, targetDir);
-      } catch (err) {
-        process.stderr.write(
-          `[copy-assets] Failed to copy templates to target: ${targetDir}\n` +
-            `[copy-assets] Error: ${
-              err instanceof Error ? err.message : String(err)
-            }\n`,
-        );
-        process.exit(1);
+        try {
+          await copyDirectory(srcTemplatesDir, targetTemplatesDir);
+          process.stdout.write(
+            `[copy-assets] Synced templates: ${srcTemplatesDir} -> ${targetTemplatesDir}\n`,
+          );
+        } catch (error) {
+          process.stderr.write(
+            `[copy-assets] Failed to copy templates directory\n` +
+              `[copy-assets] Source: ${srcTemplatesDir}\n` +
+              `[copy-assets] Target: ${targetTemplatesDir}\n` +
+              `[copy-assets] Error: ${
+                error instanceof Error ? error.message : String(error)
+              }\n`,
+          );
+          process.exit(1);
+        }
       }
     }
-  } catch (err) {
+  } catch (error) {
     process.stderr.write(
-      "[copy-assets] Unexpected error while copying templates.\n" +
-        `[copy-assets] Error: ${err instanceof Error ? err.message : String(err)}\n`,
+      "[copy-assets] Unexpected error while copying templates directories.\n" +
+        `[copy-assets] Error: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`,
     );
     process.exit(1);
   }
 }
 
-main();
+main().catch((error) => {
+  process.stderr.write(
+    "[copy-assets] Unhandled rejection.\n" +
+      `[copy-assets] Error: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`,
+  );
+  process.exit(1);
+});

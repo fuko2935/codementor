@@ -4,7 +4,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { BaseErrorCode, McpError } from "../../../../src/types-global/errors.js";
 import { registerCatFactFetcherTool } from "../../../../src/mcp-server/tool-blueprints/catFactFetcher/registration.js";
-import { authContext } from "../../../../src/mcp-server/transports/auth/core/authContext.js";
 
 type ToolHandler = (
   params: unknown,
@@ -26,79 +25,19 @@ function getRegisteredToolHandler(server: McpServer, name: string): ToolHandler 
   return tool.handler;
 }
 
-test("catFactFetcher: missing required scope results in FORBIDDEN", async () => {
+/**
+ * Bu testler, catFactFetcher aracının başarılı şekilde kaydedildiğini ve temel hata
+ * davranışlarının (McpError kullanımı) auth bağımlılığı olmadan sürdüğünü doğrular.
+ * Sunucu, varsayılan olarak kimlik doğrulaması yapmaz; gerekli ise harici olarak korunmalıdır.
+ */
+
+test("catFactFetcher: tool registers successfully and returns a response", async () => {
   const server = new McpServer();
   await registerCatFactFetcherTool(server);
 
   const handler = getRegisteredToolHandler(server, "get_random_cat_fact");
 
-  await assert.rejects(
-    async () => {
-      await authContext.run(
-        {
-          authInfo: {
-            clientId: "test-client",
-            subject: "test-subject",
-            scopes: ["some:other"],
-          },
-        },
-        async () => {
-          await handler({ maxLength: 64 });
-        },
-      );
-    },
-    (error: unknown) => {
-      assert.ok(error instanceof McpError, "Expected McpError to be thrown");
-      assert.equal(
-        error.code,
-        BaseErrorCode.FORBIDDEN,
-        "Expected FORBIDDEN error code for missing scope",
-      );
-      return true;
-    },
-  );
-});
-
-test("catFactFetcher: missing auth context results in INTERNAL_ERROR", async () => {
-  const server = new McpServer();
-  await registerCatFactFetcherTool(server);
-
-  const handler = getRegisteredToolHandler(server, "get_random_cat_fact");
-
-  await assert.rejects(
-    async () => {
-      await handler({ maxLength: 64 });
-    },
-    (error: unknown) => {
-      assert.ok(error instanceof McpError, "Expected McpError to be thrown");
-      assert.equal(
-        error.code,
-        BaseErrorCode.INTERNAL_ERROR,
-        "Expected INTERNAL_ERROR when auth context is missing",
-      );
-      return true;
-    },
-  );
-});
-
-test("catFactFetcher: succeeds when required external:fetch scope is present", async () => {
-  const server = new McpServer();
-  await registerCatFactFetcherTool(server);
-
-  const handler = getRegisteredToolHandler(server, "get_random_cat_fact");
-
-  const result = await authContext.run(
-    {
-      authInfo: {
-        clientId: "test-client",
-        subject: "test-subject",
-        scopes: ["external:fetch"],
-      },
-    },
-    async () => {
-      return handler({ maxLength: 64 });
-    },
-  );
+  const result = await handler({ maxLength: 64 });
 
   assert.ok(result, "Expected handler to return a result");
   assert.equal(
@@ -109,5 +48,24 @@ test("catFactFetcher: succeeds when required external:fetch scope is present", a
   assert.ok(
     Array.isArray(result.content),
     "Expected content to be an array in successful response",
+  );
+});
+
+test("catFactFetcher: propagates McpError correctly on invalid input", async () => {
+  const server = new McpServer();
+  await registerCatFactFetcherTool(server);
+
+  const handler = getRegisteredToolHandler(server, "get_random_cat_fact");
+
+  await assert.rejects(
+    async () => {
+      // Bilerek hatalı bir payload ile çağır.
+      // Gerçek doğrulama mantığı registration/logic tarafında tanımlı.
+      await handler({ maxLength: -1 });
+    },
+    (error: unknown) => {
+      assert.ok(error instanceof McpError || error instanceof Error);
+      return true;
+    },
   );
 });

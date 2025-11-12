@@ -1,10 +1,10 @@
 /**
- * @fileoverview Authorization scope tests for gemini_dynamic_expert_analyze tool.
+ * @fileoverview Registration and basic behavior tests for
+ * gemini_dynamic_expert_analyze tool.
  *
- * Scenarios:
- * 1) Missing required scope - expect McpError(BaseErrorCode.FORBIDDEN).
- * 2) Missing auth context   - expect McpError(BaseErrorCode.INTERNAL_ERROR).
- * 3) Required scope present - handler proceeds without FORBIDDEN.
+ * Note:
+ * - Built-in auth/scope enforcement has been removed.
+ * - These tests only verify registration and successful handler invocation.
  */
 
 import { describe, it } from "node:test";
@@ -13,8 +13,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { registerDynamicExpertAnalyze } from "../../../src/mcp-server/tools/dynamicExpertAnalyze/registration.js";
-import { McpError, BaseErrorCode } from "../../../src/types-global/errors.js";
-import { authContext } from "../../../src/mcp-server/transports/auth/core/authContext.js";
 
 /**
  * Minimal fake server to capture registered tools.
@@ -41,11 +39,10 @@ class TestMcpServer extends McpServer {
 }
 
 /**
- * Helper to invoke the tool handler with optional auth context.
+ * Helper to invoke the tool handler with standard params.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function callWithAuthContext(
-  scopes: string[] | null,
+async function callTool(
   handler: (params: any) => Promise<CallToolResult>,
 ) {
   const params = {
@@ -53,110 +50,19 @@ async function callWithAuthContext(
     question: "How does dynamic expert analyze work?",
     expertPrompt: "You are a test expert.",
   };
-
-  if (scopes) {
-    return await authContext.run(
-      {
-        authInfo: {
-          clientId: "test-client",
-          subject: "test-subject",
-          scopes,
-        },
-      },
-      async () => handler(params),
-    );
-  }
-
-  // No auth context at all
   return handler(params);
 }
 
-describe("gemini_dynamic_expert_analyze authorization scopes", () => {
-  it("rejects with FORBIDDEN when expert:analyze scope is missing", async () => {
+describe("gemini_dynamic_expert_analyze registration (no built-in auth)", () => {
+  it("registers the tool with a callable handler", async () => {
     const server = new TestMcpServer();
     await registerDynamicExpertAnalyze(server);
 
     const tool = server.registeredTools.get("gemini_dynamic_expert_analyze");
     assert.ok(tool, "gemini_dynamic_expert_analyze tool should be registered");
+    assert.ok(typeof tool.handler === "function", "handler must be a function");
 
-    await assert.rejects(
-      () => callWithAuthContext(["some:other"], tool!.handler),
-      (error: unknown) => {
-        assert.ok(error instanceof McpError, "Error should be McpError");
-        assert.strictEqual(
-          error.code,
-          BaseErrorCode.FORBIDDEN,
-          "Missing expert:analyze should yield FORBIDDEN",
-        );
-        return true;
-      },
-    );
+    const result = await callTool(tool.handler);
+    assert.ok(result, "Expected handler to return a result");
   });
-
-  it("rejects with INTERNAL_ERROR when auth context is missing", async () => {
-    const server = new TestMcpServer();
-    await registerDynamicExpertAnalyze(server);
-
-    const tool = server.registeredTools.get("gemini_dynamic_expert_analyze");
-    assert.ok(tool, "gemini_dynamic_expert_analyze tool should be registered");
-
-    await assert.rejects(
-      () => callWithAuthContext(null, tool!.handler),
-      (error: unknown) => {
-        assert.ok(error instanceof McpError, "Error should be McpError");
-        assert.strictEqual(
-          error.code,
-          BaseErrorCode.INTERNAL_ERROR,
-          "Missing auth context should be treated as INTERNAL_ERROR",
-        );
-        return true;
-      },
-    );
-  });
-
-  it("allows execution when expert:analyze scope is present", async () => {
-    const server = new TestMcpServer();
-    await registerDynamicExpertAnalyze(server);
-
-    const tool = server.registeredTools.get("gemini_dynamic_expert_analyze");
-    assert.ok(tool, "gemini_dynamic_expert_analyze tool should be registered");
-
-    let unexpectedError: unknown | null = null;
-
-    try {
-      const result = await callWithAuthContext(
-        ["expert:analyze"],
-        tool!.handler,
-      );
-      assert.ok(
-        result,
-        "Expected a CallToolResult-like response when required scope is present",
-      );
-
-      // If handler encodes errors into the result, ensure it is not a FORBIDDEN-style error.
-      if ("isError" in result && result.isError === true) {
-        const text =
-          Array.isArray(result.content) && result.content[0]?.type === "text"
-            ? result.content[0].text
-            : "";
-        assert.ok(
-          !/FORBIDDEN/i.test(text),
-          "Result should not indicate FORBIDDEN when expert:analyze scope is present",
-        );
-      }
-    } catch (error) {
-      unexpectedError = error;
-    }
-
-    if (unexpectedError) {
-      assert.ok(unexpectedError instanceof Error);
-      if (unexpectedError instanceof McpError) {
-        assert.notStrictEqual(
-          unexpectedError.code,
-          BaseErrorCode.FORBIDDEN,
-          "Should not throw FORBIDDEN when expert:analyze scope is present",
-        );
-      }
-    }
-  });
-}
+});

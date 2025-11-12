@@ -171,20 +171,18 @@ Son N commit:
 
 ---
 
+## Erişim Modeli
+
+- Bu projedeki HTTP ve STDIO MCP endpoint'leri, yerleşik bir kimlik doğrulama veya scope tabanlı yetkilendirme mekanizması içermez.
+- Sunucu; yerel geliştirme, güvenli/izole ortamlar veya kendi ağ/kimlik katmanınızın arkasında çalıştırılmak üzere tasarlanmıştır.
+- Üretim veya paylaşılan ortamlarda erişimi korumak için DAİMA harici mekanizmalar kullanın:
+  - Reverse proxy arkasında JWT/OIDC doğrulaması
+  - mTLS
+  - IP allowlist veya ağ segmentasyonu
+  - API gateway / WAF
+- Araçlar ve kaynaklar, sunucu tarafında scope kontrolü olmadan çağrılabilir; `withRequiredScopes` sadece geriye dönük uyumluluk için bırakılmış bir no-op yardımcıdır ve güvenlik kontrolü olarak KESİNLİKLE görülmemelidir.
+
 ## Güvenlik ve Mimari Öne Çıkanlar
-
-### Scope Tabanlı Yetkilendirme (BREAKING CHANGE)
-
-Tüm MCP araç ve kaynakları artık açık, scope tabanlı yetki modeliyle korunur. İstemciler, kimliklerine bağlı uygun scope setlerini göndermelidir; yetkisiz scope talepleri transport katmanında reddedilir.
-
-Örnek scope'lar:
-- `analysis:read` – analiz akışları ve raporlara erişim
-- `codebase:read` – depo/içerik okuma & inceleme
-- `orchestration:*` – proje orkestratör araçları
-- `tools:invoke` – MCP araç çağrıları
-- `resources:read` – MCP kaynak erişimi
-
-Tam scope listesi ve kırıcı değişiklik detayları için ilgili sürümün [CHANGELOG](CHANGELOG.md:1) girdisine bakın.
 
 ### Güvenli Yol Yönetimi (BASE_DIR + validateSecurePath)
 
@@ -235,13 +233,13 @@ Log çıktılarında hassas değerler agresif şekilde maskelenir.
 
 ## Güvenlik
 
-Üretim ortamı için sertleştirme rehberi: `docs/security-hardening.md`
+Üretim ortamı için detaylı sertleştirme rehberi:
+`docs/security-hardening.md` dosyasındaki önerileri izleyin.
 
-Git komutu çalıştırma güvenliği:
-- Revizyon değerleri sıkı regex ile doğrulanır
-- Kabuk meta karakterleri engellenir
-- Komut enjeksiyonunu önlemek için `simple-git` kullanılır
-- Yol geçişi (path traversal) `validateSecurePath` ile engellenir
+Özetle:
+- Bu MCP sunucusunu iç servis olarak konumlandırın.
+- TLS terminasyonu, kimlik doğrulama/yetkilendirme ve ağ sınırlandırmalarını ters proxy veya API gateway katmanında uygulayın.
+- Dosya sistemi, rate limiting, log redaksiyonu ve path güvenliği için mevcut yardımcıları etkin kullanın.
 
 ---
 

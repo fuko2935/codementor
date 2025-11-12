@@ -122,22 +122,6 @@ const EnvSchema = z.object({
   REDIS_PREFIX: z.string().optional(),
   /** Optional. Comma-separated allowed origins for CORS (HTTP transport). */
   MCP_ALLOWED_ORIGINS: z.string().optional(),
-  /** Optional. Secret key (min 32 chars) for auth tokens (HTTP transport). CRITICAL for production. */
-  MCP_AUTH_SECRET_KEY: z
-    .string()
-    .min(
-      32,
-      "MCP_AUTH_SECRET_KEY must be at least 32 characters long for security reasons.",
-    )
-    .optional(),
-  /** The authentication mode to use. 'jwt' for internal simple JWTs, 'oauth' for OAuth 2.1. Default: 'jwt'. */
-  MCP_AUTH_MODE: z.enum(["jwt", "oauth"]).default("jwt"),
-  /** The expected issuer URL for OAuth 2.1 access tokens. CRITICAL for validation. */
-  OAUTH_ISSUER_URL: z.string().url().optional(),
-  /** The JWKS (JSON Web Key Set) URI for the OAuth 2.1 provider. If not provided, it's often discoverable from the issuer URL. */
-  OAUTH_JWKS_URI: z.string().url().optional(),
-  /** The audience claim for the OAuth 2.1 access tokens. This server will reject tokens not intended for it. */
-  OAUTH_AUDIENCE: z.string().optional(),
 
   /** Optional. Application URL for OpenRouter integration. */
   OPENROUTER_APP_URL: z
@@ -208,31 +192,7 @@ const EnvSchema = z.object({
   MAX_PROJECT_TOKENS: z.coerce.number().int().positive().optional(),
   /** Maximum allowed git blob size in bytes for diff operations. Default: 4MB. Files exceeding this limit will be skipped. */
   MAX_GIT_BLOB_SIZE_BYTES: z.coerce.number().int().positive().optional(),
-  /** If true, disables authentication completely (DEVELOPMENT ONLY). Should NEVER be true in production. */
-  MCP_DISABLE_AUTH: z.preprocess(
-    (val) => String(val).toLowerCase() === "true",
-    z.boolean(),
-  ).optional(),
-}).refine(
-  (data) => {
-    // JWT secret key is only required for HTTP transport with JWT auth mode
-    // STDIO transport doesn't use authentication at all
-    if (
-      data.MCP_TRANSPORT_TYPE === "http" && 
-      !data.MCP_DISABLE_AUTH && 
-      data.MCP_AUTH_MODE === "jwt" && 
-      !data.MCP_AUTH_SECRET_KEY
-    ) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message:
-      "MCP_AUTH_SECRET_KEY must be set when using HTTP transport with JWT auth mode (unless MCP_DISABLE_AUTH is true).",
-    path: ["MCP_AUTH_SECRET_KEY"],
-  },
-);
+});
 
 const parsedEnv = EnvSchema.safeParse(process.env);
 
@@ -415,16 +375,6 @@ export const config = {
   mcpAllowedOrigins: env.MCP_ALLOWED_ORIGINS?.split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
-  /** Auth secret key (JWTs, http transport). From `MCP_AUTH_SECRET_KEY`. CRITICAL. */
-  mcpAuthSecretKey: env.MCP_AUTH_SECRET_KEY,
-  /** The authentication mode ('jwt' or 'oauth'). From `MCP_AUTH_MODE`. */
-  mcpAuthMode: env.MCP_AUTH_MODE,
-  /** OAuth 2.1 Issuer URL. From `OAUTH_ISSUER_URL`. */
-  oauthIssuerUrl: env.OAUTH_ISSUER_URL,
-  /** OAuth 2.1 JWKS URI. From `OAUTH_JWKS_URI`. */
-  oauthJwksUri: env.OAUTH_JWKS_URI,
-  /** OAuth 2.1 Audience. From `OAUTH_AUDIENCE`. */
-  oauthAudience: env.OAUTH_AUDIENCE,
   /** OpenRouter App URL. From `OPENROUTER_APP_URL`. Default: "http://localhost:3000". */
   openrouterAppUrl: env.OPENROUTER_APP_URL || "http://localhost:3000",
   /** OpenRouter App Name. From `OPENROUTER_APP_NAME`. Defaults to `mcpServerName`. */
@@ -465,8 +415,6 @@ export const config = {
   maxProjectTokens: env.MAX_PROJECT_TOKENS ?? 20_000_000,
   /** Maximum git blob size in bytes for diff operations. From `MAX_GIT_BLOB_SIZE_BYTES`. Default: 4MB. */
   maxGitBlobSizeBytes: env.MAX_GIT_BLOB_SIZE_BYTES ?? 4 * 1024 * 1024,
-  /** Whether authentication is disabled. From `MCP_DISABLE_AUTH`. Default: false. */
-  mcpDisableAuth: env.MCP_DISABLE_AUTH ?? false,
   /** Default LLM provider. From `LLM_DEFAULT_PROVIDER`. */
   llmDefaultProvider: env.LLM_DEFAULT_PROVIDER,
   /** Default LLM model. From `LLM_DEFAULT_MODEL`. */
