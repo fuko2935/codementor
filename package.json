@@ -67,7 +67,7 @@
     "glob": "^11.0.3",
     "hono": "^4.10.4",
     "ignore": "^7.0.5",
-    "openai": "^5.8.2",
+    "openai": "^6.9.0",
     "partial-json": "^0.1.7",
     "sanitize-html": "^2.17.0",
     "simple-git": "^3.30.0",
