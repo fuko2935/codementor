@@ -16,19 +16,15 @@ import {
   getAllClientNames,
 } from "../../../config/clientProfiles.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
-import { refreshMcpConfigCache } from "../../utils/mcpConfigValidator.js";
+import {
+  MCP_CONTENT_START_MARKER,
+  MCP_CONTENT_END_MARKER,
+  refreshMcpConfigCache,
+} from "../../utils/mcpConfigValidator.js";
 
 // ESM __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
- // Marker constants for content injection (shared contract)
- // Use centralized definitions from mcpConfigValidator to ensure consistency.
- import {
-   MCP_CONTENT_START_MARKER,
-   MCP_CONTENT_END_MARKER,
-   refreshMcpConfigCache,
- } from "../../utils/mcpConfigValidator.js";
 
 // Schema for project-specific rules (minimal but extensible)
 export const ProjectRulesSchema = z

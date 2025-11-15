@@ -13,6 +13,7 @@ import {
   logger,
   RequestContext,
   requestContextService,
+  sanitization,
 } from "../../../utils/index.js";
 import { config } from "../../../config/index.js";
 import {
@@ -70,6 +71,8 @@ export const registerGeminiCodebaseAnalyzer = async (
             question:
               params.question.substring(0, 100) +
               (params.question.length > 100 ? "..." : ""),
+            // Sanitize params to prevent API key leakage
+            sanitizedParams: sanitization.sanitizeForLogging(params),
           });
 
           try {
@@ -132,6 +135,8 @@ ${result.analysis}
               ...toolContext,
               error: handledError.message,
               projectPath: params.projectPath,
+              // Sanitize params in error logs
+              sanitizedParams: sanitization.sanitizeForLogging(params),
             });
 
             return {

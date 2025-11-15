@@ -9,7 +9,7 @@ import { z } from "zod";
 import { promises as fs } from "fs";
 import path from "path";
 import { glob } from "glob";
-import { logger, type RequestContext, createIgnoreInstance } from "../../../utils/index.js";
+import { logger, type RequestContext, createIgnoreInstance, sanitization } from "../../../utils/index.js";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { config } from "../../../config/index.js";
 import { BASE_DIR } from "../../../index.js";
@@ -301,7 +301,7 @@ async function prepareFullContext(
         logger.debug("Skipping unreadable file", {
           ...context,
           file,
-          error: String(error),
+          error: error instanceof Error ? error.message : String(error),
         });
       }
     }
@@ -331,9 +331,13 @@ async function prepareFullContext(
     }
     logger.error("Failed to prepare project context", {
       ...context,
-      error: String(error),
+      error: error instanceof Error ? error.message : String(error),
     });
-    throw new Error(`Failed to prepare project context: ${error}`);
+    throw new McpError(
+      BaseErrorCode.INTERNAL_ERROR,
+      `Failed to prepare project context: ${error instanceof Error ? error.message : String(error)}`,
+      { originalError: error }
+    );
   }
 }
 
@@ -361,6 +365,8 @@ export async function geminiCodebaseAnalyzerLogic(
     projectPath: params.projectPath,
     questionLength: params.question.length,
     analysisMode: params.analysisMode || "general",
+    // Sanitize params to prevent API key leakage
+    sanitizedParams: sanitization.sanitizeForLogging(params),
   });
 
   try {
@@ -493,7 +499,14 @@ export async function geminiCodebaseAnalyzerLogic(
     );
 
     if (fullContext.length === 0) {
-      throw new Error("No readable files found in the project directory");
+      throw new McpError(
+        BaseErrorCode.VALIDATION_ERROR,
+        "No readable files found in the project directory. Check your .gitignore or .mcpignore files.",
+        {
+          projectPath: normalizedPath,
+          processedFiles: 0,
+        }
+      );
     }
 
     // Extract git diff if includeChanges is provided
@@ -628,7 +641,17 @@ ${validatedParams.question}`;
     logger.error("Gemini codebase analysis failed", {
       ...context,
       error: String(error),
+      // Sanitize params in error logs
+      sanitizedParams: sanitization.sanitizeForLogging(params),
     });
-    throw new Error(`Codebase analysis failed: ${error}`);
+    // Re-throw McpError as-is, wrap others
+    if (error instanceof McpError) {
+      throw error;
+    }
+    throw new McpError(
+      BaseErrorCode.INTERNAL_ERROR,
+      `Codebase analysis failed: ${error instanceof Error ? error.message : String(error)}`,
+      { originalError: error }
+    );
   }
 }
