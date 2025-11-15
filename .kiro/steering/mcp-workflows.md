@@ -4,7 +4,7 @@ inclusion: always
 
 # Development Workflows
 
-This document defines standard workflows for common development tasks in the Gemini MCP Local project.
+This document defines standard workflows for common development tasks in the CodeMentor project.
 
 ## Adding a New MCP Tool
 

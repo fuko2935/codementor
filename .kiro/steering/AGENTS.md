@@ -1,7 +1,7 @@
 # AI Assistant Configuration
 
-<!-- MCP:GEMINI-MCP-LOCAL:START -->
-# 🤖 MCP Gemini Local - AI Asistanı Kullanım Rehberi
+<!-- MCP:CODEMENTOR:START -->
+# 🤖 CodeMentor - AI Asistanı Kullanım Rehberi
 
 Bu rehber, AI asistanlarının MCP araçlarını doğru, güvenli ve verimli kullanması için optimize edilmiştir.
 
@@ -95,4 +95,4 @@ Bu rehber, AI asistanlarının MCP araçlarını doğru, güvenli ve verimli kul
 - Analyzer zaman aşımı: `orchestrator` veya `autoOrchestrate=true`.
 - Path traversal hatası: `.` gibi göreli yol kullan.
 - `fileGroupsData missing`: `create` çıktısını `analyze`’a aktar.
-<!-- MCP:GEMINI-MCP-LOCAL:END -->
+<!-- MCP:CODEMENTOR:END -->

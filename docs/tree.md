@@ -1,9 +1,9 @@
-# gemini-mcp-local - Directory Structure
+# codementor - Directory Structure
 
 Generated on: 2025-11-04 00:56:14
 
 ```
-gemini-mcp-local
+codementor
 ├── .github
 │   ├── workflows
 │   │   └── publish.yml

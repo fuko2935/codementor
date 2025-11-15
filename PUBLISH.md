@@ -9,7 +9,7 @@
 
 ### 1. Verify Package Name
 
-The published name is `gemini-mcp-local` (unscoped). Ensure `package.json` reflects this before publishing.
+The published name is `codementor` (unscoped). Ensure `package.json` reflects this before publishing.
 
 ### 2. Build the Project
 
@@ -43,9 +43,9 @@ Kullanıcılar artık Cursor'da MCP server'ınızı şu şekilde kullanabilir:
 ```json
 {
   "mcpServers": {
-    "gemini-mcp-local": {
+    "codementor": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-local"],
+      "args": ["-y", "codementor"],
       "env": {
         "LLM_DEFAULT_PROVIDER": "gemini-cli"
       }
@@ -59,9 +59,9 @@ Kullanıcılar artık Cursor'da MCP server'ınızı şu şekilde kullanabilir:
 ```json
 {
   "mcpServers": {
-    "gemini-mcp-local": {
+    "codementor": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-local"],
+      "args": ["-y", "codementor"],
       "env": {
         "LLM_DEFAULT_PROVIDER": "gemini",
         "GOOGLE_API_KEY": "their-api-key"

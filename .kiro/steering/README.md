@@ -1,6 +1,6 @@
 # MCP Steering Rules
 
-This directory contains comprehensive development guidelines and standards for the Gemini MCP Local project, optimized for AI assistant context loading.
+This directory contains comprehensive development guidelines and standards for the CodeMentor project, optimized for AI assistant context loading.
 
 ## Quick Start
 

@@ -4,7 +4,7 @@ inclusion: always
 
 # Error Handling Standards
 
-This document defines the comprehensive error handling strategy for the Gemini MCP Local project. All code must follow these patterns for consistent, traceable, and user-friendly error management.
+This document defines the comprehensive error handling strategy for the CodeMentor project. All code must follow these patterns for consistent, traceable, and user-friendly error management.
 
 ## Error Architecture
 

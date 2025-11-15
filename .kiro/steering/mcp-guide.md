@@ -1,7 +1,7 @@
 # AI Assistant Configuration
 
-<!-- MCP:GEMINI-MCP-LOCAL:START -->
-# MCP Gemini Local - Project Bootstrap & Usage Guide
+<!-- MCP:CODEMENTOR:START -->
+# CodeMentor - Project Bootstrap & Usage Guide
 
 **⚠️ IMPORTANT: DO NOT DELETE OR MANUALLY EDIT THIS BLOCK ⚠️**
 
@@ -198,4 +198,4 @@ Temel ilkeler:
   - Kritik analiz araçları (`gemini_codebase_analyzer`, `project_orchestrator_*`, `dynamic_expert_*`) çalışmamalı;
   - Bunun yerine kullanıcıya önce bootstrap çağrısı önerilmelidir.
 - Bu rehber ve içindeki kurallar, AI için tek kanonik referanstır.
-<!-- MCP:GEMINI-MCP-LOCAL:END -->
+<!-- MCP:CODEMENTOR:END -->

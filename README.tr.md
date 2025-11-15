@@ -1,6 +1,6 @@
 Languages: [English](README.md) | Türkçe
 
-# Gemini MCP Local Tool (Türkçe)
+# CodeMentor (Türkçe)
 
 Bu proje, yerel makinenizde çalıştırabileceğiniz hafif bir Model Context Protocol (MCP) sunucusudur. `npx` ile anında başlatılabilir. Supabase, DuckDB veya ajan bağımlılıkları olmadan kapsamlı analiz iş akışları sağlar. Ortam değişkenleri ile API anahtarlarınızı tanımlayın, bir taşıyıcı seçin (varsayılan `stdio`, gerektiğinde `http`) ve Claude Desktop ya da MCP uyumlu herhangi bir istemciye bağlanın.
 
@@ -18,7 +18,7 @@ npm install -g @google/gemini-cli
 gemini  # "Login with Google" seçeneğini kullanın
 
 # Sunucuyu çalıştırın
-npx gemini-mcp-local
+npx codementor
 ```
 
 Alternatif: API Anahtarı ile
@@ -26,7 +26,7 @@ Alternatif: API Anahtarı ile
 ```bash
 # ⚠️ GÜVENLİK UYARISI: API anahtarlarını asla dosyalara gömmeyin!
 export GOOGLE_API_KEY="google veya gemini anahtarınız"
-LLM_DEFAULT_PROVIDER=gemini npx gemini-mcp-local
+LLM_DEFAULT_PROVIDER=gemini npx codementor
 ```
 
 CLI varsayılan olarak STDIO taşımacılığıyla başlar; Claude Desktop ve yerel MCP istemcileri için hazırdır.
@@ -35,7 +35,7 @@ CLI varsayılan olarak STDIO taşımacılığıyla başlar; Claude Desktop ve ye
 
 ```bash
 git clone <repo-url>
-cd gemini-mcp-local
+cd codementor
 npm install
 npm run build
 npm start

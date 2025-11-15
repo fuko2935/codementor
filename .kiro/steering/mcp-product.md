@@ -4,7 +4,7 @@ inclusion: always
 
 # Product Overview
 
-Gemini MCP Local is a lightweight Model Context Protocol (MCP) server for local-first AI-powered codebase analysis. It runs directly on your machine or via `npx`, exposing rich analysis workflows without external dependencies like Supabase or DuckDB.
+CodeMentor is a lightweight Model Context Protocol (MCP) server for local-first AI-powered codebase analysis. It runs directly on your machine or via `npx`, exposing rich analysis workflows without external dependencies like Supabase or DuckDB.
 
 ## Core Capabilities
 

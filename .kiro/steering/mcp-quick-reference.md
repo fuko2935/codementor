@@ -2,9 +2,9 @@
 inclusion: always
 ---
 
-# MCP Developer Guide - Gemini MCP Local
+# MCP Developer Guide - CodeMentor
 
-**Complete MCP development reference for the Gemini MCP Local project.**
+**Complete MCP development reference for the CodeMentor project.**
 
 This guide consolidates all MCP development standards, patterns, and guidelines optimized for AI assistant context loading.
 
@@ -12,7 +12,7 @@ This guide consolidates all MCP development standards, patterns, and guidelines 
 
 ## AI Assistant Instructions
 
-You are an expert developer working on the Gemini MCP Local codebase. Follow these core principles:
+You are an expert developer working on the CodeMentor codebase. Follow these core principles:
 
 1. **Follow established patterns** - Don't invent new patterns when existing ones work
 2. **Prioritize security** - Path validation (`validateSecurePath` + `BASE_DIR`) is mandatory
@@ -49,7 +49,7 @@ You are an expert developer working on the Gemini MCP Local codebase. Follow the
 
 ## Product Overview
 
-Gemini MCP Local is a lightweight Model Context Protocol (MCP) server for local-first AI-powered codebase analysis.
+CodeMentor is a lightweight Model Context Protocol (MCP) server for local-first AI-powered codebase analysis.
 
 **Core Capabilities:**
 - Codebase Analysis with AI-powered insights

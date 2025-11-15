@@ -1,10 +1,10 @@
 {
-  "name": "gemini-mcp-local",
-  "version": "2.12.5",
-  "description": "Local-first Gemini MCP tool for stdio or HTTP transports using environment-supplied provider credentials.",
+  "name": "codementor",
+  "version": "3.0.0",
+  "description": "Local-first AI-powered codebase analysis tool for stdio or HTTP transports using environment-supplied provider credentials.",
   "main": "dist/index.js",
   "bin": {
-    "gemini-mcp-local": "dist/index.js"
+    "codementor": "dist/index.js"
   },
   "files": [
     "dist",
@@ -21,12 +21,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/fuko2935/gemini-mcp-local.git"
+    "url": "git+https://github.com/fuko2935/codementor.git"
   },
   "bugs": {
-    "url": "https://github.com/fuko2935/gemini-mcp-local/issues"
+    "url": "https://github.com/fuko2935/codementor/issues"
   },
-  "homepage": "https://github.com/fuko2935/gemini-mcp-local#readme",
+  "homepage": "https://github.com/fuko2935/codementor#readme",
   "scripts": {
     "build": "tsc && npm run copy:templates",
     "copy:templates": "ts-node --esm scripts/copy-assets.ts",

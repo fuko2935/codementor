@@ -4,7 +4,7 @@ inclusion: always
 
 # Development Patterns & Conventions
 
-This document defines mandatory development patterns, coding conventions, and architectural standards for the Gemini MCP Local project. All code contributions must adhere to these patterns.
+This document defines mandatory development patterns, coding conventions, and architectural standards for the CodeMentor project. All code contributions must adhere to these patterns.
 
 ## Core Design Principles
 

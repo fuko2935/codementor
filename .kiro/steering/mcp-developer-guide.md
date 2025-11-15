@@ -1,6 +1,6 @@
 # Developer Guide
 
-Comprehensive development standards and guidelines for the Gemini MCP Local project.
+Comprehensive development standards and guidelines for the CodeMentor project.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ Comprehensive development standards and guidelines for the Gemini MCP Local proj
 
 ## 1. Product Overview
 
-Gemini MCP Local is a lightweight Model Context Protocol (MCP) server for local-first AI-powered codebase analysis. It runs directly on your machine or via `npx`, exposing rich analysis workflows without external dependencies like Supabase or DuckDB.
+CodeMentor is a lightweight Model Context Protocol (MCP) server for local-first AI-powered codebase analysis. It runs directly on your machine or via `npx`, exposing rich analysis workflows without external dependencies like Supabase or DuckDB.
 
 ### Core Capabilities
 
@@ -624,7 +624,7 @@ export async function processUserData(
 
 ## 3. Development Patterns
 
-This section defines mandatory development patterns, coding conventions, and architectural standards for the Gemini MCP Local project. All code contributions must adhere to these patterns.
+This section defines mandatory development patterns, coding conventions, and architectural standards for the CodeMentor project. All code contributions must adhere to these patterns.
 
 ### Core Design Principles
 
@@ -1080,7 +1080,7 @@ Before submitting a new tool, verify:
 
 ## 4. Security Practices
 
-This section defines mandatory security practices for the Gemini MCP Local project. All code must adhere to these security standards to prevent vulnerabilities and protect user data.
+This section defines mandatory security practices for the CodeMentor project. All code must adhere to these security standards to prevent vulnerabilities and protect user data.
 
 ### Security Architecture
 
@@ -1815,7 +1815,7 @@ For additional security hardening guidelines and best practices, see [`docs/secu
 
 ## 5. Error Handling
 
-This section defines the comprehensive error handling strategy for the Gemini MCP Local project. All code must follow these patterns for consistent, traceable, and user-friendly error management.
+This section defines the comprehensive error handling strategy for the CodeMentor project. All code must follow these patterns for consistent, traceable, and user-friendly error management.
 
 ### Error Architecture
 
@@ -2648,7 +2648,7 @@ Before submitting code, verify:
 
 ## 6. Workflows
 
-This section defines standard workflows for common development tasks in the Gemini MCP Local project.
+This section defines standard workflows for common development tasks in the CodeMentor project.
 
 ### Tool Status Reference
 
@@ -3610,7 +3610,7 @@ See [Architecture & Technology Stack](#2-architecture--technology-stack) for det
 
 ## 4. Security Practices
 
-This section defines mandatory security practices for the Gemini MCP Local project. All code must adhere to these security standards to prevent vulnerabilities and protect user data.
+This section defines mandatory security practices for the CodeMentor project. All code must adhere to these security standards to prevent vulnerabilities and protect user data.
 
 ### Security Architecture
 
@@ -3924,7 +3924,7 @@ Before deploying or merging code:
 
 ## 5. Error Handling
 
-This section defines the comprehensive error handling strategy for the Gemini MCP Local project. All code must follow these patterns for consistent, traceable, and user-friendly error management.
+This section defines the comprehensive error handling strategy for the CodeMentor project. All code must follow these patterns for consistent, traceable, and user-friendly error management.
 
 ### Error Architecture
 

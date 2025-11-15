@@ -1,6 +1,6 @@
 # Source Directory Overview
 
-The `src` directory contains the TypeScript sources that power the `gemini-mcp-local` CLI and the reusable MCP server scaffolding. The codebase has been trimmed to focus on local execution—no Supabase, DuckDB, or agent framework remains.
+The `src` directory contains the TypeScript sources that power the `codementor` CLI and the reusable MCP server scaffolding. The codebase has been trimmed to focus on local execution—no Supabase, DuckDB, or agent framework remains.
 
 ## Key Modules
 

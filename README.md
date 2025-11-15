@@ -1,8 +1,8 @@
-# Gemini MCP Local Tool
+# CodeMentor
 
 Languages: English | Türkçe (README.tr.md)
 
-Gemini MCP Local is a lightweight Model Context Protocol (MCP) server that you can run directly on your machine or launch ad-hoc with `npx`. It exposes the same rich analysis workflow used in the original Smithery-compatible server without the Supabase, DuckDB, or agent dependencies. Bring your own API keys via environment variables, pick a transport (`stdio` by default, `http` when you need it), and you are ready to connect from Claude Desktop or any MCP-compliant client.
+CodeMentor is a lightweight Model Context Protocol (MCP) server that you can run directly on your machine or launch ad-hoc with `npx`. It exposes the same rich analysis workflow used in the original Smithery-compatible server without the Supabase, DuckDB, or agent dependencies. Bring your own API keys via environment variables, pick a transport (`stdio` by default, `http` when you need it), and you are ready to connect from Claude Desktop or any MCP-compliant client.
 
 ---
 
@@ -18,7 +18,7 @@ npm install -g @google/gemini-cli
 gemini  # Then select "Login with Google"
 
 # Run the server
-npx gemini-mcp-local
+npx codementor
 ```
 
 **With API Key (Alternative):**
@@ -27,7 +27,7 @@ npx gemini-mcp-local
 # ⚠️ SECURITY WARNING: Never hardcode API keys in config files!
 # Set the API key as an environment variable instead:
 export GOOGLE_API_KEY="your-google-or-gemini-key"
-LLM_DEFAULT_PROVIDER=gemini npx gemini-mcp-local
+LLM_DEFAULT_PROVIDER=gemini npx codementor
 ```
 
 The CLI starts on STDIO transport by default so it is immediately ready for Claude Desktop and other local MCP clients.
@@ -36,7 +36,7 @@ The CLI starts on STDIO transport by default so it is immediately ready for Clau
 
 ```bash
 git clone <repo-url>
-cd gemini-mcp-local
+cd codementor
 npm install
 npm run build
 npm start
@@ -108,7 +108,7 @@ Set whichever providers you plan to call; the shared resolver looks at request p
 
 ## Transports
 
-- **STDIO (default):** Ideal for Claude Desktop or any local MCP orchestrator. Start with `npx gemini-mcp-local` or `npm start` and point your client at the binary.
+- **STDIO (default):** Ideal for Claude Desktop or any local MCP orchestrator. Start with `npx codementor` or `npm start` and point your client at the binary.
 - **HTTP:** Set `MCP_TRANSPORT_TYPE=http` (and optionally `MCP_HTTP_PORT` / `MCP_HTTP_HOST`). The server exposes the MCP streamable HTTP endpoint at `http://<host>:<port>/mcp`.
 
 Logs for both transports land in `logs/activity.log` and `logs/error.log`. Delete the directory to reset.
@@ -455,9 +455,9 @@ Use the sample in [`claude_desktop_config.example.json`](./claude_desktop_config
 ```json
 {
   "mcpServers": {
-    "gemini-mcp-local": {
+    "codementor": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-local"],
+      "args": ["-y", "codementor"],
       "env": {
         "LLM_DEFAULT_PROVIDER": "gemini-cli"
       }
@@ -471,9 +471,9 @@ Or with API key authentication (⚠️ **SECURITY WARNING:** Never hardcode API 
 ```json
 {
   "mcpServers": {
-    "gemini-mcp-local": {
+    "codementor": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-local"],
+      "args": ["-y", "codementor"],
       "env": {
         "LLM_DEFAULT_PROVIDER": "gemini"
         // DO NOT add GOOGLE_API_KEY here - set it as an environment variable instead!

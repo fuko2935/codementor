@@ -1,5 +1,52 @@
 # Changelog
 
+## [3.0.0] - 2025-01-16
+
+### 🚨 BREAKING CHANGE: Project Renamed to CodeMentor
+
+**CRITICAL:** This is a major breaking change. The project has been completely renamed from `gemini-mcp-local` to `codementor`.
+
+#### What Changed:
+- **NPM Package:** `gemini-mcp-local` → `codementor`
+- **Command:** `npx gemini-mcp-local` → `npx codementor`
+- **Repository:** `fuko2935/gemini-mcp-local` → `fuko2935/codementor`
+- **Config Files:** All MCP server configurations must update the server name from `gemini-mcp-local` to `codementor`
+
+#### Migration Guide:
+
+1. **Update your MCP configuration files:**
+   ```json
+   {
+     "mcpServers": {
+       "codementor": {  // Changed from "gemini-mcp-local"
+         "command": "npx",
+         "args": ["-y", "codementor"],  // Changed from "gemini-mcp-local"
+         "env": {
+           "LLM_DEFAULT_PROVIDER": "gemini-cli"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Update your commands:**
+   - Old: `npx gemini-mcp-local`
+   - New: `npx codementor`
+
+3. **Update repository references:**
+   - Old: `https://github.com/fuko2935/gemini-mcp-local`
+   - New: `https://github.com/fuko2935/codementor`
+
+#### Why This Change?
+
+The new name "CodeMentor" better reflects the tool's purpose as an AI-powered code analysis and mentoring assistant, while being more memorable and brandable.
+
+#### Deprecation Notice:
+
+The `gemini-mcp-local` package on npm has been deprecated and will no longer receive updates. Please migrate to `codementor` as soon as possible.
+
+---
+
 ## [2.10.4] - 2025-11-09
 
 ### Security / Breaking Changes

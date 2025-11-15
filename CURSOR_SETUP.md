@@ -46,9 +46,9 @@ Aşağıdaki JSON içeriğini yukarıdaki konuma yapıştırın:
 ```json
 {
   "mcpServers": {
-    "gemini-mcp-local": {
+    "codementor": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-local"],
+      "args": ["-y", "codementor"],
       "env": {
         "LLM_DEFAULT_PROVIDER": "gemini-cli"
       }
@@ -64,9 +64,9 @@ Aşağıdaki JSON içeriğini yukarıdaki konuma yapıştırın:
 ```json
 {
   "mcpServers": {
-    "gemini-mcp-local": {
+    "codementor": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-local"],
+      "args": ["-y", "codementor"],
       "env": {
         "LLM_DEFAULT_PROVIDER": "gemini"
         // GOOGLE_API_KEY'i buraya EKLEMEYİN - environment variable olarak ayarlayın!
@@ -103,7 +103,7 @@ Config dosyasını oluşturduktan sonra Cursor'u tamamen kapatıp tekrar açın.
 
 Cursor'da MCP araçlarına şu şekilde erişebilirsiniz:
 
-1. **Chat Panelinde:** Cursor'un chat panelinde `@gemini-mcp-local` yazarak araçları kullanabilirsiniz
+1. **Chat Panelinde:** Cursor'un chat panelinde `@codementor` yazarak araçları kullanabilirsiniz
 
 2. **Doğrudan Araç Adları:**
    - `gemini_codebase_analyzer` - Proje analizi için kapsamlı analiz
@@ -114,7 +114,7 @@ Cursor'da MCP araçlarına şu şekilde erişebilirsiniz:
 ### Örnek Kullanım
 
 ```
-@gemini-mcp-local gemini_codebase_analyzer ile proje yolunu analiz et
+@codementor gemini_codebase_analyzer ile proje yolunu analiz et
 ```
 
 veya

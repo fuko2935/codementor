@@ -1,6 +1,6 @@
 # Güvenlik Sertleştirme Rehberi
 
-Bu doküman, Gemini MCP Local projesini prod ortamlarında güvenli ve dayanıklı şekilde çalıştırmak için önerilen sertleştirme adımlarını içerir. Aşağıdaki pratikler HTTP/STDIO transportları, kimlik doğrulama, giriş doğrulama/sanitizasyon, kaynak sınırları ve tedarik zinciri güvenliğini kapsar.
+Bu doküman, CodeMentor projesini prod ortamlarında güvenli ve dayanıklı şekilde çalıştırmak için önerilen sertleştirme adımlarını içerir. Aşağıdaki pratikler HTTP/STDIO transportları, kimlik doğrulama, giriş doğrulama/sanitizasyon, kaynak sınırları ve tedarik zinciri güvenliğini kapsar.
 
 ## SEC-01) Logging & Sanitization
 
@@ -232,7 +232,7 @@ Bu bölüm, CI süreçleri ve tedarik zinciri güvenliğinin, kod kalitesi ve ba
 
 # Güvenlik Sertleştirme Rehberi
 
-Bu doküman, Gemini MCP Local projesini prod ortamlarında güvenli ve dayanıklı şekilde çalıştırmak için önerilen sertleştirme adımlarını içerir. Aşağıdaki pratikler HTTP/STDIO transportları, kimlik doğrulama, giriş doğrulama/sanitizasyon, kaynak sınırları ve tedarik zinciri güvenliğini kapsar.
+Bu doküman, CodeMentor projesini prod ortamlarında güvenli ve dayanıklı şekilde çalıştırmak için önerilen sertleştirme adımlarını içerir. Aşağıdaki pratikler HTTP/STDIO transportları, kimlik doğrulama, giriş doğrulama/sanitizasyon, kaynak sınırları ve tedarik zinciri güvenliğini kapsar.
 
 ## 1) Kimlik Doğrulama ve Yetkilendirme (Dış Katman)
 

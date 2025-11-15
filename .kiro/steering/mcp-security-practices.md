@@ -4,7 +4,7 @@ inclusion: always
 
 # Security Practices
 
-This document defines mandatory security practices for the Gemini MCP Local project. All code must adhere to these security standards to prevent vulnerabilities and protect user data.
+This document defines mandatory security practices for the CodeMentor project. All code must adhere to these security standards to prevent vulnerabilities and protect user data.
 
 ## Security Architecture
 

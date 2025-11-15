@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document explains the high-level architecture, request flows, module boundaries, and extension points of the Gemini MCP Local project.
+This document explains the high-level architecture, request flows, module boundaries, and extension points of the CodeMentor project.
 
 Key source areas:
 - src/index.ts — process bootstrap and server startup
