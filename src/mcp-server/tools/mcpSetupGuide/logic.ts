@@ -84,7 +84,7 @@ async function generateMcpGuideContent(context?: RequestContext): Promise<string
       BaseErrorCode.INTERNAL_ERROR,
       `CRITICAL: The MCP guide template file is missing. This indicates a build or packaging issue.
 
-Please report this at: https://github.com/fuko2935/gemini-mcp-local/issues
+Please report this at: https://github.com/fuko2935/codementor/issues
 
 Expected location: src/mcp-server/tools/mcpSetupGuide/templates/mcp-guide.md`,
       { templatePath: path.join(__dirname, "templates", "mcp-guide.md") },
