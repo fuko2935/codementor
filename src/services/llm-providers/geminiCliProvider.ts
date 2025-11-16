@@ -195,14 +195,20 @@ export function createGeminiCliModel(
   ) => Promise<{ response: { text: () => string } }>;
 } {
   const provider = createGeminiCliProvider(options);
-
+ 
   return {
     async generateContent(prompt: string) {
-      // Acquire lock to ensure only one gemini CLI call executes at a time
-      // This prevents race conditions in concurrent scenarios; stdout handling
-      // is managed centrally via executeUnderStdioSilence.
-      await stdoutLock.acquire();
-
+      // Determine if we need to use the global stdout lock.
+      // When using an API key (native Google AI SDK), we can skip the lock.
+      const shouldUseLock = options.authType !== "api-key";
+ 
+      if (shouldUseLock) {
+        // Acquire lock to ensure only one gemini CLI call executes at a time
+        // This prevents race conditions in concurrent scenarios; stdout handling
+        // is managed centrally via executeUnderStdioSilence.
+        await stdoutLock.acquire();
+      }
+ 
       try {
         const result = await generateTextWithGeminiCli(provider, {
           modelId,
@@ -210,15 +216,17 @@ export function createGeminiCliModel(
           maxOutputTokens: generationConfig?.maxOutputTokens,
           temperature: generationConfig?.temperature,
         });
-
+ 
         return {
           response: {
             text: () => result.text,
           },
         };
       } finally {
-        // Release lock to allow next waiting operation to proceed
-        stdoutLock.release();
+        if (shouldUseLock) {
+          // Release lock to allow next waiting operation to proceed
+          stdoutLock.release();
+        }
       }
     },
   };

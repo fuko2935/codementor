@@ -38,7 +38,7 @@ class TestMcpServer extends McpServer {
 }
 
 // Helper to invoke the tool handler with standard params
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 async function callTool(
   handler: (params: any) => Promise<CallToolResult>,
 ) {

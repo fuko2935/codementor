@@ -86,6 +86,8 @@ To switch back to API key-based authentication, set `LLM_DEFAULT_PROVIDER=gemini
 - Requires `@google/gemini-cli` installed globally
 - Supports `gemini-2.5-pro` and `gemini-2.5-flash` models
 
+> **Note:** For high‑traffic or production environments, using an API Key with the native SDK is recommended to avoid the `stdoutLock` bottleneck.
+
 **Standard API Key Providers:**
 Set whichever providers you plan to call; the shared resolver looks at request parameters first and then these environment variables.
 
@@ -113,6 +115,25 @@ Set whichever providers you plan to call; the shared resolver looks at request p
 
 Logs for both transports land in `logs/activity.log` and `logs/error.log`. Delete the directory to reset.
 
+### HTTP Authentication (Optional)
+
+For HTTP transport, you can enable simple API key authentication:
+
+```bash
+# Set an API key to require authentication
+export MCP_API_KEY="your-secure-api-key-here"
+export MCP_TRANSPORT_TYPE=http
+npm start
+```
+
+When `MCP_API_KEY` is set, all HTTP requests must include the API key via:
+- **Authorization header:** `Authorization: Bearer <your-api-key>`
+- **Custom header:** `x-api-key: <your-api-key>`
+
+If no `MCP_API_KEY` is configured, authentication is disabled and all requests are allowed (suitable for local development).
+
+> **⚠️ Security Note:** This is a lightweight authentication mechanism suitable for development and trusted environments. For production deployments, use a reverse proxy with proper JWT/OIDC authentication, mTLS, or API gateway.
+
 ### HTTP Session Store (optional Redis)
 
 By default, HTTP sessions are tracked in-memory, which is suitable for single-process deployments. For multi-instance or clustered deployments that require session stickiness behind a load balancer, enable Redis-backed session coordination:
@@ -130,6 +151,9 @@ Notes:
 - This enables routing layers to implement stickiness based on owner instance.
 - If Redis is unavailable, fallbacks to in-memory when `MCP_SESSION_STORE=memory`.
 - `ioredis` is declared as an optional dependency; install it only when enabling Redis session coordination (`MCP_SESSION_STORE=redis`). It is not required for the default in-memory mode.
+
+> **⚠️ Multi-Instance Deployment Warning:**  
+> When running multiple server instances (cluster/Kubernetes) with HTTP transport, you **MUST** enable **Sticky Session (Session Affinity)** on your load balancer. Without sticky sessions, SSE (Server-Sent Events) connections may break when requests are routed to different instances. Use Redis-backed session coordination (`MCP_SESSION_STORE=redis`) to track session ownership across instances.
 
 ---
 
@@ -482,6 +506,34 @@ Or with API key authentication (⚠️ **SECURITY WARNING:** Never hardcode API 
   }
 }
 ```
+
+---
+
+## Known Limitations
+
+### Gemini CLI Provider Concurrency
+
+When using the `gemini-cli` provider (default), concurrent requests are serialized to prevent stdout conflicts. This is a known limitation of the `ai-sdk-provider-gemini-cli` library.
+
+**Impact:**
+- Multiple simultaneous requests will be processed sequentially
+- May affect performance under high load
+- Not an issue for typical single-user IDE usage
+
+**Workarounds:**
+- For high-concurrency scenarios, use API key-based providers (`gemini`, `google`, `openai`)
+- Set `LLM_DEFAULT_PROVIDER=gemini` and provide `GOOGLE_API_KEY` environment variable
+- API key providers support full concurrent request processing
+
+**Example:**
+```bash
+# Switch to API key provider for better concurrency
+export GOOGLE_API_KEY="your-api-key"
+export LLM_DEFAULT_PROVIDER=gemini
+npx codementor
+```
+
+This limitation is documented in the codebase at `src/services/llm-providers/geminiCliProvider.ts` and does not affect the security or correctness of the system.
 
 ---
 

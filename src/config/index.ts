@@ -122,6 +122,8 @@ const EnvSchema = z.object({
   REDIS_PREFIX: z.string().optional(),
   /** Optional. Comma-separated allowed origins for CORS (HTTP transport). */
   MCP_ALLOWED_ORIGINS: z.string().optional(),
+  /** Optional. API key for HTTP transport authentication. If set, all HTTP requests must include this key. */
+  MCP_API_KEY: z.string().optional(),
 
   /** Optional. Application URL for OpenRouter integration. */
   OPENROUTER_APP_URL: z
@@ -375,6 +377,8 @@ export const config = {
   mcpAllowedOrigins: env.MCP_ALLOWED_ORIGINS?.split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
+  /** Optional API key for HTTP transport authentication. From `MCP_API_KEY`. */
+  mcpApiKey: env.MCP_API_KEY,
   /** OpenRouter App URL. From `OPENROUTER_APP_URL`. Default: "http://localhost:3000". */
   openrouterAppUrl: env.OPENROUTER_APP_URL || "http://localhost:3000",
   /** OpenRouter App Name. From `OPENROUTER_APP_NAME`. Defaults to `mcpServerName`. */

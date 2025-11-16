@@ -9,7 +9,7 @@ const path = require("path");
 async function main() {
   try {
     const compiledPath = path.resolve(__dirname, "../dist/scripts/copy-assets.cjs");
-    // eslint-disable-next-line import/no-dynamic-require, global-require
+    // eslint-disable-next-line import/no-dynamic-require
     require(compiledPath);
   } catch (err) {
     process.stderr.write(

@@ -2,6 +2,57 @@
 
 ## [Unreleased]
 
+## [3.0.6] - 2025-01-16
+
+### 🐛 Bug Fixes
+
+**Critical: Logger Race Condition Fixed**
+- Fixed race condition in logger initialization that could cause crashes during startup
+- `initialized` flag now set only after Winston logger is fully created
+- Prevents `TypeError: Cannot read properties of undefined` errors
+
+**TypeScript Compilation Errors Fixed**
+- Fixed MCP SDK compatibility issues in `clientConnectionLogic.ts`
+- Fixed resource registration signature in `echoResource/registration.ts`
+- Added type guard for tool calls in `tokenCounter.ts`
+
+**Security: Path Traversal Protection Enhanced**
+- Added `validateSecurePath` to `project_bootstrap` tool
+- All file operations now properly constrained to project root
+
+### ♻️ Refactoring
+
+**Code Duplication Eliminated**
+- Created shared `contextBuilder.ts` utility module
+- Removed 120+ lines of duplicated code from `dynamicExpertCreate` and `dynamicExpertAnalyze`
+- Improved maintainability and consistency
+
+### 🚀 Performance
+
+**I/O Optimization**
+- `mcpConfigValidator` now reads only first/last 500 bytes instead of entire file
+- Significant performance improvement for large configuration files
+
+### 📝 Documentation
+
+**Known Limitations Added**
+- Documented Gemini CLI provider concurrency limitation
+- Added workarounds and alternative provider recommendations
+- Improved user transparency
+
+### ✨ Improvements
+
+**AI Prompt Engineering**
+- Enhanced `aiGroupingService` prompt with explicit file path preservation instructions
+- Reduced need for complex path correction logic
+- Improved LLM output reliability
+
+### 🧪 Testing
+
+**New Test Coverage**
+- Added unit tests for `contextBuilder` utility
+- Improved test infrastructure
+
 ### 🗑️ Deprecated & Removed
 
 **`mcp_setup_guide` tool has been removed** - Use `project_bootstrap` instead

@@ -97,7 +97,7 @@ describe("executeUnderStdioSilence", () => {
     const originalStdoutWrite = process.stdout.write;
     const originalStderrWrite = process.stderr.write;
 
-    let observedDuringSilence = {
+    const observedDuringSilence = {
       stdoutCalled: false,
       stderrCalled: false,
       stdoutSuppressed: false,

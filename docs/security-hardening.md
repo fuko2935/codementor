@@ -115,7 +115,81 @@ Geliştirici rehberi:
 - src/mcp-server/utils/[securePathValidator.ts](src/mcp-server/utils/securePathValidator.ts:1)
 - tests/unit/mcp-server/utils/[securePathValidator.test.ts](tests/unit/mcp-server/utils/securePathValidator.test.ts:1)
 
-## SEC-03) Dış Katman Erişim Kontrolleri (Önerilen Model)
+## SEC-03) Hafif Kimlik Doğrulama Middleware (HTTP Transport)
+
+### Genel Bakış
+
+HTTP transport için isteğe bağlı, hafif bir API key kimlik doğrulama mekanizması eklenmiştir. Bu mekanizma, geliştirme ve güvenilir ortamlar için basit bir koruma katmanı sağlar.
+
+### Yapılandırma
+
+```bash
+# API key tanımlayarak kimlik doğrulamayı etkinleştirin
+export MCP_API_KEY="your-secure-api-key-here"
+export MCP_TRANSPORT_TYPE=http
+npm start
+```
+
+### Kullanım
+
+`MCP_API_KEY` tanımlandığında, tüm HTTP istekleri aşağıdaki yöntemlerden biriyle API key içermelidir:
+
+**Authorization Header (Bearer Token):**
+```bash
+curl -H "Authorization: Bearer your-api-key" http://localhost:3010/mcp
+```
+
+**Custom Header (x-api-key):**
+```bash
+curl -H "x-api-key: your-api-key" http://localhost:3010/mcp
+```
+
+### Güvenlik Notları
+
+- **Geliştirme İçin:** Bu mekanizma yerel geliştirme ve güvenilir ortamlar için uygundur.
+- **Üretim İçin:** Aşağıdaki daha güçlü mekanizmalar önerilir:
+  - Reverse proxy ile JWT/OIDC doğrulaması
+  - mTLS (Mutual TLS) ile sertifika tabanlı kimlik doğrulama
+  - API Gateway ile merkezi kimlik doğrulama ve yetkilendirme
+  - VPN veya sıfır güven (zero trust) ağ çözümleri
+
+### Davranış
+
+- `MCP_API_KEY` **tanımlı değilse:** Kimlik doğrulama devre dışıdır, tüm istekler kabul edilir (yerel geliştirme için uygundur).
+- `MCP_API_KEY` **tanımlıysa:** Geçersiz veya eksik API key ile gelen istekler `401 Unauthorized` hatası alır.
+
+### Hata Yanıtı
+
+Geçersiz kimlik doğrulama durumunda:
+
+```json
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid or missing API key",
+    "details": {
+      "hint": "Provide valid API key via Authorization: Bearer <key> or x-api-key header"
+    }
+  }
+}
+```
+
+### Güvenlik İyileştirmeleri (Gelecek)
+
+Üretim ortamları için düşünülebilecek iyileştirmeler:
+
+- **Timing-safe comparison:** `crypto.timingSafeEqual()` kullanarak timing attack'lara karşı koruma
+- **Key rotation:** Periyodik API key değişimi mekanizması
+- **Multiple keys:** Farklı istemciler için farklı API key'ler
+- **Audit logging:** Başarısız kimlik doğrulama denemelerinin detaylı loglanması
+
+İlgili dosyalar:
+
+- src/mcp-server/transports/[httpTransport.ts](src/mcp-server/transports/httpTransport.ts:1)
+- src/config/[index.ts](src/config/index.ts:1)
+- tests/unit/mcp-server/transports/[httpTransport.test.ts](tests/unit/mcp-server/transports/httpTransport.test.ts:1)
+
+## SEC-04) Dış Katman Erişim Kontrolleri (Önerilen Model)
 
 Bu proje, yerleşik bir kimlik doğrulama veya scope tabanlı yetkilendirme mekanizması sağlamaz.
 Tasarım hedefi, MCP sunucusunu yerel/güvenli ağ içinde hafif bir bileşen olarak kullanmak ve
@@ -135,7 +209,7 @@ erişim kontrollerini aşağıdaki dış katmanlara devretmektir:
   herhangi bir güvenlik garantisi vermez.
 - Güvenlik kritik kurallar her zaman yukarıdaki harici katmanlarda uygulanmalıdır.
 
-## SEC-04) Rate Limiting
+## SEC-05) Rate Limiting
 
 Bu bölüm, kimlik-temelli ve IP-aware rate limiting stratejisini açıklar.
 
@@ -181,7 +255,7 @@ Operasyon notları:
 - src/mcp-server/transports/[httpTransport.ts](src/mcp-server/transports/httpTransport.ts:1)
 - tests/unit/utils/[rateLimiter.test.ts](tests/unit/utils/rateLimiter.test.ts:1)
 
-## SEC-05) CI & Supply Chain Security
+## SEC-06) CI & Supply Chain Security
 
 Bu bölüm, CI süreçleri ve tedarik zinciri güvenliğinin, kod kalitesi ve bağımlılık güvenliği ile birlikte nasıl işletildiğini açıklar.
 
@@ -217,7 +291,7 @@ Bu bölüm, CI süreçleri ve tedarik zinciri güvenliğinin, kod kalitesi ve ba
   - Tedarik zinciri ve güvenlik uyarılarının görünürlüğü korunur.
   - Aynı zamanda operasyon loglarında ek bir veri sızıntısı yüzeyi oluşmaz.
 
-## SEC-06) İzleme, Olay Tepkisi ve Dağıtım Topolojisi
+## SEC-07) İzleme, Olay Tepkisi ve Dağıtım Topolojisi
 
 - Log seviyeleri (`MCP_LOG_LEVEL`) prod’da `info`/`warning` aralığında tutulmalıdır.
 - Error korelasyonu için:

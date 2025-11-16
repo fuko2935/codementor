@@ -125,12 +125,27 @@ export function validateRevision(revision: string): boolean {
  * @returns The diff block for the specific file, or empty string if not found
  */
 function extractFileDiff(fullDiff: string, filePath: string): string {
-  // Find the diff block that starts with this file
-  const filePattern = new RegExp(
-    `diff --git a/${filePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} b/${filePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?(?=diff --git|$)`,
-  );
-  const match = fullDiff.match(filePattern);
-  return match ? match[0].trim() : "";
+  // Split the diff into sections by 'diff --git' headers
+  const sections = fullDiff.split(/(?=^diff --git )/m);
+  
+  // Find the section that matches our file path
+  for (const section of sections) {
+    if (section.trim().length === 0) continue;
+    
+    // Look for the git header line: "diff --git a/file b/file"
+    const gitHeaderMatch = section.match(/^diff --git a\/(.+?) b\/(.+)$/m);
+    if (gitHeaderMatch) {
+      const [, fileA, fileB] = gitHeaderMatch;
+      
+      // Check if either file path matches (for renames, fileA and fileB might differ)
+      if (fileA === filePath || fileB === filePath) {
+        return section.trim();
+      }
+    }
+  }
+  
+  // Handle edge case: binary files or empty diffs
+  return "";
 }
 
 /**

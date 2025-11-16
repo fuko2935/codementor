@@ -181,8 +181,8 @@ export class Logger {
       return;
     }
 
-    // Set initialized to true at the beginning of the initialization process.
-    this.initialized = true;
+    // DO NOT set initialized flag here - wait until Winston logger is fully created
+    // to prevent race condition where log calls happen before winstonLogger is ready
 
     this.currentMcpLevel = level;
     this.currentWinstonLevel = mcpToWinstonLevel[level];
@@ -263,6 +263,10 @@ export class Logger {
     // Configure console transport after Winston logger is created
     const consoleStatus = this._configureConsoleTransport();
 
+    // CRITICAL: Set initialized flag ONLY after Winston logger is fully created
+    // This prevents race condition where log calls happen before winstonLogger is ready
+    this.initialized = true;
+
     const initialContext: RequestContext = {
       loggerSetup: true,
       requestId: "logger-init-deferred",
@@ -273,7 +277,6 @@ export class Logger {
       this.info(consoleStatus.message, initialContext);
     }
 
-    this.initialized = true; // Ensure this is set after successful setup
     this.info(
       `Logger initialized. File logging level: ${this.currentWinstonLevel}. MCP logging level: ${this.currentMcpLevel}. Console logging: ${consoleStatus.enabled ? "enabled" : "disabled"}`,
       {

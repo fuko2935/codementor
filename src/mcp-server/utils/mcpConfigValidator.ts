@@ -99,20 +99,32 @@ export async function mcpConfigExists(
         const partialContent = buffer.toString("utf-8", 0, bytesRead);
 
         // Check for START marker in first 500 bytes (support both legacy and new markers)
-        // If found, read full file to verify END marker
-        const hasLegacyMarker = partialContent.includes(MCP_CONTENT_START_MARKER);
-        const hasNewMarker = partialContent.includes(MCP_CODEMENTOR_START_MARKER);
+        const hasLegacyStartMarker = partialContent.includes(MCP_CONTENT_START_MARKER);
+        const hasNewStartMarker = partialContent.includes(MCP_CODEMENTOR_START_MARKER);
         
-        if (hasLegacyMarker || hasNewMarker) {
-          const fullContent = await fs.readFile(fullPath, "utf-8");
+        if (hasLegacyStartMarker || hasNewStartMarker) {
+          // Performance optimization: Read only last 500 bytes to check for END marker
+          // instead of loading entire file into memory
+          const stats = await fs.stat(fullPath);
+          const endBuffer = Buffer.alloc(500);
+          const endPosition = Math.max(0, stats.size - 500);
+          
+          const endFileHandle = await fs.open(fullPath, "r");
+          let endBytesRead = 0;
+          try {
+            const result = await endFileHandle.read(endBuffer, 0, 500, endPosition);
+            endBytesRead = result.bytesRead;
+          } finally {
+            await endFileHandle.close();
+          }
+          
+          const endContent = endBuffer.toString("utf-8", 0, endBytesRead);
 
           // Check if both START and END markers exist (either legacy or new)
           const hasValidLegacyMarkers =
-            fullContent.includes(MCP_CONTENT_START_MARKER) &&
-            fullContent.includes(MCP_CONTENT_END_MARKER);
+            hasLegacyStartMarker && endContent.includes(MCP_CONTENT_END_MARKER);
           const hasValidNewMarkers =
-            fullContent.includes(MCP_CODEMENTOR_START_MARKER) &&
-            fullContent.includes(MCP_CODEMENTOR_END_MARKER);
+            hasNewStartMarker && endContent.includes(MCP_CODEMENTOR_END_MARKER);
 
           if (hasValidLegacyMarkers || hasValidNewMarkers) {
             const result = {

@@ -79,6 +79,9 @@ You will receive a JSON stringified array of objects with the following structur
 
 **OUTPUT FORMAT:**
 You MUST respond with ONLY a single JSON array of group objects, with no extra text, explanations, or markdown. The JSON array must conform to the following schema:
+
+**CRITICAL REQUIREMENT:** You MUST use the EXACT \`filePath\` values from the input metadata. Do NOT modify, shorten, or change the file paths in any way. Copy them exactly as provided.
+
 \`\`\`json
 [
   {
@@ -126,6 +129,7 @@ IMPORTANT:
 - Return ONLY valid JSON, no markdown code blocks, no explanations
 - Include the full metadata object for each file in the metadata array
 - Ensure totalTokens matches the sum of estimatedTokens for all files in the group
+- **YOU MUST RETURN THE EXACT \`filePath\` FOR EACH FILE AS IT WAS PROVIDED IN THE INPUT METADATA. DO NOT MODIFY OR SHORTEN FILE PATHS.**
 ${question ? "- Only include files that are relevant to answering the user's question. Irrelevant files should NOT appear in any group." : "- Every file from the input MUST appear in exactly one group's files array"}`;
 }
 

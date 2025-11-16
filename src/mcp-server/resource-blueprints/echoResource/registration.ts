@@ -56,15 +56,12 @@ export const registerEchoResource = async (
         },
       });
 
+      // Register resource with template
+      // Note: The MCP SDK's resource() method signature has changed
+      // Using the correct overload for resource templates
       server.resource(
         resourceName,
         template,
-        {
-          name: "Echo Message Resource",
-          description: "A simple echo resource that returns a message.",
-          mimeType: "application/json",
-          examples: [{ name: "Basic echo", uri: "echo://hello" }],
-        },
         async (
           uri: URL,
           params: EchoResourceParams,

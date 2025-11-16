@@ -474,14 +474,18 @@ build/
 
   const { targetDir, filePath } = getTargetFilePath(validated.client, normalizedPath);
 
-  await fs.mkdir(targetDir, { recursive: true });
+  // SECURITY: Validate final paths to prevent path traversal via malicious client profiles
+  const validatedTargetDir = await validateSecurePath(targetDir, process.cwd(), context);
+  const validatedFilePath = path.join(validatedTargetDir, path.basename(filePath));
+
+  await fs.mkdir(validatedTargetDir, { recursive: true });
 
   logger.info("Running project_bootstrap", {
     ...context,
     client: validated.client,
     projectPath: normalizedPath,
-    targetDir,
-    filePath,
+    targetDir: validatedTargetDir,
+    filePath: validatedFilePath,
   });
 
   const rulesBlockResult = await generateProjectRulesBlock(effectiveRules || {}, context);
@@ -496,7 +500,7 @@ build/
   let currentHash = "";
 
   try {
-    existingContent = await fs.readFile(filePath, "utf-8");
+    existingContent = await fs.readFile(validatedFilePath, "utf-8");
     fileExists = true;
     extracted = extractManagedBlock(existingContent);
     if (extracted) {
@@ -508,17 +512,17 @@ build/
   let newContent: string;
 
   if (fileExists && extracted && currentHash === newHash && !validated.force) {
-    targetAction = { type: "skipped", file: path.basename(filePath), details: "content hash match" };
+    targetAction = { type: "skipped", file: path.basename(validatedFilePath), details: "content hash match" };
   } else {
     const baseContent = fileExists ? existingContent : `# ${validated.client.toUpperCase()} Configuration\n\n`;
     newContent = insertManagedBlock(baseContent, innerBlock, extracted ? "replace" : "append");
-    await fs.writeFile(filePath, newContent, "utf-8");
-    targetAction = { type: fileExists ? "updated" : "created", file: path.basename(filePath) };
+    await fs.writeFile(validatedFilePath, newContent, "utf-8");
+    targetAction = { type: fileExists ? "updated" : "created", file: path.basename(validatedFilePath) };
   }
 
   actions.push(targetAction);
 
-  await updateConfigCache(normalizedPath, filePath, validated.client, context).catch((err) => {
+  await updateConfigCache(normalizedPath, validatedFilePath, validated.client, context).catch((err) => {
     logger.warning("[projectBootstrapLogic] Cache update failed (warn+continue)", {
       ...context,
       err: err instanceof Error ? err.message : String(err),

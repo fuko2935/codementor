@@ -155,12 +155,40 @@ Rationale:
 
 ---
 
-## 8) Performance considerations
+## 8) Performance and Scalability Considerations
 
+### Performance
 - Full-project context building can be heavy; prefer project orchestrator on large repos
 - Tree-sitter grammars are warmed up at startup for better p95
 - Gemini CLI calls are serialized with AsyncLock to protect JSON-RPC streams
 - Large git blobs are skipped early by size guardrails
+
+### Scalability
+
+> **⚠️ Multi-Instance Deployment Warning:**  
+> When running multiple server instances (cluster/Kubernetes) with HTTP transport, you **MUST** enable **Sticky Session (Session Affinity)** on your load balancer. Without sticky sessions, SSE (Server-Sent Events) connections may break when requests are routed to different instances.
+
+**Session Management:**
+- By default, HTTP sessions are tracked in-memory (suitable for single-process deployments)
+- For multi-instance deployments, enable Redis-backed session coordination:
+  ```bash
+  export MCP_SESSION_STORE=redis
+  export REDIS_URL="redis://localhost:6379"
+  ```
+- Redis stores only session ownership metadata (instance ID), not transport objects
+- This enables load balancers to implement sticky routing based on session ownership
+
+**Load Balancer Configuration:**
+- Configure session affinity/sticky sessions based on `mcp-session-id` header
+- Example (Nginx):
+  ```nginx
+  upstream mcp_backend {
+    ip_hash;  # or use sticky sessions module
+    server instance1:3010;
+    server instance2:3010;
+  }
+  ```
+- Without sticky sessions, clients may experience connection drops and failed requests
 
 ---
 

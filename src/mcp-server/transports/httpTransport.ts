@@ -22,6 +22,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { Context, Hono, Next } from "hono";
 import { cors } from "hono/cors";
+import crypto from "crypto";
 import http from "http";
 import { randomUUID } from "node:crypto";
 import { config } from "../../config/index.js";
@@ -171,6 +172,48 @@ export async function startHttpTransport(
 
   app.use("*", async (c: Context, next: Next) => {
     c.res.headers.set("X-Content-Type-Options", "nosniff");
+    await next();
+  });
+
+  // Simple authentication middleware (optional)
+  // If MCP_API_KEY is set, all requests must include it via Authorization header or x-api-key
+  app.use("*", async (c: Context, next: Next) => {
+    const configuredApiKey = config.mcpApiKey;
+    
+    // If no API key is configured, skip authentication
+    if (!configuredApiKey) {
+      await next();
+      return;
+    }
+
+    // Check Authorization header (Bearer token) or x-api-key header
+    const authHeader = c.req.header("Authorization");
+    const apiKeyHeader = c.req.header("x-api-key");
+    
+    let providedKey: string | undefined;
+    
+    if (authHeader?.startsWith("Bearer ")) {
+      providedKey = authHeader.substring(7);
+    } else if (apiKeyHeader) {
+      providedKey = apiKeyHeader;
+    }
+    
+    // Validate the provided key using constant-time comparison to prevent timing attacks
+    const configuredKeyBuffer = Buffer.from(configuredApiKey);
+    const providedKeyBuffer = Buffer.from(providedKey || "");
+
+    const isValid =
+      providedKeyBuffer.length === configuredKeyBuffer.length &&
+      crypto.timingSafeEqual(providedKeyBuffer, configuredKeyBuffer);
+
+    if (!isValid) {
+      throw new McpError(
+        BaseErrorCode.UNAUTHORIZED,
+        "Invalid or missing API key",
+        { hint: "Provide valid API key via Authorization: Bearer <key> or x-api-key header" }
+      );
+    }
+    
     await next();
   });
 
