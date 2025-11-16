@@ -74,9 +74,11 @@ export const ProjectRulesSchema = z
  */
 
 /**
- * Safely load and validate YAML string as ProjectRulesSchema.
+ * Safely loads and validates a YAML string against the ProjectRulesSchema.
+ * Note: Uses `js-yaml`'s `load()` function, which is safe by default and does not
+ * execute arbitrary code, unlike some other YAML parsers.
  */
-export function safeYamlLoad(
+export function loadAndValidateProjectRules(
   yamlStr: string,
   context?: RequestContext
 ): z.infer<typeof ProjectRulesSchema> | null {
@@ -87,7 +89,7 @@ export function safeYamlLoad(
       return result.data;
     } else {
       if (context) {
-        logger.warning("[safeYamlLoad] Schema validation failed", {
+        logger.warning("[loadAndValidateProjectRules] Schema validation failed", {
           ...context,
           validationErrors: result.error.format(),
         });
@@ -96,7 +98,7 @@ export function safeYamlLoad(
     }
   } catch (error) {
     if (context) {
-      logger.warning("[safeYamlLoad] YAML parse error", {
+      logger.warning("[loadAndValidateProjectRules] YAML parse error", {
         ...context,
         parseError: error instanceof Error ? error.message : String(error),
       });
@@ -344,7 +346,7 @@ async function generateProjectRulesBlock(
 
   const yamlStr = yamlLines.join("\n");
 
-  const validatedRules = safeYamlLoad(yamlStr, context);
+  const validatedRules = loadAndValidateProjectRules(yamlStr, context);
   if (!validatedRules) {
     logger.warning("[generateProjectRulesBlock] Generated YAML failed schema validation", {
       ...context,
@@ -419,7 +421,7 @@ export async function projectBootstrapLogic(
 
   const actions: Array<{type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string}> = [];
 
-  // .mcpignore yönetimi (FR-2)
+  // Manage .mcpignore file (FR-2)
   const mcpignorePath = path.join(normalizedPath, ".mcpignore");
   try {
     await fs.access(mcpignorePath);
@@ -456,7 +458,7 @@ build/
       const frontmatterMatch = codementorContent.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
       if (frontmatterMatch) {
         const yamlStr = frontmatterMatch[1];
-        const parsedRules = safeYamlLoad(yamlStr, context);
+        const parsedRules = loadAndValidateProjectRules(yamlStr, context);
         if (parsedRules) {
           effectiveRules = parsedRules;
         }
