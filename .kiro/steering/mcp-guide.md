@@ -1,7 +1,7 @@
 # AI Assistant Configuration
 
 <!-- MCP:CODEMENTOR:START -->
-# CodeMentor - Project Bootstrap & Usage Guide
+# MCP Gemini Local - Project Bootstrap & Usage Guide
 
 **⚠️ IMPORTANT: DO NOT DELETE OR MANUALLY EDIT THIS BLOCK ⚠️**
 
@@ -55,18 +55,7 @@ AI asistanları bu kuralları "hard constraint" olarak ele almalı ve önerileri
 bunlarla çelişmeyecek şekilde üretmelidir.
 
 ```yaml
-# No explicit projectRules provided.
-# Default assumptions (edit via project_bootstrap.projectRules to override):
-openSourceStatus: proprietary
-distributionModel: saas
-targetAudience: "internal-developers"
-licenseConstraints:
-  - "Avoid copyleft licenses (e.g., GPL, AGPL) unless explicitly approved."
-packageConstraints:
-  - "Do not add new runtime dependencies without strong justification."
-deploymentNotes: |
-  Treat this project as security-sensitive and internal by default.
-  Do not assume public deployment or data sharing unless rules explicitly allow it.
+{{PROJECT_RULES_YAML}}
 ```
 
 Yorumlayıcı İlkeler:
