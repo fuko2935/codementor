@@ -6,6 +6,7 @@
 
 import { promises as fs } from "fs";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
@@ -17,11 +18,12 @@ import {
 } from "../../../config/clientProfiles.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
 import {
-  MCP_CONTENT_START_MARKER,
-  MCP_CONTENT_END_MARKER,
+  MCP_CONTENT_START_MARKER as MCP_BLOCK_START_MARKER,
+  MCP_CONTENT_END_MARKER as MCP_BLOCK_END_MARKER,
   refreshMcpConfigCache,
 } from "../../utils/mcpConfigValidator.js";
 
+import yaml from "js-yaml";
 // ESM __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +69,128 @@ export const ProjectRulesSchema = z
   .strict()
   .optional();
 
+/**
+ * Helper functions for idempotent project bootstrap (Architect plan Adım 1)
+ */
+
+/**
+ * Safely load and validate YAML string as ProjectRulesSchema.
+ */
+export function safeYamlLoad(
+  yamlStr: string,
+  context?: RequestContext
+): z.infer<typeof ProjectRulesSchema> | null {
+  try {
+    const parsed = yaml.load(yamlStr);
+    const result = ProjectRulesSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    } else {
+      if (context) {
+        logger.warning("[safeYamlLoad] Schema validation failed", {
+          ...context,
+          validationErrors: result.error.format(),
+        });
+      }
+      return null;
+    }
+  } catch (error) {
+    if (context) {
+      logger.warning("[safeYamlLoad] YAML parse error", {
+        ...context,
+        parseError: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return null;
+  }
+}
+
+/**
+ * Extract managed block between custom markers with line positions.
+ */
+export function extractManagedBlock(content: string): { block: string; startLine: number; endLine: number } | null {
+  const lines = content.split(/\r?\n/);
+  const startIdx = lines.findIndex((line) => line.trim() === MCP_BLOCK_START_MARKER);
+  if (startIdx === -1) return null;
+
+  const endIdx = lines.slice(startIdx + 1).findIndex((line) => line.trim() === MCP_BLOCK_END_MARKER);
+  if (endIdx === -1) return null;
+
+  const fullEndIdx = startIdx + 1 + endIdx;
+  const blockLines = lines.slice(startIdx + 1, fullEndIdx);
+  const block = blockLines.join('\n');
+
+  return {
+    block,
+    startLine: startIdx + 1, // 1-based
+    endLine: fullEndIdx + 1,
+  };
+}
+
+/**
+ * Insert or replace managed block at position.
+ */
+export function insertManagedBlock(
+  content: string,
+  block: string,
+  mode: 'replace' | 'append',
+  pos?: number
+): string {
+  const newBlock = `${MCP_BLOCK_START_MARKER}\n${block}\n${MCP_BLOCK_END_MARKER}`;
+
+  if (mode === 'replace') {
+    const extracted = extractManagedBlock(content);
+    if (!extracted) {
+      // Fallback to append if no block found
+      return insertManagedBlock(content, block, 'append');
+    }
+
+    const lines = content.split(/\r?\n/);
+    const startIdx = extracted.startLine - 1;
+    const endIdx = extracted.endLine - 1;
+    const before = lines.slice(0, startIdx);
+    const after = lines.slice(endIdx + 1);
+    const newLines = [...before, ...newBlock.split(/\r?\n/), ...after];
+    return newLines.join('\n');
+  } else {
+    // append
+    let insertIdx = content.length;
+    if (pos !== undefined) {
+      insertIdx = content.split(/\r?\n/).slice(0, pos).join('\n').length + (content.includes('\n') ? 1 : 0);
+    }
+    const before = content.slice(0, insertIdx);
+    const after = content.slice(insertIdx);
+    const sep = before.endsWith('\n') ? '\n' : '\n\n';
+    return before + sep + newBlock + (after ? '\n' + after : '');
+  }
+}
+
+/**
+ * Load client-specific MCP guide template with fallbacks.
+ * Uses async file operations for consistency with the rest of the codebase.
+ */
+export async function loadClientTemplate(client: ClientName): Promise<string> {
+  const baseDir = __dirname;
+  const clientPath = path.join(baseDir, './templates', `${client}-mcp-guide.md`);
+  
+  try {
+    return (await fs.readFile(clientPath, 'utf-8')).trimEnd();
+  } catch {
+    // First fallback: generic mcp-guide.md
+    const mcpPath = path.join(baseDir, './templates', 'mcp-guide.md');
+    try {
+      return (await fs.readFile(mcpPath, 'utf-8')).trimEnd();
+    } catch {
+      // Second fallback: default-mcp-guide.md
+      const defaultPath = path.join(baseDir, './templates', 'default-mcp-guide.md');
+      try {
+        return (await fs.readFile(defaultPath, 'utf-8')).trimEnd();
+      } catch {
+        return ''; // Ultimate fallback
+      }
+    }
+  }
+}
 export const ProjectBootstrapInputSchema = z.object({
   client: z
     .enum(getAllClientNames() as [ClientName, ...ClientName[]])
@@ -97,8 +221,8 @@ export type ProjectBootstrapInput = z.infer<typeof ProjectBootstrapInputSchema>;
 export interface ProjectBootstrapResponse {
   success: boolean;
   message: string;
-  filePath: string;
-  action: "created" | "updated" | "skipped";
+  actions: Array<{type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string}>;
+  summary: string;
 }
 
 // Placeholder used in the template for injecting project rules YAML.
@@ -109,29 +233,17 @@ const PROJECT_RULES_PLACEHOLDER = "{{PROJECT_RULES_YAML}}";
  * This is the canonical AI-facing guide injected into client config files.
  */
 async function generateMcpGuideContent(
+  client: ClientName,
   context: RequestContext,
 ): Promise<string> {
-  const templatePath = path.join(__dirname, "templates", "mcp-guide.md");
-  try {
-    const content = await fs.readFile(templatePath, "utf-8");
-    return content.trimEnd();
-  } catch (error) {
-    logger.error("MCP guide template file not found - critical error", {
+  const template = await loadClientTemplate(client);
+  if (!template) {
+    logger.warning(`[projectBootstrap] Client-specific template not found for ${client}, falling back to empty`, {
       ...context,
-      templatePath,
-      error: error instanceof Error ? error.message : String(error),
     });
-
-    throw new McpError(
-      BaseErrorCode.INTERNAL_ERROR,
-      [
-        "CRITICAL: The MCP guide template file is missing. This indicates a build or packaging issue.",
-        "Expected location:",
-        `  ${templatePath}`,
-      ].join("\n"),
-      { templatePath },
-    );
+    return "";
   }
+  return template.trimEnd();
 }
 
 /**
@@ -141,6 +253,7 @@ async function generateMcpGuideContent(
 interface ProjectRulesBlock {
   rendered: string;
   yaml: string;
+  hash: string;
 }
 
 async function generateProjectRulesBlock(
@@ -229,12 +342,23 @@ async function generateProjectRulesBlock(
     );
   }
 
-  const yaml = yamlLines.join("\n");
-  const rendered = template.replace(PROJECT_RULES_PLACEHOLDER, yaml);
+  const yamlStr = yamlLines.join("\n");
+
+  const validatedRules = safeYamlLoad(yamlStr, context);
+  if (!validatedRules) {
+    logger.warning("[generateProjectRulesBlock] Generated YAML failed schema validation", {
+      ...context,
+    });
+  }
+
+  const hash = crypto.createHash("md5").update(yamlStr).digest("hex");
+
+  const rendered = template.replace(PROJECT_RULES_PLACEHOLDER, yamlStr);
 
   return {
     rendered: rendered.trimEnd(),
-    yaml,
+    yaml: yamlStr,
+    hash,
   };
 }
 
@@ -287,17 +411,68 @@ export async function projectBootstrapLogic(
 ): Promise<ProjectBootstrapResponse> {
   const validated = ProjectBootstrapInputSchema.parse(params);
 
-  // SECURITY: Validate and normalize path to prevent path traversal attacks
   const normalizedPath = await validateSecurePath(
     validated.projectPath,
     process.cwd(),
     context,
   );
 
-  const { targetDir, filePath } = getTargetFilePath(
-    validated.client,
-    normalizedPath,
-  );
+  const actions: Array<{type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string}> = [];
+
+  // .mcpignore yönetimi (FR-2)
+  const mcpignorePath = path.join(normalizedPath, ".mcpignore");
+  try {
+    await fs.access(mcpignorePath);
+    actions.push({ type: "exists", file: ".mcpignore" });
+  } catch {
+    const examplePath = path.join(normalizedPath, ".mcpignore.example");
+    let createdFrom = "";
+    try {
+      await fs.access(examplePath);
+      await fs.copyFile(examplePath, mcpignorePath);
+      createdFrom = "copied from .mcpignore.example";
+    } catch {
+      const defaultContent = `# Default .mcpignore patterns for MCP tools
+node_modules/
+dist/
+build/
+*.log
+.env*
+.DS_Store
+.vscode/settings.json
+!.mcpignore.example`;
+      await fs.writeFile(mcpignorePath, defaultContent, "utf-8");
+      createdFrom = "default created";
+    }
+    actions.push({ type: "created", file: ".mcpignore", details: createdFrom });
+  }
+
+  // Effective rules: param > CODEMENTOR.md frontmatter YAML > default
+  let effectiveRules = validated.projectRules;
+  if (!effectiveRules) {
+    const codementorPath = path.join(normalizedPath, "CODEMENTOR.md");
+    try {
+      const codementorContent = await fs.readFile(codementorPath, "utf-8");
+      const frontmatterMatch = codementorContent.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+      if (frontmatterMatch) {
+        const yamlStr = frontmatterMatch[1];
+        const parsedRules = safeYamlLoad(yamlStr, context);
+        if (parsedRules) {
+          effectiveRules = parsedRules;
+        }
+      }
+    } catch (err) {
+      logger.warning("[projectBootstrapLogic] CODEMENTOR.md YAML parse failed (warn+continue)", {
+        ...context,
+        codementorPath,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const { targetDir, filePath } = getTargetFilePath(validated.client, normalizedPath);
+
+  await fs.mkdir(targetDir, { recursive: true });
 
   logger.info("Running project_bootstrap", {
     ...context,
@@ -307,123 +482,49 @@ export async function projectBootstrapLogic(
     filePath,
   });
 
-  // Ensure directory exists
-  try {
-    await fs.mkdir(targetDir, { recursive: true });
-  } catch (error) {
-    throw new McpError(
-      BaseErrorCode.INTERNAL_ERROR,
-      `Failed to create directory: ${targetDir}`,
-      { cause: error },
-    );
-  }
+  const rulesBlockResult = await generateProjectRulesBlock(effectiveRules || {}, context);
+  const guideTemplate = await generateMcpGuideContent(validated.client, context);
+  const innerBlock = guideTemplate.replace(/\{\{rules\}\}/g, rulesBlockResult.rendered).trimEnd();
 
-  const guideContent = await generateMcpGuideContent(context);
-  const { rendered: rulesBlock, yaml: rulesYaml } =
-    await generateProjectRulesBlock(
-      validated.projectRules,
-      context,
-    );
-
-  const combinedContent = guideContent.includes(PROJECT_RULES_PLACEHOLDER)
-    ? guideContent.replace(PROJECT_RULES_PLACEHOLDER, rulesYaml)
-    : `${guideContent}\n\n${rulesBlock}`;
-  const wrappedContent = `${MCP_CONTENT_START_MARKER}\n${combinedContent}\n${MCP_CONTENT_END_MARKER}\n`;
+  const newHash = crypto.createHash("md5").update(innerBlock).digest("hex");
 
   let existingContent = "";
   let fileExists = false;
+  let extracted = null;
+  let currentHash = "";
 
   try {
     existingContent = await fs.readFile(filePath, "utf-8");
     fileExists = true;
-  } catch {
-    fileExists = false;
-  }
+    extracted = extractManagedBlock(existingContent);
+    if (extracted) {
+      currentHash = crypto.createHash("md5").update(extracted.block).digest("hex");
+    }
+  } catch {}
 
-  if (!fileExists) {
-    // New file with MCP configuration
-    const newContent = `# AI Assistant Configuration\n\n${wrappedContent}`;
-    await fs.writeFile(filePath, newContent, "utf-8");
-    logger.info("Created new bootstrap config file", {
-      ...context,
-      filePath,
-    });
-
-    await updateConfigCache(normalizedPath, filePath, validated.client, context);
-
-    return {
-      success: true,
-      message: `Successfully created ${path.basename(
-        filePath,
-      )} with MCP bootstrap configuration`,
-      filePath,
-      action: "created",
-    };
-  }
-
-  // Existing file: update or append MCP block
-  const escapedStart = MCP_CONTENT_START_MARKER.replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&",
-  );
-  const escapedEnd = MCP_CONTENT_END_MARKER.replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&",
-  );
-  const mcpBlockRegex = new RegExp(
-    `${escapedStart}[\\s\\S]*?${escapedEnd}(?:\\r?\\n)?`,
-    "s",
-  );
-
+  let targetAction: {type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string};
   let newContent: string;
-  const action: ProjectBootstrapResponse["action"] = "updated";
 
-  if (mcpBlockRegex.test(existingContent)) {
-    // Replace existing managed block
-    newContent = existingContent.replace(mcpBlockRegex, wrappedContent);
+  if (fileExists && extracted && currentHash === newHash && !validated.force) {
+    targetAction = { type: "skipped", file: path.basename(filePath), details: "content hash match" };
   } else {
-    // Append a new managed block
-    const sep = existingContent.endsWith("\n") ? "\n" : "\n\n";
-    newContent = `${existingContent}${sep}${wrappedContent}`;
+    const baseContent = fileExists ? existingContent : `# ${validated.client.toUpperCase()} Configuration\n\n`;
+    newContent = insertManagedBlock(baseContent, innerBlock, extracted ? "replace" : "append");
+    await fs.writeFile(filePath, newContent, "utf-8");
+    targetAction = { type: fileExists ? "updated" : "created", file: path.basename(filePath) };
   }
 
-  if (!validated.force && newContent === existingContent) {
-    logger.info("MCP bootstrap content already up to date", {
+  actions.push(targetAction);
+
+  await updateConfigCache(normalizedPath, filePath, validated.client, context).catch((err) => {
+    logger.warning("[projectBootstrapLogic] Cache update failed (warn+continue)", {
       ...context,
-      filePath,
+      err: err instanceof Error ? err.message : String(err),
     });
-
-    await updateConfigCache(
-      normalizedPath,
-      filePath,
-      validated.client,
-      context,
-    );
-
-    return {
-      success: true,
-      message: `MCP bootstrap configuration is already up to date in ${path.basename(
-        filePath,
-      )}`,
-      filePath,
-      action: "skipped",
-    };
-  }
-
-  await fs.writeFile(filePath, newContent, "utf-8");
-  logger.info("Updated MCP bootstrap content", {
-    ...context,
-    filePath,
   });
 
-  await updateConfigCache(normalizedPath, filePath, validated.client, context);
+  const summary = "Idempotent bootstrap complete. Verified .mcpignore and updated client configuration file with the latest MCP guide.";
+  const message = `Success: ${actions.map((a) => `${a.type} ${a.file}${a.details ? ` (${a.details})` : ""}`).join(", ")}`;
 
-  return {
-    success: true,
-    message: `Successfully updated MCP bootstrap configuration in ${path.basename(
-      filePath,
-    )}`,
-    filePath,
-    action,
-  };
+  return { success: true, message, actions, summary };
 }

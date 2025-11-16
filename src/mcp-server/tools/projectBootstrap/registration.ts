@@ -68,8 +68,8 @@ export const registerProjectBootstrap = async (
 
             logger.info(`Tool '${toolName}' executed successfully`, {
               ...handlerContext,
-              action: result.action,
-              filePath: result.filePath,
+              actions: result.actions,
+              summary: result.summary,
             });
 
             return {
