@@ -31,10 +31,14 @@ const CACHE_TTL_MS = 60_000;
 
 /**
  * Shared marker constants for content injection used by setup tools.
- * These must match the values used in mcpSetupGuide and projectBootstrap.
+ * Supports both legacy (GEMINI-MCP-LOCAL) and new (CODEMENTOR) markers for backward compatibility.
  */
 export const MCP_CONTENT_START_MARKER = "<!-- MCP:GEMINI-MCP-LOCAL:START -->";
 export const MCP_CONTENT_END_MARKER = "<!-- MCP:GEMINI-MCP-LOCAL:END -->";
+
+// New marker constants for CodeMentor branding
+export const MCP_CODEMENTOR_START_MARKER = "<!-- MCP:CODEMENTOR:START -->";
+export const MCP_CODEMENTOR_END_MARKER = "<!-- MCP:CODEMENTOR:END -->";
 
 /**
  * Checks if MCP configuration exists in the given project path.
@@ -94,15 +98,23 @@ export async function mcpConfigExists(
       if (bytesRead > 0) {
         const partialContent = buffer.toString("utf-8", 0, bytesRead);
 
-        // Check for START marker in first 500 bytes
+        // Check for START marker in first 500 bytes (support both legacy and new markers)
         // If found, read full file to verify END marker
-        if (partialContent.includes(MCP_CONTENT_START_MARKER)) {
+        const hasLegacyMarker = partialContent.includes(MCP_CONTENT_START_MARKER);
+        const hasNewMarker = partialContent.includes(MCP_CODEMENTOR_START_MARKER);
+        
+        if (hasLegacyMarker || hasNewMarker) {
           const fullContent = await fs.readFile(fullPath, "utf-8");
 
-          if (
+          // Check if both START and END markers exist (either legacy or new)
+          const hasValidLegacyMarkers =
             fullContent.includes(MCP_CONTENT_START_MARKER) &&
-            fullContent.includes(MCP_CONTENT_END_MARKER)
-          ) {
+            fullContent.includes(MCP_CONTENT_END_MARKER);
+          const hasValidNewMarkers =
+            fullContent.includes(MCP_CODEMENTOR_START_MARKER) &&
+            fullContent.includes(MCP_CODEMENTOR_END_MARKER);
+
+          if (hasValidLegacyMarkers || hasValidNewMarkers) {
             const result = {
               exists: true,
               filePath: fullPath,
@@ -115,6 +127,7 @@ export async function mcpConfigExists(
               ...context,
               filePath: fullPath,
               client: clientName,
+              markerType: hasValidNewMarkers ? "codementor" : "legacy",
             });
 
             return result;

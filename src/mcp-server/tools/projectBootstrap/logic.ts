@@ -18,8 +18,8 @@ import {
 } from "../../../config/clientProfiles.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
 import {
-  MCP_CONTENT_START_MARKER as MCP_BLOCK_START_MARKER,
-  MCP_CONTENT_END_MARKER as MCP_BLOCK_END_MARKER,
+  MCP_CODEMENTOR_START_MARKER as MCP_BLOCK_START_MARKER,
+  MCP_CODEMENTOR_END_MARKER as MCP_BLOCK_END_MARKER,
   refreshMcpConfigCache,
 } from "../../utils/mcpConfigValidator.js";
 
