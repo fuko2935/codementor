@@ -81,7 +81,7 @@ export interface MyToolResponse {
  * @param context - Request context for logging and tracing
  * @returns Analysis results
  * @throws {McpError} VALIDATION_ERROR - Invalid input or path
- * @throws {McpError} RESOURCE_NOT_FOUND - Project directory not found
+ * @throws {McpError} NOT_FOUND - Project directory not found
  * @throws {McpError} INTERNAL_ERROR - Unexpected processing error
  */
 export async function myToolLogic(
@@ -101,7 +101,7 @@ export async function myToolLogic(
   // Check if directory exists
   if (!fs.existsSync(validatedPath)) {
     throw new McpError(
-      BaseErrorCode.RESOURCE_NOT_FOUND,
+      BaseErrorCode.NOT_FOUND,
       "Project directory not found",
       { path: params.projectPath }
     );
@@ -524,7 +524,7 @@ export class MyProvider {
       return response.text;
     } catch (error) {
       throw new McpError(
-        BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+        BaseErrorCode.SERVICE_UNAVAILABLE,
         "Provider API call failed",
         {
           provider: "my-provider",

@@ -1827,11 +1827,15 @@ Error (JavaScript base)
        ├── VALIDATION_ERROR
        ├── UNAUTHORIZED
        ├── FORBIDDEN
+       ├── NOT_FOUND
+       ├── CONFLICT
        ├── RATE_LIMITED
-       ├── RESOURCE_NOT_FOUND
-       ├── EXTERNAL_SERVICE_ERROR
+       ├── TIMEOUT
+       ├── SERVICE_UNAVAILABLE
        ├── CONFIGURATION_ERROR
-       └── INTERNAL_ERROR
+       ├── INITIALIZATION_FAILED
+       ├── INTERNAL_ERROR
+       └── UNKNOWN_ERROR
 ```
 
 #### McpError Structure
@@ -1966,41 +1970,41 @@ throw new McpError(
 
 See [`src/utils/security/rateLimiter.ts`](../../src/utils/security/rateLimiter.ts) for rate limiting implementation.
 
-#### RESOURCE_NOT_FOUND
+#### NOT_FOUND
 **When to use:** Requested resource doesn't exist
 
 **Examples:**
 ```typescript
 // File not found
 throw new McpError(
-  BaseErrorCode.RESOURCE_NOT_FOUND,
+  BaseErrorCode.NOT_FOUND,
   "Project directory not found",
   { path: validatedPath }
 );
 
 // Git repository not found
 throw new McpError(
-  BaseErrorCode.RESOURCE_NOT_FOUND,
+  BaseErrorCode.NOT_FOUND,
   "Not a git repository",
   { path: projectPath }
 );
 
 // Commit not found
 throw new McpError(
-  BaseErrorCode.RESOURCE_NOT_FOUND,
+  BaseErrorCode.NOT_FOUND,
   "Commit not found",
   { revision: params.revision }
 );
 ```
 
-#### EXTERNAL_SERVICE_ERROR
+#### SERVICE_UNAVAILABLE
 **When to use:** External API/service failures
 
 **Examples:**
 ```typescript
 // LLM API error
 throw new McpError(
-  BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+  BaseErrorCode.SERVICE_UNAVAILABLE,
   "Gemini API request failed",
   {
     provider: "gemini",
@@ -2011,7 +2015,7 @@ throw new McpError(
 
 // Network timeout
 throw new McpError(
-  BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+  BaseErrorCode.TIMEOUT,
   "Request timeout",
   {
     service: "gemini-api",
@@ -2021,7 +2025,7 @@ throw new McpError(
 
 // Service unavailable
 throw new McpError(
-  BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+  BaseErrorCode.SERVICE_UNAVAILABLE,
   "Service temporarily unavailable",
   {
     service: "redis",
@@ -2103,7 +2107,7 @@ export async function myToolLogic(
   const validPath = validateSecurePath(params.path, BASE_DIR);
   if (!fs.existsSync(validPath)) {
     throw new McpError(
-      BaseErrorCode.RESOURCE_NOT_FOUND,
+      BaseErrorCode.NOT_FOUND,
       "Path does not exist",
       { path: params.path }
     );
@@ -2115,7 +2119,7 @@ export async function myToolLogic(
     return processResult(result);
   } catch (error) {
     throw new McpError(
-      BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+      BaseErrorCode.SERVICE_UNAVAILABLE,
       "External API failed",
       {
         service: "external-api",
@@ -2241,11 +2245,14 @@ const errorStatusMap: Record<BaseErrorCode, number> = {
   [BaseErrorCode.VALIDATION_ERROR]: 400,
   [BaseErrorCode.UNAUTHORIZED]: 401,
   [BaseErrorCode.FORBIDDEN]: 403,
-  [BaseErrorCode.RESOURCE_NOT_FOUND]: 404,
+  [BaseErrorCode.NOT_FOUND]: 404,
+  [BaseErrorCode.CONFLICT]: 409,
   [BaseErrorCode.RATE_LIMITED]: 429,
-  [BaseErrorCode.EXTERNAL_SERVICE_ERROR]: 502,
+  [BaseErrorCode.TIMEOUT]: 504,
+  [BaseErrorCode.SERVICE_UNAVAILABLE]: 503,
   [BaseErrorCode.CONFIGURATION_ERROR]: 500,
-  [BaseErrorCode.INTERNAL_ERROR]: 500
+  [BaseErrorCode.INTERNAL_ERROR]: 500,
+  [BaseErrorCode.UNKNOWN_ERROR]: 500
 };
 ```
 
@@ -2439,17 +2446,17 @@ describe("myToolLogic", () => {
       });
   });
 
-  it("should throw RESOURCE_NOT_FOUND for missing directory", async () => {
+  it("should throw NOT_FOUND for missing directory", async () => {
     const params = { projectPath: "/nonexistent" };
     const context = createMockContext();
 
     await expect(myToolLogic(params, context))
       .rejects.toMatchObject({
-        code: BaseErrorCode.RESOURCE_NOT_FOUND
+        code: BaseErrorCode.NOT_FOUND
       });
   });
 
-  it("should throw EXTERNAL_SERVICE_ERROR on API failure", async () => {
+  it("should throw SERVICE_UNAVAILABLE on API failure", async () => {
     mockApi.mockRejectedValue(new Error("API down"));
     
     const params = { projectPath: "." };
@@ -2457,10 +2464,32 @@ describe("myToolLogic", () => {
 
     await expect(myToolLogic(params, context))
       .rejects.toMatchObject({
-        code: BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+        code: BaseErrorCode.SERVICE_UNAVAILABLE,
         details: expect.objectContaining({
           service: "external-api"
         })
+      });
+  });
+
+  it("should throw UNAUTHORIZED for missing credentials", async () => {
+    const params = { apiKey: "" };
+    const context = createMockContext();
+
+    await expect(myToolLogic(params, context))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.UNAUTHORIZED,
+        message: expect.stringContaining("credentials")
+      });
+  });
+
+  it("should throw FORBIDDEN for insufficient permissions", async () => {
+    const params = { action: "delete" };
+    const context = createMockContext({ userRole: "viewer" });
+
+    await expect(myToolLogic(params, context))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.FORBIDDEN,
+        message: expect.stringContaining("permission")
       });
   });
 
@@ -2501,7 +2530,7 @@ const validPath = validateSecurePath(params.projectPath, BASE_DIR);
 // Check existence
 if (!fs.existsSync(validPath)) {
   throw new McpError(
-    BaseErrorCode.RESOURCE_NOT_FOUND,
+    BaseErrorCode.NOT_FOUND,
     "Project directory not found",
     { path: params.projectPath }
   );
@@ -2525,7 +2554,7 @@ See [Security Practices - Path Security](#path-security-critical) for path valid
 // Check if git repository
 if (!fs.existsSync(path.join(validPath, ".git"))) {
   throw new McpError(
-    BaseErrorCode.RESOURCE_NOT_FOUND,
+    BaseErrorCode.NOT_FOUND,
     "Not a git repository",
     { path: params.projectPath }
   );
@@ -2602,11 +2631,11 @@ if (!hasPermission(user, "codebase:write")) {
  * @returns Analysis results with insights and recommendations
  * 
  * @throws {McpError} VALIDATION_ERROR - Invalid or empty project path
- * @throws {McpError} RESOURCE_NOT_FOUND - Project directory doesn't exist
+ * @throws {McpError} NOT_FOUND - Project directory doesn't exist
  * @throws {McpError} VALIDATION_ERROR - Project exceeds token limit
  * @throws {McpError} UNAUTHORIZED - Missing or invalid API credentials
  * @throws {McpError} FORBIDDEN - Insufficient permissions for analysis
- * @throws {McpError} EXTERNAL_SERVICE_ERROR - LLM API call failed
+ * @throws {McpError} SERVICE_UNAVAILABLE - LLM API call failed
  * @throws {McpError} INTERNAL_ERROR - Unexpected processing error
  * 
  * @example
@@ -2785,7 +2814,7 @@ export interface MyToolResponse {
  * @param context - Request context for logging and tracing
  * @returns Analysis results
  * @throws {McpError} VALIDATION_ERROR - Invalid input or path
- * @throws {McpError} RESOURCE_NOT_FOUND - Project directory not found
+ * @throws {McpError} NOT_FOUND - Project directory not found
  * @throws {McpError} INTERNAL_ERROR - Unexpected processing error
  */
 export async function myToolLogic(
@@ -2805,7 +2834,7 @@ export async function myToolLogic(
   // Check if directory exists
   if (!fs.existsSync(validatedPath)) {
     throw new McpError(
-      BaseErrorCode.RESOURCE_NOT_FOUND,
+      BaseErrorCode.NOT_FOUND,
       "Project directory not found",
       { path: params.projectPath }
     );
@@ -3137,9 +3166,11 @@ Before submitting PR, verify all requirements are met:
 - [ ] Path traversal tests included
 
 **Error Handling:**
-- [ ] Appropriate error codes used (VALIDATION_ERROR, RESOURCE_NOT_FOUND, etc.)
+- [ ] Appropriate error codes used (VALIDATION_ERROR, NOT_FOUND, etc.)
 - [ ] Error messages are clear and actionable
 - [ ] Error details include relevant context
+- [ ] UNAUTHORIZED used for authentication failures (who you are)
+- [ ] FORBIDDEN used for authorization failures (what you can do)
 - [ ] Errors logged with full context
 - [ ] Unit tests cover error scenarios
 
@@ -3285,7 +3316,7 @@ export class MyProvider {
       return response.text;
     } catch (error) {
       throw new McpError(
-        BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+        BaseErrorCode.SERVICE_UNAVAILABLE,
         "Provider API call failed",
         {
           provider: "my-provider",

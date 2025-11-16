@@ -14,13 +14,17 @@ This document defines the comprehensive error handling strategy for the CodeMent
 Error (JavaScript base)
   └── McpError (Custom structured error)
        ├── VALIDATION_ERROR
-       ├── AUTHENTICATION_ERROR
-       ├── AUTHORIZATION_ERROR
+       ├── UNAUTHORIZED
+       ├── FORBIDDEN
+       ├── NOT_FOUND
+       ├── CONFLICT
        ├── RATE_LIMITED
-       ├── RESOURCE_NOT_FOUND
-       ├── EXTERNAL_SERVICE_ERROR
+       ├── TIMEOUT
+       ├── SERVICE_UNAVAILABLE
        ├── CONFIGURATION_ERROR
-       └── INTERNAL_ERROR
+       ├── INITIALIZATION_FAILED
+       ├── INTERNAL_ERROR
+       └── UNKNOWN_ERROR
 ```
 
 ### McpError Structure
@@ -73,44 +77,66 @@ throw new McpError(
 );
 ```
 
-### AUTHENTICATION_ERROR
-**When to use:** Missing or invalid credentials
+### UNAUTHORIZED
+**When to use:** Missing or invalid credentials (authentication failures)
+
+**Semantic meaning:** The request lacks valid authentication credentials. The client must authenticate itself to get the requested response. This is about **who you are** (identity verification).
 
 **Examples:**
 ```typescript
 // Missing API key
 throw new McpError(
-  BaseErrorCode.AUTHENTICATION_ERROR,
+  BaseErrorCode.UNAUTHORIZED,
   "API key not configured",
   { provider: "gemini", envVar: "GOOGLE_API_KEY" }
 );
 
 // Invalid token
 throw new McpError(
-  BaseErrorCode.AUTHENTICATION_ERROR,
+  BaseErrorCode.UNAUTHORIZED,
   "Invalid authentication token"
+);
+
+// Expired credentials
+throw new McpError(
+  BaseErrorCode.UNAUTHORIZED,
+  "Authentication token has expired",
+  { expiredAt: "2024-01-15T10:30:00Z" }
 );
 ```
 
-### AUTHORIZATION_ERROR
-**When to use:** Insufficient permissions, scope violations
+### FORBIDDEN
+**When to use:** Insufficient permissions, scope violations (authorization failures)
+
+**Semantic meaning:** The client is authenticated but does not have permission to access the requested resource. This is about **what you can do** (permission verification).
 
 **Examples:**
 ```typescript
 // Missing required scope
 throw new McpError(
-  BaseErrorCode.AUTHORIZATION_ERROR,
+  BaseErrorCode.FORBIDDEN,
   "Insufficient permissions",
   { required: ["codebase:read"], provided: ["basic:read"] }
 );
 
 // Access denied
 throw new McpError(
-  BaseErrorCode.AUTHORIZATION_ERROR,
+  BaseErrorCode.FORBIDDEN,
   "Access denied to resource",
   { resource: "project-config" }
 );
+
+// Role-based access control
+throw new McpError(
+  BaseErrorCode.FORBIDDEN,
+  "User role does not permit this action",
+  { userRole: "viewer", requiredRole: "editor" }
+);
 ```
+
+**UNAUTHORIZED vs FORBIDDEN:**
+- **UNAUTHORIZED (401)**: "I don't know who you are" - Authentication failed or missing
+- **FORBIDDEN (403)**: "I know who you are, but you can't do that" - Authorization failed
 
 ### RATE_LIMITED
 **When to use:** Rate limit exceeded
@@ -129,41 +155,41 @@ throw new McpError(
 );
 ```
 
-### RESOURCE_NOT_FOUND
+### NOT_FOUND
 **When to use:** Requested resource doesn't exist
 
 **Examples:**
 ```typescript
 // File not found
 throw new McpError(
-  BaseErrorCode.RESOURCE_NOT_FOUND,
+  BaseErrorCode.NOT_FOUND,
   "Project directory not found",
   { path: validatedPath }
 );
 
 // Git repository not found
 throw new McpError(
-  BaseErrorCode.RESOURCE_NOT_FOUND,
+  BaseErrorCode.NOT_FOUND,
   "Not a git repository",
   { path: projectPath }
 );
 
 // Commit not found
 throw new McpError(
-  BaseErrorCode.RESOURCE_NOT_FOUND,
+  BaseErrorCode.NOT_FOUND,
   "Commit not found",
   { revision: params.revision }
 );
 ```
 
-### EXTERNAL_SERVICE_ERROR
+### SERVICE_UNAVAILABLE
 **When to use:** External API/service failures
 
 **Examples:**
 ```typescript
 // LLM API error
 throw new McpError(
-  BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+  BaseErrorCode.SERVICE_UNAVAILABLE,
   "Gemini API request failed",
   {
     provider: "gemini",
@@ -174,7 +200,7 @@ throw new McpError(
 
 // Network timeout
 throw new McpError(
-  BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+  BaseErrorCode.TIMEOUT,
   "Request timeout",
   {
     service: "gemini-api",
@@ -184,7 +210,7 @@ throw new McpError(
 
 // Service unavailable
 throw new McpError(
-  BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+  BaseErrorCode.SERVICE_UNAVAILABLE,
   "Service temporarily unavailable",
   {
     service: "redis",
@@ -262,7 +288,7 @@ export async function myToolLogic(
   const validPath = validateSecurePath(params.path, BASE_DIR);
   if (!fs.existsSync(validPath)) {
     throw new McpError(
-      BaseErrorCode.RESOURCE_NOT_FOUND,
+      BaseErrorCode.NOT_FOUND,
       "Path does not exist",
       { path: params.path }
     );
@@ -274,7 +300,7 @@ export async function myToolLogic(
     return processResult(result);
   } catch (error) {
     throw new McpError(
-      BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+      BaseErrorCode.SERVICE_UNAVAILABLE,
       "External API failed",
       {
         service: "external-api",
@@ -390,13 +416,16 @@ The HTTP transport automatically maps error codes to HTTP status codes:
 ```typescript
 const errorStatusMap: Record<BaseErrorCode, number> = {
   [BaseErrorCode.VALIDATION_ERROR]: 400,
-  [BaseErrorCode.AUTHENTICATION_ERROR]: 401,
-  [BaseErrorCode.AUTHORIZATION_ERROR]: 403,
-  [BaseErrorCode.RESOURCE_NOT_FOUND]: 404,
+  [BaseErrorCode.UNAUTHORIZED]: 401,
+  [BaseErrorCode.FORBIDDEN]: 403,
+  [BaseErrorCode.NOT_FOUND]: 404,
+  [BaseErrorCode.CONFLICT]: 409,
   [BaseErrorCode.RATE_LIMITED]: 429,
-  [BaseErrorCode.EXTERNAL_SERVICE_ERROR]: 502,
+  [BaseErrorCode.TIMEOUT]: 504,
+  [BaseErrorCode.SERVICE_UNAVAILABLE]: 503,
   [BaseErrorCode.CONFIGURATION_ERROR]: 500,
-  [BaseErrorCode.INTERNAL_ERROR]: 500
+  [BaseErrorCode.INTERNAL_ERROR]: 500,
+  [BaseErrorCode.UNKNOWN_ERROR]: 500
 };
 ```
 
@@ -534,7 +563,7 @@ class CircuitBreaker {
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     if (this.isOpen()) {
       throw new McpError(
-        BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+        BaseErrorCode.SERVICE_UNAVAILABLE,
         "Circuit breaker open",
         { retryAfter: this.timeout }
       );
@@ -586,17 +615,17 @@ describe("myToolLogic", () => {
       });
   });
 
-  it("should throw RESOURCE_NOT_FOUND for missing directory", async () => {
+  it("should throw NOT_FOUND for missing directory", async () => {
     const params = { projectPath: "/nonexistent" };
     const context = createMockContext();
 
     await expect(myToolLogic(params, context))
       .rejects.toMatchObject({
-        code: BaseErrorCode.RESOURCE_NOT_FOUND
+        code: BaseErrorCode.NOT_FOUND
       });
   });
 
-  it("should throw EXTERNAL_SERVICE_ERROR on API failure", async () => {
+  it("should throw SERVICE_UNAVAILABLE on API failure", async () => {
     mockApi.mockRejectedValue(new Error("API down"));
     
     const params = { projectPath: "." };
@@ -604,10 +633,32 @@ describe("myToolLogic", () => {
 
     await expect(myToolLogic(params, context))
       .rejects.toMatchObject({
-        code: BaseErrorCode.EXTERNAL_SERVICE_ERROR,
+        code: BaseErrorCode.SERVICE_UNAVAILABLE,
         details: expect.objectContaining({
           service: "external-api"
         })
+      });
+  });
+
+  it("should throw UNAUTHORIZED for missing credentials", async () => {
+    const params = { apiKey: "" };
+    const context = createMockContext();
+
+    await expect(myToolLogic(params, context))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.UNAUTHORIZED,
+        message: expect.stringContaining("credentials")
+      });
+  });
+
+  it("should throw FORBIDDEN for insufficient permissions", async () => {
+    const params = { action: "delete" };
+    const context = createMockContext({ userRole: "viewer" });
+
+    await expect(myToolLogic(params, context))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.FORBIDDEN,
+        message: expect.stringContaining("permission")
       });
   });
 });
@@ -624,7 +675,7 @@ const validPath = validateSecurePath(params.projectPath, BASE_DIR);
 // Check existence
 if (!fs.existsSync(validPath)) {
   throw new McpError(
-    BaseErrorCode.RESOURCE_NOT_FOUND,
+    BaseErrorCode.NOT_FOUND,
     "Project directory not found",
     { path: params.projectPath }
   );
@@ -646,7 +697,7 @@ if (!fs.statSync(validPath).isDirectory()) {
 // Check if git repository
 if (!fs.existsSync(path.join(validPath, ".git"))) {
   throw new McpError(
-    BaseErrorCode.RESOURCE_NOT_FOUND,
+    BaseErrorCode.NOT_FOUND,
     "Not a git repository",
     { path: params.projectPath }
   );
@@ -690,9 +741,11 @@ if (!config.GOOGLE_API_KEY && config.LLM_DEFAULT_PROVIDER === "gemini") {
  * Analyzes project codebase
  * 
  * @throws {McpError} VALIDATION_ERROR - Invalid or empty project path
- * @throws {McpError} RESOURCE_NOT_FOUND - Project directory doesn't exist
+ * @throws {McpError} NOT_FOUND - Project directory doesn't exist
  * @throws {McpError} VALIDATION_ERROR - Project exceeds token limit
- * @throws {McpError} EXTERNAL_SERVICE_ERROR - LLM API call failed
+ * @throws {McpError} UNAUTHORIZED - Missing or invalid API credentials
+ * @throws {McpError} FORBIDDEN - Insufficient permissions for analysis
+ * @throws {McpError} SERVICE_UNAVAILABLE - LLM API call failed
  * @throws {McpError} INTERNAL_ERROR - Unexpected processing error
  */
 export async function analyzeCodebase(
@@ -708,7 +761,7 @@ export async function analyzeCodebase(
 Before submitting code, verify:
 
 - [ ] All error paths throw structured `McpError`
-- [ ] Error codes match the error condition
+- [ ] Error codes match the error condition (UNAUTHORIZED for auth, FORBIDDEN for authz)
 - [ ] Error messages are clear and actionable
 - [ ] Error details include relevant context
 - [ ] Errors are caught and processed in handlers
@@ -717,3 +770,5 @@ Before submitting code, verify:
 - [ ] Unit tests cover error scenarios
 - [ ] Error documentation is complete
 - [ ] Graceful degradation where appropriate
+- [ ] UNAUTHORIZED used for authentication failures (who you are)
+- [ ] FORBIDDEN used for authorization failures (what you can do)

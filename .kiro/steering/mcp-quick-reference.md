@@ -278,11 +278,14 @@ McpError
 ├── VALIDATION_ERROR (400)
 ├── UNAUTHORIZED (401)
 ├── FORBIDDEN (403)
-├── RESOURCE_NOT_FOUND (404)
+├── NOT_FOUND (404)
+├── CONFLICT (409)
 ├── RATE_LIMITED (429)
-├── EXTERNAL_SERVICE_ERROR (502)
+├── TIMEOUT (504)
+├── SERVICE_UNAVAILABLE (503)
 ├── CONFIGURATION_ERROR (500)
-└── INTERNAL_ERROR (500)
+├── INTERNAL_ERROR (500)
+└── UNKNOWN_ERROR (500)
 ```
 
 ### Error Codes Reference
@@ -292,11 +295,16 @@ McpError
 | `VALIDATION_ERROR` | 400 | Invalid input, schema violations | Empty required field, path traversal |
 | `UNAUTHORIZED` | 401 | Missing/invalid credentials | Missing API key, invalid token |
 | `FORBIDDEN` | 403 | Insufficient permissions | Missing required scope |
-| `RESOURCE_NOT_FOUND` | 404 | Resource doesn't exist | File not found, git repo not found |
+| `NOT_FOUND` | 404 | Resource doesn't exist | File not found, git repo not found |
 | `RATE_LIMITED` | 429 | Rate limit exceeded | Too many requests |
-| `EXTERNAL_SERVICE_ERROR` | 502 | External API failures | LLM API error, network timeout |
+| `SERVICE_UNAVAILABLE` | 503 | External API failures | LLM API error, service down |
+| `TIMEOUT` | 504 | Request timeout | Network timeout, slow response |
 | `CONFIGURATION_ERROR` | 500 | Invalid configuration | Missing required config |
 | `INTERNAL_ERROR` | 500 | Unexpected errors | Programming errors |
+
+**UNAUTHORIZED vs FORBIDDEN:**
+- **UNAUTHORIZED (401)**: "I don't know who you are" - Authentication failed
+- **FORBIDDEN (403)**: "I know who you are, but you can't do that" - Authorization failed
 
 **UNAUTHORIZED vs FORBIDDEN:**
 - **UNAUTHORIZED (401)**: "I don't know who you are" - Authentication failed
@@ -327,7 +335,7 @@ throw new McpError(
 
 // Resource not found
 throw new McpError(
-  BaseErrorCode.RESOURCE_NOT_FOUND,
+  BaseErrorCode.NOT_FOUND,
   "Project directory not found",
   { path: validatedPath }
 );
@@ -384,7 +392,7 @@ export async function myToolLogic(
   
   if (!fs.existsSync(validPath)) {
     throw new McpError(
-      BaseErrorCode.RESOURCE_NOT_FOUND,
+      BaseErrorCode.NOT_FOUND,
       "Project directory not found",
       { path: params.projectPath }
     );
