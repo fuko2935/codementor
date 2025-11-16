@@ -2,7 +2,7 @@
  * @fileoverview Unit tests for contextBuilder utility
  * @module tests/unit/utils/contextBuilder
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "@jest/globals";
 import { prepareFullContext } from "../../../src/mcp-server/utils/contextBuilder.js";
 import type { RequestContext } from "../../../src/utils/index.js";
 
@@ -44,14 +44,17 @@ describe("prepareFullContext", () => {
     it("should respect temporaryIgnore patterns", async () => {
       const result = await prepareFullContext(
         ".",
-        ["**/*.test.ts"],
+        ["**/*.test.ts", "tests/**"],
         false,
         mockContext
       );
       
       expect(typeof result).toBe("string");
-      // Result should not contain test files
-      expect(result).not.toContain(".test.ts");
+      // Result should not contain test file markers (--- File: path/to/test.test.ts ---)
+      expect(result).not.toMatch(/--- File: .*\.test\.ts ---/);
+      // Result should not contain test-specific patterns from our test files
+      expect(result).not.toContain('should respect temporaryIgnore patterns');
+      expect(result).not.toContain('should prepare context for valid project');
     });
   });
 

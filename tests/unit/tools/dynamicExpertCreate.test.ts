@@ -3,11 +3,9 @@
  * and authorization behavior for the gemini_dynamic_expert_create tool.
  */
 
-import { describe, it, beforeEach, afterEach } from "node:test";
-import assert from "node:assert";
+import { describe, it, beforeEach, afterEach, expect } from "@jest/globals";
 import { promises as fs } from "fs";
 import path from "path";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import {
@@ -17,36 +15,16 @@ import {
 import { registerDynamicExpertCreate } from "../../../src/mcp-server/tools/dynamicExpertCreate/registration.js";
 import { requestContextService } from "../../../src/utils/index.js";
 import {
-  MCP_CONTENT_END_MARKER,
-  MCP_CONTENT_START_MARKER,
-} from "../../../src/mcp-server/tools/mcpSetupGuide/logic.js";
+  MCP_CODEMENTOR_END_MARKER as MCP_CONTENT_END_MARKER,
+  MCP_CODEMENTOR_START_MARKER as MCP_CONTENT_START_MARKER,
+} from "../../../src/mcp-server/utils/mcpConfigValidator.js";
 import {
   McpError,
   BaseErrorCode,
 } from "../../../src/types-global/errors.js";
+import { TestMcpServer } from "../testUtils/testMcpServer.js";
 
 const TEST_ROOT = path.join(process.cwd(), ".test-temp");
-
-class TestMcpServer extends McpServer {
-  public registeredTools: Map<
-    string,
-    {
-      description: string;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      inputSchema: any;
-      handler: (params: unknown) => Promise<CallToolResult>;
-    }
-  > = new Map();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tool(name: string, description: string, inputSchema: any, handler: any): void {
-    this.registeredTools.set(name, {
-      description,
-      inputSchema,
-      handler,
-    });
-  }
-}
 
 // Helper to invoke the registered tool handler with standard params.
  
@@ -112,12 +90,13 @@ describe("dynamicExpertCreateLogic limits", () => {
       const server = new TestMcpServer();
       await registerDynamicExpertCreate(server);
 
-      const tool = server.registeredTools.get("gemini_dynamic_expert_create");
-      assert.ok(tool, "gemini_dynamic_expert_create tool should be registered");
-      assert.ok(typeof tool.handler === "function", "handler must be a function");
+      const tools = server.getTools();
+      const tool = tools.get("gemini_dynamic_expert_create");
+      expect(tool).toBeDefined();
+      expect(typeof tool.handler).toBe("function");
 
       const result = await callTool(tool.handler);
-      assert.ok(result, "Expected a CallToolResult-like response");
+      expect(result).toBeDefined();
     });
   });
 
@@ -135,17 +114,9 @@ describe("dynamicExpertCreateLogic limits", () => {
       temporaryIgnore: ["AGENTS.md"],
     };
 
-    await assert.rejects(
-      () => dynamicExpertCreateLogic(params, context),
-      (error: unknown) => {
-        assert.ok(error instanceof Error);
-        assert.match(
-          error.message,
-          /Project too large: \d+ files found \(maximum 1000 allowed\)/,
-        );
-        return true;
-      },
-    );
+    await expect(
+      dynamicExpertCreateLogic(params, context)
+    ).rejects.toThrow(/Project too large: \d+ files found \(maximum 1000 allowed\)/);
   });
 
   it("throws when total project size exceeds MAX_TOTAL_SIZE", async () => {
@@ -159,13 +130,8 @@ describe("dynamicExpertCreateLogic limits", () => {
       temporaryIgnore: ["AGENTS.md"],
     };
 
-    await assert.rejects(
-      () => dynamicExpertCreateLogic(params, context),
-      (error: unknown) => {
-        assert.ok(error instanceof Error);
-        assert.match(error.message, /total size exceeds 100MB limit/i);
-        return true;
-      },
-    );
+    await expect(
+      dynamicExpertCreateLogic(params, context)
+    ).rejects.toThrow(/total size exceeds 100MB limit/i);
   });
 });

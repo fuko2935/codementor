@@ -49,7 +49,7 @@
     "test:unit": "node -e \\\"console.log(\\\\\"tests disabled\\\\\")\\\"",
     "test:all": "node -e \\\"console.log(\\\\\"tests disabled\\\\\")\\\"",
     "audit:deps": "npm audit",
-    "test": "node -e \\\"console.log(\\\\\"tests disabled\\\\\")\\\""
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
   },
   "dependencies": {
     "@babel/parser": "^7.26.3",
@@ -80,14 +80,14 @@
     "zod-to-json-schema": "^3.23.5"
   },
   "optionalDependencies": {
+    "ioredis": "^5.4.1",
     "tree-sitter-c-sharp": "^0.20.4",
     "tree-sitter-go": "^0.20.0",
     "tree-sitter-java": "^0.20.4",
     "tree-sitter-php": "^0.20.3",
     "tree-sitter-python": "^0.20.4",
     "tree-sitter-ruby": "^0.20.3",
-    "tree-sitter-rust": "^0.20.4",
-    "ioredis": "^5.4.1"
+    "tree-sitter-rust": "^0.20.4"
   },
   "keywords": [
     "typescript",
@@ -133,13 +133,16 @@
   "devDependencies": {
     "@eslint/js": "^9.30.1",
     "@types/babel__traverse": "^7.28.0",
+    "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "axios": "^1.10.0",
     "depcheck": "^1.4.7",
     "eslint": "^9.30.1",
     "globals": "^16.3.0",
+    "jest": "^30.2.0",
     "js-yaml": "^4.1.0",
     "prettier": "^3.6.2",
+    "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
     "typedoc": "^0.28.7",
     "typescript": "^5.8.3",

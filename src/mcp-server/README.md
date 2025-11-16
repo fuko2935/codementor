@@ -8,18 +8,40 @@ The server is designed for extensibility, leveraging the high-level abstractions
 
 ## 🔐 Authentication / Access Control
 
-This MCP server no longer provides built-in authentication or scope-based authorization for HTTP or stdio transports.
+### API Key Authentication (HTTP Transport)
 
-- The `/mcp` HTTP endpoint is open by default (subject only to rate limiting and CORS configuration).
-- All tools and resources are callable without server-side token or scope checks.
-- `withRequiredScopes` exists only as a backward-compatible no-op helper; it MUST NOT be relied on for security.
+When using the HTTP transport, the server supports simple API key authentication via the `MCP_API_KEY` environment variable:
+
+```bash
+# Enable API key authentication
+export MCP_API_KEY="your-secure-api-key-here"
+export MCP_TRANSPORT_TYPE=http
+npm start
+```
+
+**Authentication Methods:**
+- **Authorization header:** `Authorization: Bearer <your-api-key>`
+- **Custom header:** `x-api-key: <your-api-key>`
+
+If no `MCP_API_KEY` is configured, authentication is disabled and all requests are allowed (suitable for local development).
+
+### Security Model
+
+- No JWT/OAuth layer is provided by the server itself
+- The API key authentication is a lightweight mechanism suitable for development and trusted environments
+- For production deployments, place a reverse proxy (e.g., Nginx) in front of the server for additional security
+- All tools and resources are callable without server-side scope checks
+- `withRequiredScopes` exists only as a backward-compatible no-op helper; it MUST NOT be relied on for security
+
+### Production Security Recommendations
 
 For production deployments, you are expected to enforce access control externally, for example:
 
-- HTTP reverse proxy with authentication/authorization
+- HTTP reverse proxy with proper authentication/authorization
 - mTLS between trusted clients and this server
 - Network-level controls (IP allowlists, private networks, service mesh policies)
 - WAF or API gateway in front of the MCP HTTP endpoint
+- TLS termination at the proxy level
 
 ---
 

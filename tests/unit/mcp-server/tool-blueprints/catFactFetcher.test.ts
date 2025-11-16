@@ -1,5 +1,4 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import { describe, it, expect } from "@jest/globals";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { BaseErrorCode, McpError } from "../../../../src/types-global/errors.js";
@@ -31,41 +30,52 @@ function getRegisteredToolHandler(server: McpServer, name: string): ToolHandler 
  * Sunucu, varsayılan olarak kimlik doğrulaması yapmaz; gerekli ise harici olarak korunmalıdır.
  */
 
-test("catFactFetcher: tool registers successfully and returns a response", async () => {
-  const server = new McpServer();
+describe("catFactFetcher", () => {
+  it("catFactFetcher: tool registers successfully and returns a response", async () => {
+  const server = new McpServer(
+    {
+      name: "test-server",
+      version: "1.0.0"
+    },
+    {
+      capabilities: {
+        logging: {},
+        tools: { listChanged: true },
+      },
+    }
+  );
   await registerCatFactFetcherTool(server);
 
   const handler = getRegisteredToolHandler(server, "get_random_cat_fact");
 
   const result = await handler({ maxLength: 64 });
 
-  assert.ok(result, "Expected handler to return a result");
-  assert.equal(
-    result.isError,
-    false,
-    "Expected successful response (isError should be false or undefined)",
-  );
-  assert.ok(
-    Array.isArray(result.content),
-    "Expected content to be an array in successful response",
-  );
-});
+  expect(result).toBeDefined();
+  expect(result.isError).toBe(false);
+  expect(Array.isArray(result.content)).toBe(true);
+  });
 
-test("catFactFetcher: propagates McpError correctly on invalid input", async () => {
-  const server = new McpServer();
+  it("catFactFetcher: propagates McpError correctly on invalid input", async () => {
+  const server = new McpServer(
+    {
+      name: "test-server",
+      version: "1.0.0"
+    },
+    {
+      capabilities: {
+        logging: {},
+        tools: { listChanged: true },
+      },
+    }
+  );
   await registerCatFactFetcherTool(server);
 
   const handler = getRegisteredToolHandler(server, "get_random_cat_fact");
 
-  await assert.rejects(
-    async () => {
-      // Bilerek hatalı bir payload ile çağır.
-      // Gerçek doğrulama mantığı registration/logic tarafında tanımlı.
-      await handler({ maxLength: -1 });
-    },
-    (error: unknown) => {
-      assert.ok(error instanceof McpError || error instanceof Error);
-      return true;
-    },
-  );
+  await expect(async () => {
+    // Bilerek hatalı bir payload ile çağır.
+    // Gerçek doğrulama mantığı registration/logic tarafında tanımlı.
+    await handler({ maxLength: -1 });
+  }).rejects.toThrow();
+});
 });

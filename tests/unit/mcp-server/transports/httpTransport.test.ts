@@ -3,8 +3,8 @@
  * @module tests/unit/mcp-server/transports/httpTransport
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { BaseErrorCode } from "../../../../src/types-global/errors.js";
+import { describe, it, expect, beforeEach, afterEach, jest } from "@jest/globals";
+import { BaseErrorCode } from "../../../../src/types-global/errors";
 
 describe("HTTP Transport Authentication Middleware", () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -17,7 +17,7 @@ describe("HTTP Transport Authentication Middleware", () => {
   afterEach(() => {
     // Restore original environment
     process.env = originalEnv;
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe("when MCP_API_KEY is not configured", () => {

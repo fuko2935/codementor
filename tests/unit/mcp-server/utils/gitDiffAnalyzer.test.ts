@@ -4,15 +4,14 @@
  * @module tests/unit/mcp-server/utils/gitDiffAnalyzer
  */
 
-import { describe, it, beforeEach, afterEach } from "node:test";
-import assert from "node:assert";
+import { describe, it, beforeEach, afterEach, expect } from "@jest/globals";
 import { promises as fs } from "fs";
 import path from "path";
 import simpleGit, { SimpleGit } from "simple-git";
 import ignore from "ignore";
 
-import { validateRevision, extractGitDiff } from "../../../../src/mcp-server/utils/gitDiffAnalyzer.js";
-import { requestContextService } from "../../../../src/utils/index.js";
+import { validateRevision, extractGitDiff } from "../../../../src/mcp-server/utils/gitDiffAnalyzer";
+import { requestContextService } from "../../../../src/utils/index";
 
 const TEST_ROOT = path.join(process.cwd(), ".test-temp");
 
@@ -56,14 +55,14 @@ describe("validateRevision", () => {
   it("accepts common valid revisions", () => {
     const valids = ["HEAD", "HEAD~1", "main", "feature/test_1", "abc123", "HEAD^", "a/b", "v1.0.0"];
     for (const r of valids) {
-      assert.strictEqual(validateRevision(r), true, `Expected valid: ${r}`);
+      expect(validateRevision(r)).toBe(true);
     }
   });
 
   it("rejects unsafe or malformed revisions", () => {
     const invalids = ["-bad", "HEAD; rm -rf /", "bad|rev", "$ENV", "rev && echo hi"];
     for (const r of invalids) {
-      assert.strictEqual(validateRevision(r), false, `Expected invalid: ${r}`);
+      expect(validateRevision(r)).toBe(false);
     }
   });
 });
@@ -76,11 +75,11 @@ describe("extractGitDiff", () => {
 
     // 1) Valid absolute path inside allowed base (simulates already-validated path)
     const firstResult = await extractGitDiff(repoDir, { revision: "." }, context);
-    assert.ok(firstResult.summary.filesModified >= 0, "Should work with absolute repoDir path");
+    expect(firstResult.summary.filesModified).toBeGreaterThanOrEqual(0);
 
     // 2) Idempotent behavior: passing the normalized path again must not break
     const secondResult = await extractGitDiff(firstResult.summary.revisionInfo ? repoDir : repoDir, { revision: "." }, context);
-    assert.ok(secondResult.summary.filesModified >= 0, "Double validation should be safe and not throw");
+    expect(secondResult.summary.filesModified).toBeGreaterThanOrEqual(0);
   });
 
   it("rejects insecure project paths escaping BASE_DIR", async () => {
@@ -90,14 +89,7 @@ describe("extractGitDiff", () => {
 
     const unsafePath = path.join(repoDir, "..", "outside-repo");
 
-    await assert.rejects(
-      () => extractGitDiff(unsafePath, { revision: "." }, context),
-      (err: unknown) => {
-        // Implementation uses validateSecurePath -> McpError with security-related code
-        assert.ok(err instanceof Error, "Should throw an error for unsafe path");
-        return true;
-      },
-    );
+    await expect(extractGitDiff(unsafePath, { revision: "." }, context)).rejects.toThrow();
   });
 
   it("returns uncommitted changes for revision '.'", async () => {
@@ -111,14 +103,14 @@ describe("extractGitDiff", () => {
     });
     const result = await extractGitDiff(repoDir, { revision: "." }, context);
 
-    assert.ok(result.summary.filesModified >= 0, "filesModified should be >= 0");
-    assert.ok(result.summary.revisionInfo, "revisionInfo should be present");
-    assert.strictEqual(result.summary.revisionInfo?.head, "working directory");
+    expect(result.summary.filesModified).toBeGreaterThanOrEqual(0);
+    expect(result.summary.revisionInfo).toBeDefined();
+    expect(result.summary.revisionInfo?.head).toBe("working directory");
     // If there are changes, c.txt should be in the list
     if (result.summary.filesModified > 0) {
-      assert.ok(result.files.some((f) => f.path === rel), "c.txt should appear in uncommitted diff");
+      expect(result.files.some((f) => f.path === rel)).toBe(true);
     }
-    assert.strictEqual(Array.isArray(result.skippedFiles) ? typeof result.skippedFiles[0]?.path === "string" : true, true);
+    expect(Array.isArray(result.skippedFiles) ? typeof result.skippedFiles[0]?.path === "string" : true).toBe(true);
   });
 
   it("returns diff for last N commits when 'count' is set", async () => {
@@ -127,10 +119,10 @@ describe("extractGitDiff", () => {
     });
     const result = await extractGitDiff(repoDir, { count: 1 }, context);
 
-    assert.ok(result.summary.filesModified >= 1, "Should have at least one modified file for last commit");
-    assert.ok(result.summary.revisionInfo, "revisionInfo should be present");
-    assert.strictEqual(result.summary.revisionInfo?.head, "HEAD");
-    assert.strictEqual(result.summary.revisionInfo?.base, "HEAD~1");
+    expect(result.summary.filesModified).toBeGreaterThanOrEqual(1);
+    expect(result.summary.revisionInfo).toBeDefined();
+    expect(result.summary.revisionInfo?.head).toBe("HEAD");
+    expect(result.summary.revisionInfo?.base).toBe("HEAD~1");
   });
 
   it("returns diff for specific revision range 'HEAD~2..HEAD'", async () => {
@@ -139,13 +131,13 @@ describe("extractGitDiff", () => {
     });
     const result = await extractGitDiff(repoDir, { revision: "HEAD~2..HEAD" }, context);
 
-    assert.ok(result.summary.filesModified >= 1, "Range should include changes across commits");
-    assert.ok(result.summary.revisionInfo, "revisionInfo should be present");
-    assert.strictEqual(result.summary.revisionInfo?.base, "HEAD~2");
-    assert.strictEqual(result.summary.revisionInfo?.head, "HEAD");
+    expect(result.summary.filesModified).toBeGreaterThanOrEqual(1);
+    expect(result.summary.revisionInfo).toBeDefined();
+    expect(result.summary.revisionInfo?.base).toBe("HEAD~2");
+    expect(result.summary.revisionInfo?.head).toBe("HEAD");
     // Expect a.txt or b.txt in the range
     const paths = result.files.map((f) => f.path);
-    assert.ok(paths.includes("a.txt") || paths.includes("b.txt"), "Expected a.txt or b.txt in diff");
+    expect(paths.includes("a.txt") || paths.includes("b.txt")).toBe(true);
   });
 
   it("returns diff for a single commit hash (against parent or empty tree)", async () => {
@@ -156,9 +148,9 @@ describe("extractGitDiff", () => {
     });
     const result = await extractGitDiff(repoDir, { revision: hash }, context);
 
-    assert.ok(result.summary.filesModified >= 1, "Single commit should produce at least one file change");
-    assert.ok(result.summary.revisionInfo, "revisionInfo should be present");
-    assert.strictEqual(result.summary.revisionInfo?.head, hash);
+    expect(result.summary.filesModified).toBeGreaterThanOrEqual(1);
+    expect(result.summary.revisionInfo).toBeDefined();
+    expect(result.summary.revisionInfo?.head).toBe(hash);
   });
 
   it("applies ignore filtering (exclude b.txt)", async () => {
@@ -168,7 +160,7 @@ describe("extractGitDiff", () => {
     });
     const result = await extractGitDiff(repoDir, { revision: "HEAD~2..HEAD", ignoreInstance: ig }, context);
 
-    assert.ok(result.summary.filesModified >= 1, "Filtered range should still include changes");
-    assert.ok(!result.files.some((f) => f.path === "b.txt"), "b.txt should be filtered out by ignore");
+    expect(result.summary.filesModified).toBeGreaterThanOrEqual(1);
+    expect(result.files.some((f) => f.path === "b.txt")).toBe(false);
   });
 });

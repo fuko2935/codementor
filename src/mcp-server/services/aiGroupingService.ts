@@ -5,11 +5,29 @@
  * @module src/mcp-server/services/aiGroupingService
  */
 
+import { z } from "zod";
 import { McpError, BaseErrorCode } from "../../types-global/errors.js";
 import { logger, type RequestContext } from "../../utils/index.js";
 import { config } from "../../config/index.js";
 import { createModelByProvider } from "../../services/llm-providers/modelFactory.js";
 import type { FileMetadata } from "../utils/codeParser.js";
+
+/**
+ * Zod schema for validating a single project group from AI response.
+ */
+const ProjectGroupSchema = z.object({
+  groupIndex: z.number(),
+  name: z.string(),
+  description: z.string(),
+  totalTokens: z.number(),
+  files: z.array(z.string()),
+  metadata: z.array(z.any())
+});
+
+/**
+ * Zod schema for validating the complete AI response array.
+ */
+const AIResponseSchema = z.array(ProjectGroupSchema);
 
 /**
  * Represents a group of related files with AI-generated metadata.
@@ -151,18 +169,18 @@ function parseAIResponse(
 
   let groups: ProjectGroup[];
   try {
-    groups = JSON.parse(cleaned);
+    const raw = JSON.parse(cleaned);
+    groups = AIResponseSchema.parse(raw);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new McpError(
+        BaseErrorCode.PARSING_ERROR,
+        `AI response validation failed: ${error.message}`,
+      );
+    }
     throw new McpError(
       BaseErrorCode.PARSING_ERROR,
       `Failed to parse AI response as JSON: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-
-  if (!Array.isArray(groups)) {
-    throw new McpError(
-      BaseErrorCode.PARSING_ERROR,
-      "AI response is not a JSON array",
     );
   }
 

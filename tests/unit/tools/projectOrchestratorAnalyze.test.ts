@@ -7,36 +7,11 @@
  * - These tests only verify registration and successful handler invocation.
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { describe, it, expect } from "@jest/globals";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
-import { registerProjectOrchestratorAnalyze } from "../../src/mcp-server/tools/projectOrchestratorAnalyze/registration.js";
-
-/**
- * Minimal fake server to capture registered tools.
- */
-class TestMcpServer extends McpServer {
-  public registeredTools: Map<
-    string,
-    {
-      description: string;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      inputSchema: any;
-      handler: (params: unknown) => Promise<CallToolResult>;
-    }
-  > = new Map();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tool(name: string, description: string, inputSchema: any, handler: any): void {
-    this.registeredTools.set(name, {
-      description,
-      inputSchema,
-      handler,
-    });
-  }
-}
+import { registerProjectOrchestratorAnalyze } from "../../../src/mcp-server/tools/projectOrchestratorAnalyze/registration.js";
+import { TestMcpServer } from "../testUtils/testMcpServer.js";
 
 /**
  * Helper to invoke the tool handler with standard params.
@@ -58,11 +33,12 @@ describe("project_orchestrator_analyze registration (no built-in auth)", () => {
     const server = new TestMcpServer();
     await registerProjectOrchestratorAnalyze(server);
 
-    const tool = server.registeredTools.get("project_orchestrator_analyze");
-    assert.ok(tool, "project_orchestrator_analyze tool should be registered");
-    assert.ok(typeof tool.handler === "function", "handler must be a function");
+    const tools = server.getTools();
+    const tool = tools.get("project_orchestrator_analyze");
+    expect(tool).toBeDefined();
+    expect(typeof tool.handler).toBe("function");
 
     const result = await callTool(tool.handler);
-    assert.ok(result, "Expected a CallToolResult-like response");
+    expect(result).toBeDefined();
   });
 });

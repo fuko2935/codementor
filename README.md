@@ -240,16 +240,44 @@ The `analysisMode` parameter supports the following modes:
 
 ---
 
-## Access Model
+## Security / Authentication
 
-- HTTP and STDIO MCP endpoints provided by this project do not implement any built-in authentication or scope-based authorization.
-- This server is intended for local and controlled environments (e.g., running alongside your editor or behind your own infrastructure).
-- In production or shared environments, you MUST protect access using external mechanisms such as:
-  - Reverse proxy with JWT/OIDC validation
-  - mTLS
-  - IP allowlists / network segmentation
-  - API gateways or WAF
-- Tools and resources are callable without server-side scope checks; any `withRequiredScopes` helper is a no-op kept only for backwards-compatible imports and MUST NOT be treated as a security control.
+### API Key Authentication (HTTP Transport)
+
+When using the HTTP transport, the server supports simple API key authentication via the `MCP_API_KEY` environment variable:
+
+```bash
+# Enable API key authentication
+export MCP_API_KEY="your-secure-api-key-here"
+export MCP_TRANSPORT_TYPE=http
+npm start
+```
+
+**Authentication Methods:**
+- **Authorization header:** `Authorization: Bearer <your-api-key>`
+- **Custom header:** `x-api-key: <your-api-key>`
+
+If no `MCP_API_KEY` is configured, authentication is disabled and all requests are allowed (suitable for local development).
+
+### Production Security Recommendations
+
+**⚠️ Important Security Notes:**
+- No JWT/OAuth layer is provided by the server itself
+- The API key authentication is a lightweight mechanism suitable for development and trusted environments
+- For production deployments, place a reverse proxy (e.g., Nginx) in front of the server for additional security
+
+**Recommended Production Setup:**
+- Use a reverse proxy with proper authentication/authorization
+- Implement TLS termination at the proxy level
+- Consider mTLS, JWT/OIDC validation, or API gateway solutions
+- Apply network segmentation and IP allowlists
+- Use Web Application Firewall (WAF) for additional protection
+
+### Access Model
+
+- HTTP and STDIO MCP endpoints do not implement built-in scope-based authorization
+- This server is intended for local and controlled environments (e.g., running alongside your editor or behind your own infrastructure)
+- Tools and resources are callable without server-side scope checks; any `withRequiredScopes` helper is a no-op kept only for backwards-compatible imports and MUST NOT be treated as a security control
 
 ## Security & Architecture Highlights
 

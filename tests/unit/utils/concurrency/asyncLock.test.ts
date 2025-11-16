@@ -4,8 +4,7 @@
  * @module tests/unit/utils/concurrency/asyncLock
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert";
+import { describe, it } from "@jest/globals";
 import { AsyncLock } from "../../../../src/utils/concurrency/asyncLock.js";
 
 describe("AsyncLock", () => {
@@ -48,7 +47,7 @@ describe("AsyncLock", () => {
       await Promise.all([op1, op2, op3]);
 
       // Verify FIFO ordering
-      assert.deepStrictEqual(executionOrder, [1, 2, 3]);
+      expect(executionOrder).toEqual([1, 2, 3]);
     });
   });
 
@@ -65,7 +64,7 @@ describe("AsyncLock", () => {
         lock.release();
       }
 
-      assert.strictEqual(acquired, true);
+      expect(acquired).toBe(true);
 
       // Second acquire should succeed immediately
       const startTime = Date.now();
@@ -74,7 +73,7 @@ describe("AsyncLock", () => {
       lock.release();
 
       // Should acquire immediately (no waiting)
-      assert.ok(endTime - startTime < 10, "Lock should be released immediately");
+      expect(endTime - startTime).toBeLessThan(10);
     });
   });
 
@@ -105,7 +104,7 @@ describe("AsyncLock", () => {
       await Promise.all(promises);
 
       // Verify FIFO order
-      assert.deepStrictEqual(order, [1, 2, 3, 4, 5]);
+      expect(order).toEqual([1, 2, 3, 4, 5]);
     });
   });
 
@@ -124,15 +123,15 @@ describe("AsyncLock", () => {
         }
       } catch (error) {
         // Expected error
-        assert.strictEqual((error as Error).message, "Test error");
+        expect((error as Error).message).toBe("Test error");
       }
 
-      assert.strictEqual(lockReleased, true, "Lock should be released in finally block");
+      expect(lockReleased).toBe(true);
 
       // Verify next waiter can acquire successfully (should not throw)
       await lock.acquire();
       lock.release();
-      assert.ok(true, "Next waiter should be able to acquire lock");
+      expect(true).toBe(true);
     });
 
     it("should allow next waiter to acquire after exception", async () => {
@@ -161,7 +160,7 @@ describe("AsyncLock", () => {
 
       await Promise.allSettled([op1, op2]);
 
-      assert.strictEqual(secondOperationExecuted, true, "Second operation should execute after first releases lock");
+      expect(secondOperationExecuted).toBe(true);
     });
   });
 
@@ -194,11 +193,11 @@ describe("AsyncLock", () => {
       await Promise.all(operations);
 
       // Verify no overlapping critical sections
-      assert.strictEqual(maxConcurrent, 1, "Only one operation should be active at a time");
+      expect(maxConcurrent).toBe(1);
 
       // Verify all operations completed
-      assert.strictEqual(completedOperations.length, 10, "All operations should complete");
-      assert.strictEqual(activeOperations.size, 0, "All operations should release lock");
+      expect(completedOperations.length).toBe(10);
+      expect(activeOperations.size).toBe(0);
     });
 
     it("should serialize operations with delays correctly", async () => {
@@ -240,10 +239,7 @@ describe("AsyncLock", () => {
 
       // Verify operations executed sequentially (timestamps should be in order)
       for (let i = 1; i < timestamps.length; i++) {
-        assert.ok(
-          timestamps[i] >= timestamps[i - 1],
-          `Operation ${i} should start after operation ${i - 1} completes`,
-        );
+        expect(timestamps[i]).toBeGreaterThanOrEqual(timestamps[i - 1]);
       }
     });
   });
@@ -261,7 +257,7 @@ describe("AsyncLock", () => {
       // Should still work correctly
       await lock.acquire();
       lock.release();
-      assert.ok(true, "Lock should handle rapid cycles");
+      expect(true).toBe(true);
     });
 
     it("should handle single operation without issues", async () => {
@@ -269,7 +265,7 @@ describe("AsyncLock", () => {
 
       await lock.acquire();
       try {
-        assert.ok(true, "Single operation should work");
+        expect(true).toBe(true);
       } finally {
         lock.release();
       }
@@ -277,7 +273,7 @@ describe("AsyncLock", () => {
       // Should be able to acquire again
       await lock.acquire();
       lock.release();
-      assert.ok(true, "Lock should be reusable");
+      expect(true).toBe(true);
     });
   });
 });

@@ -1,5 +1,4 @@
-import assert from "node:assert";
-import test from "node:test";
+import { describe, it, expect } from "@jest/globals";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
@@ -22,10 +21,10 @@ function getRegisteredToolHandler(server: McpServer, name: string): ToolHandler 
   };
 
   const tools = anyServer.tools;
-  assert.ok(tools, "Server should have a tools map exposing registered tools");
+  expect(tools).toBeDefined();
 
   const tool = tools.get(name);
-  assert.ok(tool, `Tool '${name}' should be registered`);
+  expect(tool).toBeDefined(`Tool '${name}' should be registered`);
 
   return tool.handler;
 }
@@ -36,35 +35,54 @@ function getRegisteredToolHandler(server: McpServer, name: string): ToolHandler 
  * Araç, varsayılan olarak serbestçe çağrılabilir; üretimde harici koruma önerilir.
  */
 
-test("imageTest tool - registers and returns a successful response", async () => {
-  const server = new McpServer();
-  await registerFetchImageTestTool(server);
+describe("imageTest", () => {
+  it("imageTest tool - registers and returns a successful response", async () => {
+    const server = new McpServer(
+      {
+        name: "test-server",
+        version: "1.0.0"
+      },
+      {
+        capabilities: {
+          logging: {},
+          tools: { listChanged: true },
+        },
+      }
+    );
+    await registerFetchImageTestTool(server);
 
-  const handler = getRegisteredToolHandler(server, "fetch_image_test");
+    const handler = getRegisteredToolHandler(server, "fetch_image_test");
 
-  const result = await handler(
-    {
-      imageUrl: "https://example.com/cat.png",
-    },
-    {},
-  );
+    const result = await handler(
+      {
+        imageUrl: "https://example.com/cat.png",
+      },
+      {},
+    );
 
-  assert.ok(result, "Result should be defined");
-  assert.strictEqual(result.isError, false, "Expected a successful response");
-  assert.ok(
-    Array.isArray(result.content),
-    "Expected result.content to be an array",
-  );
-});
+    expect(result).toBeDefined();
+    expect(result.isError).toBe(false);
+    expect(Array.isArray(result.content)).toBe(true);
+  });
 
-test("imageTest tool - surfaces McpError or Error on invalid input", async () => {
-  const server = new McpServer();
-  await registerFetchImageTestTool(server);
+  it("imageTest tool - surfaces McpError or Error on invalid input", async () => {
+    const server = new McpServer(
+      {
+        name: "test-server",
+        version: "1.0.0"
+      },
+      {
+        capabilities: {
+          logging: {},
+          tools: { listChanged: true },
+        },
+      }
+    );
+    await registerFetchImageTestTool(server);
 
-  const handler = getRegisteredToolHandler(server, "fetch_image_test");
+    const handler = getRegisteredToolHandler(server, "fetch_image_test");
 
-  await assert.rejects(
-    async () => {
+    await expect(async () => {
       // Bilerek geçersiz/gereksiz bir payload kullanarak hata yüzeylenmesini doğrula.
       await handler(
         {
@@ -72,10 +90,6 @@ test("imageTest tool - surfaces McpError or Error on invalid input", async () =>
         },
         {},
       );
-    },
-    (error: unknown) => {
-      assert.ok(error instanceof McpError || error instanceof Error);
-      return true;
-    },
-  );
+    }).rejects.toThrow();
+  });
 });

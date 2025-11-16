@@ -4,8 +4,7 @@
  * ensuring backward-compatible silence/restore semantics.
  */
 
-import { describe, it, beforeEach, afterEach } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, beforeEach, afterEach, expect } from "@jest/globals";
 
 import { executeUnderStdioSilence } from "../../../../src/mcp-server/utils/stdioSilence.js";
 import { config } from "../../../../src/config/index.js";
@@ -72,22 +71,10 @@ describe("executeUnderStdioSilence", () => {
     const result = await executeUnderStdioSilence(operationToSilence);
 
     // Assert
-    assert.strictEqual(called, true, "operationToSilence should be invoked");
-    assert.strictEqual(
-      process.stdout.write,
-      beforeStdoutWrite,
-      "process.stdout.write must not be replaced in non-stdio mode",
-    );
-    assert.strictEqual(
-      process.stderr.write,
-      beforeStderrWrite,
-      "process.stderr.write must not be replaced in non-stdio mode",
-    );
-    assert.strictEqual(
-      result,
-      expectedResult,
-      "Result must equal the operation's return value in non-stdio mode",
-    );
+    expect(called).toBe(true);
+    expect(process.stdout.write).toBe(beforeStdoutWrite);
+    expect(process.stderr.write).toBe(beforeStderrWrite);
+    expect(result).toBe(expectedResult);
   });
 
   it("suppresses stdout/stderr during execution in stdio mode and restores afterwards (success case)", async () => {
@@ -108,15 +95,15 @@ describe("executeUnderStdioSilence", () => {
     let originalStdoutCallCount = 0;
     let originalStderrCallCount = 0;
 
-    process.stdout.write = ((...args: unknown[]) => {
+    process.stdout.write = ((...args: any[]) => {
       originalStdoutCallCount += 1;
-      return (ORIGINAL_STDOUT_WRITE as typeof process.stdout.write)(...args);
-    }) as typeof process.stdout.write;
+      return (ORIGINAL_STDOUT_WRITE as any)(...args);
+    }) as any;
 
-    process.stderr.write = ((...args: unknown[]) => {
+    process.stderr.write = ((...args: any[]) => {
       originalStderrCallCount += 1;
-      return (ORIGINAL_STDERR_WRITE as typeof process.stderr.write)(...args);
-    }) as typeof process.stderr.write;
+      return (ORIGINAL_STDERR_WRITE as any)(...args);
+    }) as any;
 
     const returnValue = "silenced-ok";
 
@@ -144,45 +131,19 @@ describe("executeUnderStdioSilence", () => {
     const result = await executeUnderStdioSilence(operationToSilence);
 
     // Assert: inside call, we must have attempted writes
-    assert.ok(
-      observedDuringSilence.stdoutCalled,
-      "operationToSilence should attempt stdout.write",
-    );
-    assert.ok(
-      observedDuringSilence.stderrCalled,
-      "operationToSilence should attempt stderr.write",
-    );
+    expect(observedDuringSilence.stdoutCalled).toBe(true);
+    expect(observedDuringSilence.stderrCalled).toBe(true);
 
     // No real writes should have reached our original spies during silenced section.
-    assert.strictEqual(
-      originalStdoutCallCount,
-      0,
-      "stdout writes must be suppressed in stdio mode",
-    );
-    assert.strictEqual(
-      originalStderrCallCount,
-      0,
-      "stderr writes must be suppressed in stdio mode",
-    );
+    expect(originalStdoutCallCount).toBe(0);
+    expect(originalStderrCallCount).toBe(0);
 
     // After completion, original references must be fully restored.
-    assert.strictEqual(
-      process.stdout.write,
-      ORIGINAL_STDOUT_WRITE,
-      "process.stdout.write must be restored after successful execution",
-    );
-    assert.strictEqual(
-      process.stderr.write,
-      ORIGINAL_STDERR_WRITE,
-      "process.stderr.write must be restored after successful execution",
-    );
+    expect(process.stdout.write.toString()).toBe(ORIGINAL_STDOUT_WRITE.toString());
+    expect(process.stderr.write.toString()).toBe(ORIGINAL_STDERR_WRITE.toString());
 
     // Result propagation
-    assert.strictEqual(
-      result,
-      returnValue,
-      "executeUnderStdioSilence must return the operation result in stdio mode",
-    );
+    expect(result).toBe(returnValue);
   });
 
   it("restores stdout/stderr and propagates error when operation throws in stdio mode", async () => {
@@ -209,35 +170,15 @@ describe("executeUnderStdioSilence", () => {
     }
 
     // Assert: error must be propagated as-is
-    assert.ok(caught instanceof Error, "Thrown value must be an Error");
-    assert.strictEqual(
-      (caught as Error).message,
-      error.message,
-      "Error message must be preserved",
-    );
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe(error.message);
 
     // After error, original references must be restored.
-    assert.strictEqual(
-      process.stdout.write,
-      ORIGINAL_STDOUT_WRITE,
-      "process.stdout.write must be restored after error",
-    );
-    assert.strictEqual(
-      process.stderr.write,
-      ORIGINAL_STDERR_WRITE,
-      "process.stderr.write must be restored after error",
-    );
+    expect(process.stdout.write.toString()).toBe(ORIGINAL_STDOUT_WRITE.toString());
+    expect(process.stderr.write.toString()).toBe(ORIGINAL_STDERR_WRITE.toString());
 
     // Ensure that our saved originals match pre-call originals (no leakage).
-    assert.strictEqual(
-      originalStdoutWrite,
-      ORIGINAL_STDOUT_WRITE,
-      "Original stdout reference must remain unchanged",
-    );
-    assert.strictEqual(
-      originalStderrWrite,
-      ORIGINAL_STDERR_WRITE,
-      "Original stderr reference must remain unchanged",
-    );
+    expect(originalStdoutWrite.toString()).toBe(ORIGINAL_STDOUT_WRITE.toString());
+    expect(originalStderrWrite.toString()).toBe(ORIGINAL_STDERR_WRITE.toString());
   });
 });

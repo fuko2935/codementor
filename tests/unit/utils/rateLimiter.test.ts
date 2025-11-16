@@ -1,12 +1,10 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-
 import {
   RateLimiter,
   resolveRateLimitKey,
   type RequestContextLike,
 } from "../../../src/utils/security/rateLimiter.js";
 import { BaseErrorCode, McpError } from "../../../src/types-global/errors.js";
+import { expect } from "@jest/globals";
 
 /**
  * Helper to assert that a function call is NOT rate limited.
@@ -15,7 +13,7 @@ function assertNotRateLimited(fn: () => void, message?: string): void {
   try {
     fn();
   } catch (err) {
-    assert.fail(
+    expect.fail(
       message ??
         `Expected call to be allowed, but received error: ${String(err)}`,
     );
@@ -28,21 +26,14 @@ function assertNotRateLimited(fn: () => void, message?: string): void {
 function assertRateLimited(fn: () => void, expectedKeyHint?: string): void {
   try {
     fn();
-    assert.fail("Expected rate limiter to throw, but call was allowed");
+    expect.fail("Expected rate limiter to throw, but call was allowed");
   } catch (err) {
-    assert.ok(err instanceof McpError, "Error must be instance of McpError");
-    assert.equal(
-      (err as McpError).code,
-      BaseErrorCode.RATE_LIMITED,
-      "Error code must be RATE_LIMITED",
-    );
+    expect(err).toBeInstanceOf(McpError);
+    expect((err as McpError).code).toBe(BaseErrorCode.RATE_LIMITED);
 
     if (expectedKeyHint && (err as McpError).details?.key) {
       const key = String((err as McpError).details?.key);
-      assert.ok(
-        key.includes(expectedKeyHint),
-        `Expected details.key "${key}" to include "${expectedKeyHint}"`,
-      );
+      expect(key).toContain(expectedKeyHint);
     }
   }
 }
@@ -68,7 +59,8 @@ function createTestLimiter(
 }
 
 // 1) Window filling and RATE_LIMITED behavior
-test("RateLimiter - window fill and RATE_LIMITED when exceeding maxRequests", () => {
+describe("RateLimiter", () => {
+  test("window fill and RATE_LIMITED when exceeding maxRequests", () => {
   const limiter = createTestLimiter();
 
   const baseKey = "test:window";
@@ -85,8 +77,8 @@ test("RateLimiter - window fill and RATE_LIMITED when exceeding maxRequests", ()
   );
 });
 
-// 2) Identity-based separation: userId / clientId
-test("RateLimiter - separates buckets per userId for same base key", () => {
+  // 2) Identity-based separation: userId / clientId
+  test("separates buckets per userId for same base key", () => {
   const limiter = createTestLimiter();
 
   const baseKey = "test:identity:user";
@@ -112,7 +104,7 @@ test("RateLimiter - separates buckets per userId for same base key", () => {
   );
 });
 
-test("RateLimiter - falls back to clientId when userId missing", () => {
+  test("falls back to clientId when userId missing", () => {
   const limiter = createTestLimiter();
 
   const baseKey = "test:identity:client";
@@ -140,8 +132,8 @@ test("RateLimiter - falls back to clientId when userId missing", () => {
   );
 });
 
-// 3) IP fallback behavior
-test("RateLimiter - uses ip-based buckets when no auth identity", () => {
+  // 3) IP fallback behavior
+  test("uses ip-based buckets when no auth identity", () => {
   const limiter = createTestLimiter();
 
   const baseKey = "test:ip";
@@ -165,8 +157,8 @@ test("RateLimiter - uses ip-based buckets when no auth identity", () => {
   );
 });
 
-// 4) Anonymous global bucket behavior
-test("RateLimiter - anonymous contexts share anon:global bucket", () => {
+  // 4) Anonymous global bucket behavior
+  test("anonymous contexts share anon:global bucket", () => {
   const limiter = createTestLimiter();
 
   const baseKey = "test:anon";
@@ -184,8 +176,8 @@ test("RateLimiter - anonymous contexts share anon:global bucket", () => {
   );
 });
 
-// 5) Composition of base key + resolveRateLimitKey (behavioral verification)
-test("RateLimiter - base key + identity composition isolates buckets correctly", () => {
+  // 5) Composition of base key + resolveRateLimitKey (behavioral verification)
+  test("base key + identity composition isolates buckets correctly", () => {
   const limiter = createTestLimiter();
 
   const baseKey = "http:mcp";
@@ -196,10 +188,10 @@ test("RateLimiter - base key + identity composition isolates buckets correctly",
   const ctxAnon: RequestContextLike = {};
 
   // Sanity: verify resolveRateLimitKey mapping used by check()
-  assert.equal(resolveRateLimitKey(ctxUser1), "id:u1");
-  assert.equal(resolveRateLimitKey(ctxUser2), "id:u2");
-  assert.equal(resolveRateLimitKey(ctxIp), "ip:203.0.113.20");
-  assert.equal(resolveRateLimitKey(ctxAnon), "anon:global");
+  expect(resolveRateLimitKey(ctxUser1)).toBe("id:u1");
+  expect(resolveRateLimitKey(ctxUser2)).toBe("id:u2");
+  expect(resolveRateLimitKey(ctxIp)).toBe("ip:203.0.113.20");
+  expect(resolveRateLimitKey(ctxAnon)).toBe("anon:global");
 
   // Fill bucket for u1
   assertNotRateLimited(() => limiter.check(baseKey, ctxUser1));
@@ -234,27 +226,26 @@ test("RateLimiter - base key + identity composition isolates buckets correctly",
   );
 });
 
-// Ensure resolveRateLimitKey strategy is stable and human-readable on its own.
-test("resolveRateLimitKey - strategy for various contexts", () => {
-  assert.equal(
-    resolveRateLimitKey({ authInfo: { userId: "user-x" } }),
-    "id:user-x",
-  );
-  assert.equal(
-    resolveRateLimitKey({ authInfo: { clientId: "client-x" } }),
-    "client:client-x",
-  );
-  assert.equal(
-    resolveRateLimitKey({ ip: "198.51.100.1" }),
-    "ip:198.51.100.1",
-  );
-  assert.equal(resolveRateLimitKey({}), "anon:global");
+  // Ensure resolveRateLimitKey strategy is stable and human-readable on its own.
+  describe("resolveRateLimitKey", () => {
+    test("strategy for various contexts", () => {
+      expect(
+        resolveRateLimitKey({ authInfo: { userId: "user-x" } }),
+      ).toBe("id:user-x");
+      expect(
+        resolveRateLimitKey({ authInfo: { clientId: "client-x" } }),
+      ).toBe("client:client-x");
+      expect(
+        resolveRateLimitKey({ ip: "198.51.100.1" }),
+      ).toBe("ip:198.51.100.1");
+      expect(resolveRateLimitKey({})).toBe("anon:global");
 
-  // Trim and guard cases
-  assert.equal(
-    resolveRateLimitKey({
-      authInfo: { userId: "  spaced " },
-    }),
-    "id:  spaced ",
-  );
+      // Trim and guard cases
+      expect(
+        resolveRateLimitKey({
+          authInfo: { userId: "  spaced " },
+        }),
+      ).toBe("id:  spaced ");
+    });
+  });
 });

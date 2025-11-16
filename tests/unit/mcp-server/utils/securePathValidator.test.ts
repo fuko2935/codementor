@@ -4,8 +4,7 @@
  * @module tests/unit/mcp-server/utils/securePathValidator
  */
 
-import { describe, it, beforeEach, afterEach } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, beforeEach, afterEach } from "@jest/globals";
 import { promises as fs } from "fs";
 import path from "path";
 import { validateSecurePath } from "../../../../src/mcp-server/utils/securePathValidator.js";
@@ -39,174 +38,140 @@ describe("validateSecurePath", () => {
     const p = "./project";
     const result = await validateSecurePath(p, baseDir);
     const expected = path.normalize(path.resolve(baseDir, "project"));
-    assert.strictEqual(result, expected);
+    expect(result).toBe(expected);
   });
 
   it("treats empty string as baseDir (current behavior)", async () => {
     const result = await validateSecurePath("", baseDir);
     const expected = path.normalize(path.resolve(baseDir));
-    assert.strictEqual(result, expected);
+    expect(result).toBe(expected);
   });
 
   it("treats whitespace-only path as normalized under baseDir (current behavior)", async () => {
     const result = await validateSecurePath("   ", baseDir);
     const expected = path.normalize(path.resolve(baseDir));
-    assert.strictEqual(result, expected);
+    expect(result).toBe(expected);
   });
 
   it("allows baseDir itself via '.'", async () => {
     const result = await validateSecurePath(".", baseDir);
     const expected = path.normalize(path.resolve(baseDir));
-    assert.strictEqual(result, expected);
+    expect(result).toBe(expected);
   });
 
   it("rejects absolute path outside baseDir with VALIDATION_ERROR (sanitization layer)", async () => {
-    await assert.rejects(
-      () => validateSecurePath(outsideDir, baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        assert.strictEqual((err as McpError).code, BaseErrorCode.VALIDATION_ERROR);
-        assert.match((err as Error).message, /Path traversal/i);
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath(outsideDir, baseDir))
+      .rejects.toThrow(McpError);
+    await expect(() => validateSecurePath(outsideDir, baseDir))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.VALIDATION_ERROR,
+        message: expect.stringMatching(/Path traversal/i)
+      });
   });
 
   it("rejects unix-style absolute path outside baseDir with FORBIDDEN", async () => {
     const unixAbsolute = path.resolve("/etc/passwd");
     // Güvenli davranış: baseDir altında olmadığı için FORBIDDEN beklenir (implementasyondaki final kontrol).
-    await assert.rejects(
-      () => validateSecurePath(unixAbsolute, baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        assert.strictEqual((err as McpError).code, BaseErrorCode.FORBIDDEN);
-        assert.match((err as Error).message, /Path traversal detected/i);
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath(unixAbsolute, baseDir))
+      .rejects.toThrow(McpError);
+    await expect(() => validateSecurePath(unixAbsolute, baseDir))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.FORBIDDEN,
+        message: expect.stringMatching(/Path traversal detected/i)
+      });
   });
 
   it("rejects windows-style absolute path outside baseDir with FORBIDDEN (platform-agnostic check)", async () => {
     const winLike = "C:\\windows\\system32";
-    await assert.rejects(
-      () => validateSecurePath(winLike, baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        // sanitizePath + final kontrolün mevcut davranışıyla hizalan:
-        // Gerçek kodda kullanılan hata kodlarından birini bekle.
-        // Burada güvenlik reddi olarak FORBIDDEN assert ediliyor.
-        assert.strictEqual((err as McpError).code, BaseErrorCode.FORBIDDEN);
-        assert.match((err as Error).message, /Path traversal detected/i);
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath(winLike, baseDir))
+      .rejects.toThrow(McpError);
+    await expect(() => validateSecurePath(winLike, baseDir))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.FORBIDDEN,
+        message: expect.stringMatching(/Path traversal detected/i)
+      });
   });
 
   it("rejects relative traversal outside baseDir with VALIDATION_ERROR (sanitization layer)", async () => {
     const rel = "project/../../";
-    await assert.rejects(
-      () => validateSecurePath(rel, baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        assert.strictEqual((err as McpError).code, BaseErrorCode.VALIDATION_ERROR);
-        assert.match((err as Error).message, /traversal|escape/i);
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath(rel, baseDir))
+      .rejects.toThrow(McpError);
+    await expect(() => validateSecurePath(rel, baseDir))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.VALIDATION_ERROR,
+        message: expect.stringMatching(/traversal|escape/i)
+      });
   });
 
   it("rejects '../outside' traversal escaping baseDir (sanitization / final guard)", async () => {
     const rel = "../outside";
-    await assert.rejects(
-      () => validateSecurePath(rel, baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        // sanitizePath veya final guard tarafından path traversal olarak algılanmalı.
-        assert.ok(
-          (err as McpError).code === BaseErrorCode.VALIDATION_ERROR ||
-          (err as McpError).code === BaseErrorCode.FORBIDDEN,
-          `Unexpected error code for '../outside': ${(err as McpError).code}`,
-        );
-        assert.match((err as Error).message, /traversal|escape/i);
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath(rel, baseDir))
+      .rejects.toThrow(McpError);
+    const error = await (() => validateSecurePath(rel, baseDir))()
+      .catch(err => err);
+    expect(
+      error.code === BaseErrorCode.VALIDATION_ERROR ||
+      error.code === BaseErrorCode.FORBIDDEN
+    ).toBe(true);
+    expect(error.message).toMatch(/traversal|escape/i);
   });
 
   it("rejects 'subdir/../../escape' traversal escaping baseDir (sanitization / final guard)", async () => {
     const rel = "subdir/../../escape";
-    await assert.rejects(
-      () => validateSecurePath(rel, baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        assert.ok(
-          (err as McpError).code === BaseErrorCode.VALIDATION_ERROR ||
-          (err as McpError).code === BaseErrorCode.FORBIDDEN,
-          `Unexpected error code for 'subdir/../../escape': ${(err as McpError).code}`,
-        );
-        assert.match((err as Error).message, /traversal|escape/i);
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath(rel, baseDir))
+      .rejects.toThrow(McpError);
+    const error = await (() => validateSecurePath(rel, baseDir))()
+      .catch(err => err);
+    expect(
+      error.code === BaseErrorCode.VALIDATION_ERROR ||
+      error.code === BaseErrorCode.FORBIDDEN
+    ).toBe(true);
+    expect(error.message).toMatch(/traversal|escape/i);
   });
 
   it("rejects './../escape' traversal escaping baseDir (sanitization / final guard)", async () => {
     const rel = "./../escape";
-    await assert.rejects(
-      () => validateSecurePath(rel, baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        assert.ok(
-          (err as McpError).code === BaseErrorCode.VALIDATION_ERROR ||
-          (err as McpError).code === BaseErrorCode.FORBIDDEN,
-          `Unexpected error code for './../escape': ${(err as McpError).code}`,
-        );
-        assert.match((err as Error).message, /traversal|escape/i);
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath(rel, baseDir))
+      .rejects.toThrow(McpError);
+    const error = await (() => validateSecurePath(rel, baseDir))()
+      .catch(err => err);
+    expect(
+      error.code === BaseErrorCode.VALIDATION_ERROR ||
+      error.code === BaseErrorCode.FORBIDDEN
+    ).toBe(true);
+    expect(error.message).toMatch(/traversal|escape/i);
   });
 
   it("rejects non-existent path with INVALID_INPUT", async () => {
-    await assert.rejects(
-      () => validateSecurePath("missing-folder", baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        assert.strictEqual((err as McpError).code, BaseErrorCode.INVALID_INPUT);
-        assert.match((err as Error).message, /does not exist|inaccessible/i);
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath("missing-folder", baseDir))
+      .rejects.toThrow(McpError);
+    await expect(() => validateSecurePath("missing-folder", baseDir))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.INVALID_INPUT,
+        message: expect.stringMatching(/does not exist|inaccessible/i)
+      });
   });
 
   it("rejects file path (not a directory) with INVALID_INPUT", async () => {
-    await assert.rejects(
-      () => validateSecurePath(path.relative(baseDir, fileInside), baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        assert.strictEqual((err as McpError).code, BaseErrorCode.INVALID_INPUT);
-        assert.match((err as Error).message, /not a directory/i);
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath(path.relative(baseDir, fileInside), baseDir))
+      .rejects.toThrow(McpError);
+    await expect(() => validateSecurePath(path.relative(baseDir, fileInside), baseDir))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.INVALID_INPUT,
+        message: expect.stringMatching(/not a directory/i)
+      });
   });
 
   it("rejects path containing null byte with INVALID_INPUT or VALIDATION_ERROR", async () => {
     const malicious = "some/path\0evil";
-    await assert.rejects(
-      () => validateSecurePath(malicious, baseDir),
-      (err: unknown) => {
-        assert.ok(err instanceof McpError);
-        // sanitizePath/FS katmanının mevcut davranışına göre:
-        // null byte içeren girdiler güvenli şekilde reddedilmeli.
-        assert.ok(
-          (err as McpError).code === BaseErrorCode.INVALID_INPUT ||
-          (err as McpError).code === BaseErrorCode.VALIDATION_ERROR,
-          `Unexpected error code for null-byte path: ${(err as McpError).code}`,
-        );
-        return true;
-      }
-    );
+    await expect(() => validateSecurePath(malicious, baseDir))
+      .rejects.toThrow(McpError);
+    const error = await (() => validateSecurePath(malicious, baseDir))()
+      .catch(err => err);
+    expect(
+      error.code === BaseErrorCode.INVALID_INPUT ||
+      error.code === BaseErrorCode.VALIDATION_ERROR
+    ).toBe(true);
   });
 
   it("accepts valid nested relative path under baseDir", async () => {
@@ -215,8 +180,8 @@ describe("validateSecurePath", () => {
 
     const result = await validateSecurePath(path.relative(baseDir, nestedDir), baseDir);
     const expected = path.normalize(path.resolve(nestedDir));
-    assert.strictEqual(result, expected);
-    assert.ok(result.startsWith(path.normalize(path.resolve(baseDir))));
+    expect(result).toBe(expected);
+    expect(result.startsWith(path.normalize(path.resolve(baseDir)))).toBe(true);
   });
 
   it("accepts './subdir' style path under baseDir", async () => {
@@ -225,13 +190,13 @@ describe("validateSecurePath", () => {
 
     const result = await validateSecurePath("./subdir", baseDir);
     const expected = path.normalize(path.resolve(subdir));
-    assert.strictEqual(result, expected);
-    assert.ok(result.startsWith(path.normalize(path.resolve(baseDir))));
+    expect(result).toBe(expected);
+    expect(result.startsWith(path.normalize(path.resolve(baseDir)))).toBe(true);
   });
 
   it("accepts absolute path inside baseDir", async () => {
     const abs = path.resolve(validDir);
     const result = await validateSecurePath(abs, baseDir);
-    assert.strictEqual(result, path.normalize(abs));
+    expect(result).toBe(path.normalize(abs));
   });
 });

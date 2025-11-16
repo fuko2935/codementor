@@ -55,7 +55,7 @@ async function getGitBlobSize(
     const sizeString = await git.raw(['cat-file', '-s', `${revision}:${filePath}`]);
     const size = parseInt(sizeString.trim(), 10);
     return isNaN(size) ? 0 : size;
-  } catch (error) {
+  } catch (_error) {
     // File doesn't exist in that revision (e.g., was added/deleted)
     // Return 0 to indicate file not found
     return 0;
@@ -198,6 +198,294 @@ async function getDiffSummaryForFiles(
 }
 
 /**
+ * Private helper function to get filtered diff with common logic.
+ * Consolidates the duplicated file filtering and diff extraction logic.
+ *
+ * @param git - SimpleGit instance
+ * @param diffArgs - Arguments for git diff command (e.g., ['HEAD~1', 'HEAD'] or [] for uncommitted)
+ * @param headRevisionForSizeCheck - Revision to use for size checking (e.g., 'HEAD', 'index')
+ * @param ignoreInstance - Optional ignore instance to filter out certain files
+ * @param maxBlobSize - Maximum blob size in bytes
+ * @param context - Request context for logging
+ * @param logContext - Context string for logging (e.g., "uncommitted", "last N commits")
+ * @returns Object containing diff text, summary, and skipped files
+ */
+async function _getFilteredDiff(
+  git: SimpleGit,
+  diffArgs: string[],
+  headRevisionForSizeCheck: string,
+  ignoreInstance: ReturnType<typeof ignore> | undefined,
+  maxBlobSize: number,
+  context: RequestContext,
+  logContext: string,
+): Promise<{ diffText: string, diffSummary: DiffResult["files"], skippedFilesForSize: Array<{ path: string; size: number; reason: string }> }> {
+  // Get file names first (needed for both ignore and size filtering)
+  logger.info(`🔍 Getting changed files list (${logContext}, name-only)...`, context);
+  const nameOnlyArgs = ['diff', '--name-only', ...diffArgs];
+  const nameOnlyResult = await git.raw(nameOnlyArgs);
+  const allChangedFiles = nameOnlyResult.split('\n').filter((f) => f.trim().length > 0);
+  
+  // Filter using ignore patterns if provided
+  let filesToDiff: string[];
+  if (ignoreInstance) {
+    filesToDiff = allChangedFiles.filter((file) => !ignoreInstance.ignores(file));
+    logger.info(`🔍 Files after ignore filtering: ${filesToDiff.length}/${allChangedFiles.length} (excluded: ${allChangedFiles.length - filesToDiff.length})`, context);
+  } else {
+    filesToDiff = allChangedFiles;
+  }
+
+  // Filter by file size before running git diff
+  const skippedFilesForSize: Array<{ path: string; size: number; reason: string }> = [];
+  const safeFilesToDiff: string[] = [];
+  for (const file of filesToDiff) {
+    const size = await getGitBlobSize(git, headRevisionForSizeCheck, file);
+    if (size > maxBlobSize) {
+      skippedFilesForSize.push({
+        path: file,
+        size,
+        reason: `File size (${size} bytes) exceeds the configured limit of ${maxBlobSize} bytes.`
+      });
+      logger.warning(`Skipping large file in diff analysis: ${file}`, {
+        ...context,
+        fileSize: size,
+        limit: maxBlobSize
+      });
+    } else {
+      safeFilesToDiff.push(file);
+    }
+  }
+
+  let diffText: string;
+  let diffSummary: DiffResult["files"];
+
+  // Get diff text only for safe files (within size limit)
+  if (safeFilesToDiff.length > 0) {
+    logger.info(`⚡ Running filtered diff (${safeFilesToDiff.length} files, ${skippedFilesForSize.length} skipped due to size)`, context);
+    const diffTextArgs = [...diffArgs, '--', ...safeFilesToDiff];
+    const diffTextResult = await git.diff(diffTextArgs);
+    diffText = diffTextResult;
+    logger.info(`✅ Filtered diff size: ${(diffText.length / 1024).toFixed(2)} KB`, context);
+    
+    // Get actual insertion/deletion counts for filtered files
+    // Extract base and head revisions from diffArgs for getDiffSummaryForFiles
+    const baseRevision = diffArgs.length >= 2 ? diffArgs[0] : undefined;
+    const headRevision = diffArgs.length >= 2 ? diffArgs[1] : undefined;
+    diffSummary = await getDiffSummaryForFiles(git, baseRevision, headRevision, safeFilesToDiff, context);
+  } else {
+    logger.info(`📭 No files to diff after filtering`, context);
+    diffText = "";
+    diffSummary = [];
+  }
+
+  return { diffText, diffSummary, skippedFilesForSize };
+}
+
+/**
+ * Helper function to extract uncommitted changes from git.
+ *
+ * @param git - SimpleGit instance
+ * @param ignoreInstance - Optional ignore instance to filter out certain files
+ * @param maxBlobSize - Maximum blob size in bytes
+ * @param context - Request context for logging
+ * @returns Object containing diff text, summary, revision info, and skipped files
+ */
+async function extractUncommittedChanges(
+  git: SimpleGit,
+  ignoreInstance: ReturnType<typeof ignore> | undefined,
+  maxBlobSize: number,
+  context: RequestContext,
+): Promise<{ diffText: string, diffSummary: DiffResult["files"], revisionInfo: { base: string; head: string }, skippedFilesForSize: Array<{ path: string; size: number; reason: string }> }> {
+  logger.debug("Extracting uncommitted changes", context);
+
+  const { diffText, diffSummary, skippedFilesForSize } = await _getFilteredDiff(
+    git,
+    [], // No revision args for uncommitted changes
+    'index', // Use 'index' for size check
+    ignoreInstance,
+    maxBlobSize,
+    context,
+    'uncommitted'
+  );
+
+  // Get current branch for context
+  const currentBranch = (await git.revparse(["--abbrev-ref", "HEAD"]).catch(() => "HEAD")).trim();
+  const revisionInfo = {
+    base: currentBranch,
+    head: "working directory",
+  };
+
+  return { diffText, diffSummary, revisionInfo, skippedFilesForSize };
+}
+
+/**
+ * Helper function to extract changes for the last N commits.
+ *
+ * @param git - SimpleGit instance
+ * @param count - Number of commits to analyze
+ * @param ignoreInstance - Optional ignore instance to filter out certain files
+ * @param maxBlobSize - Maximum blob size in bytes
+ * @param context - Request context for logging
+ * @returns Object containing diff text, summary, revision info, and skipped files
+ */
+async function extractCommitCountChanges(
+  git: SimpleGit,
+  count: number,
+  ignoreInstance: ReturnType<typeof ignore> | undefined,
+  maxBlobSize: number,
+  context: RequestContext,
+): Promise<{ diffText: string, diffSummary: DiffResult["files"], revisionInfo: { base: string; head: string }, skippedFilesForSize: Array<{ path: string; size: number; reason: string }> }> {
+  if (!validateRevision(String(count))) {
+    throw new McpError(
+      BaseErrorCode.INVALID_INPUT,
+      `Invalid count parameter: ${count}`,
+    );
+  }
+
+  logger.debug("Extracting last N commits", {
+    ...context,
+    count,
+  });
+
+  const baseRevision = `HEAD~${count}`;
+  const headRevision = "HEAD";
+
+  if (!validateRevision(baseRevision) || !validateRevision(headRevision)) {
+    throw new McpError(
+      BaseErrorCode.INVALID_INPUT,
+      "Invalid revision format for commit count",
+    );
+  }
+
+  const { diffText, diffSummary, skippedFilesForSize } = await _getFilteredDiff(
+    git,
+    [baseRevision, headRevision],
+    headRevision, // Use head for size check
+    ignoreInstance,
+    maxBlobSize,
+    context,
+    `last ${count} commits`
+  );
+
+  const revisionInfo = {
+    base: baseRevision,
+    head: headRevision,
+  };
+
+  return { diffText, diffSummary, revisionInfo, skippedFilesForSize };
+}
+
+/**
+ * Helper function to extract changes for a specific revision or range.
+ *
+ * @param git - SimpleGit instance
+ * @param revision - Git revision string (commit hash, range, etc.)
+ * @param ignoreInstance - Optional ignore instance to filter out certain files
+ * @param maxBlobSize - Maximum blob size in bytes
+ * @param context - Request context for logging
+ * @returns Object containing diff text, summary, revision info, and skipped files
+ */
+async function extractRevisionChanges(
+  git: SimpleGit,
+  revision: string,
+  ignoreInstance: ReturnType<typeof ignore> | undefined,
+  maxBlobSize: number,
+  context: RequestContext,
+): Promise<{ diffText: string, diffSummary: DiffResult["files"], revisionInfo: { base: string; head: string }, skippedFilesForSize: Array<{ path: string; size: number; reason: string }> }> {
+  if (!validateRevision(revision)) {
+    throw new McpError(
+      BaseErrorCode.INVALID_INPUT,
+      `Invalid characters in revision string: ${revision}. ` +
+        `Revision must contain only alphanumeric characters and git revision symbols (~, ^, ., /, -, _).`,
+    );
+  }
+
+  logger.debug("Extracting diff for specific revision", {
+    ...context,
+    revision,
+  });
+
+  // Check if it's a range (contains "..")
+  if (revision.includes("..")) {
+    const [base, head] = revision.split("..");
+    if (!validateRevision(base) || !validateRevision(head)) {
+      throw new McpError(
+        BaseErrorCode.INVALID_INPUT,
+        "Invalid revision range format",
+      );
+    }
+
+    const { diffText, diffSummary, skippedFilesForSize } = await _getFilteredDiff(
+      git,
+      [base, head],
+      head, // Use head for size check
+      ignoreInstance,
+      maxBlobSize,
+      context,
+      `range ${base}..${head}`
+    );
+
+    const revisionInfo = {
+      base: base.trim(),
+      head: head.trim(),
+    };
+
+    return { diffText, diffSummary, revisionInfo, skippedFilesForSize };
+  } else {
+    // Single commit - compare with parent (or empty tree for initial commit)
+    const EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // Git's magic empty tree hash
+    let baseRevision = `${revision}^1`;
+
+    try {
+      // Try diffing against the parent first
+      const { diffText, diffSummary, skippedFilesForSize } = await _getFilteredDiff(
+        git,
+        [baseRevision, revision],
+        revision, // Use commit revision for size check
+        ignoreInstance,
+        maxBlobSize,
+        context,
+        `commit ${revision}`
+      );
+
+      const revisionInfo = {
+        base: baseRevision,
+        head: revision,
+      };
+
+      return { diffText, diffSummary, revisionInfo, skippedFilesForSize };
+    } catch (error) {
+      // If it fails, it's likely the initial commit. Fallback to empty tree.
+      logger.debug(
+        `Diff against parent for ${revision} failed, trying against empty tree.`,
+        {
+          ...context,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+
+      baseRevision = EMPTY_TREE_HASH;
+      
+      const { diffText, diffSummary, skippedFilesForSize } = await _getFilteredDiff(
+        git,
+        [baseRevision, revision],
+        revision, // Use commit revision for size check
+        ignoreInstance,
+        maxBlobSize,
+        context,
+        `first commit ${revision}`
+      );
+
+      const revisionInfo = {
+        base: baseRevision,
+        head: revision,
+      };
+
+      return { diffText, diffSummary, revisionInfo, skippedFilesForSize };
+    }
+  }
+}
+
+/**
  * Extracts git diff information from a repository.
  *
  * @param projectPath - The validated path to the git repository
@@ -218,438 +506,43 @@ export async function extractGitDiff(
   const git: SimpleGit = simpleGit(validatedProjectPath);
 
   try {
-    let diffSummary: DiffResult["files"];
-    let diffText: string;
-    let revisionInfo: { base: string; head: string } | undefined;
-    const skippedFilesForSize: Array<{ path: string; size: number; reason: string }> = [];
     const maxBlobSize = config.maxGitBlobSizeBytes;
+
+    let resultData: { diffText: string, diffSummary: DiffResult["files"], revisionInfo: { base: string; head: string }, skippedFilesForSize: Array<{ path: string; size: number; reason: string }> };
 
     // Handle uncommitted changes (revision === ".")
     if (params.revision === ".") {
-      logger.debug("Extracting uncommitted changes", {
+      resultData = await extractUncommittedChanges(git, params.ignoreInstance, maxBlobSize, {
         ...context,
         projectPath,
       });
-
-      // Filter files early if ignoreInstance provided
-      let filesToDiff: string[] = [];
-      let allChangedFiles: string[] = [];
-      
-      // Get file names first (needed for both ignore and size filtering)
-      logger.info(`🔍 Getting uncommitted files list (name-only)...`, context);
-      const nameOnlyResult = await git.raw(['diff', '--name-only']);
-      allChangedFiles = nameOnlyResult.split('\n').filter((f) => f.trim().length > 0);
-      
-      // Filter using ignore patterns if provided
-      if (params.ignoreInstance) {
-        filesToDiff = allChangedFiles.filter((file) => !params.ignoreInstance!.ignores(file));
-        logger.info(`🔍 Uncommitted files after ignore filtering: ${filesToDiff.length}/${allChangedFiles.length} (excluded: ${allChangedFiles.length - filesToDiff.length})`, context);
-      } else {
-        filesToDiff = allChangedFiles;
-      }
-
-      // NEW: Filter by file size before running git diff
-      const safeFilesToDiff: string[] = [];
-      for (const file of filesToDiff) {
-        const size = await getGitBlobSize(git, 'index', file);
-        if (size > maxBlobSize) {
-          skippedFilesForSize.push({
-            path: file,
-            size,
-            reason: `File size (${size} bytes) exceeds the configured limit of ${maxBlobSize} bytes.`
-          });
-          logger.warning(`Skipping large file in diff analysis: ${file}`, {
-            ...context,
-            fileSize: size,
-            limit: maxBlobSize
-          });
-        } else {
-          safeFilesToDiff.push(file);
-        }
-      }
-
-      // Get diff text only for safe files (within size limit)
-      if (safeFilesToDiff.length > 0) {
-        logger.info(`⚡ Running filtered diff (${safeFilesToDiff.length} uncommitted files, ${skippedFilesForSize.length} skipped due to size)`, context);
-        const diffTextResult = await git.diff(['--', ...safeFilesToDiff]);
-        diffText = diffTextResult;
-        logger.info(`✅ Filtered diff size: ${(diffText.length / 1024).toFixed(2)} KB`, context);
-        
-        // Get actual insertion/deletion counts for filtered files
-        diffSummary = await getDiffSummaryForFiles(git, undefined, undefined, safeFilesToDiff, context);
-      } else {
-        logger.info(`📭 No uncommitted files to diff after filtering`, context);
-        diffText = "";
-        diffSummary = [];
-      }
-
-      // Get current branch for context
-      const currentBranch = (await git.revparse(["--abbrev-ref", "HEAD"]).catch(() => "HEAD")).trim();
-      revisionInfo = {
-        base: currentBranch,
-        head: "working directory",
-      };
     }
     // Handle commit count (last N commits)
     else if (params.count !== undefined && params.count > 0) {
-      if (!validateRevision(String(params.count))) {
-        throw new McpError(
-          BaseErrorCode.INVALID_INPUT,
-          `Invalid count parameter: ${params.count}`,
-        );
-      }
-
-      logger.debug("Extracting last N commits", {
+      resultData = await extractCommitCountChanges(git, params.count, params.ignoreInstance, maxBlobSize, {
         ...context,
         projectPath,
-        count: params.count,
       });
-
-      const baseRevision = `HEAD~${params.count}`;
-      const headRevision = "HEAD";
-
-      if (!validateRevision(baseRevision) || !validateRevision(headRevision)) {
-        throw new McpError(
-          BaseErrorCode.INVALID_INPUT,
-          "Invalid revision format for commit count",
-        );
-      }
-
-      // Filter files early if ignoreInstance provided
-      let filesToDiff: string[] = [];
-      let allChangedFiles: string[] = [];
-      
-      // Get file names first (needed for both ignore and size filtering)
-      logger.info(`🔍 Getting changed files list (name-only, no content)...`, context);
-      const nameOnlyResult = await git.raw(['diff', '--name-only', baseRevision, headRevision]);
-      allChangedFiles = nameOnlyResult.split('\n').filter((f) => f.trim().length > 0);
-      
-      // Filter using ignore patterns if provided
-      if (params.ignoreInstance) {
-        filesToDiff = allChangedFiles.filter((file) => !params.ignoreInstance!.ignores(file));
-        logger.info(`🔍 Git diff filtering: ${filesToDiff.length}/${allChangedFiles.length} files (excluded: ${allChangedFiles.length - filesToDiff.length})`, context);
-        logger.info(`📂 Files to diff: ${filesToDiff.slice(0, 10).join(", ")}${filesToDiff.length > 10 ? "..." : ""}`, context);
-      } else {
-        filesToDiff = allChangedFiles;
-      }
-
-      // NEW: Filter by file size before running git diff
-      const safeFilesToDiff: string[] = [];
-      for (const file of filesToDiff) {
-        // Check size at head revision
-        const size = await getGitBlobSize(git, headRevision, file);
-        if (size > maxBlobSize) {
-          skippedFilesForSize.push({
-            path: file,
-            size,
-            reason: `File size (${size} bytes) exceeds the configured limit of ${maxBlobSize} bytes.`
-          });
-          logger.warning(`Skipping large file in diff analysis: ${file}`, {
-            ...context,
-            fileSize: size,
-            limit: maxBlobSize
-          });
-        } else {
-          safeFilesToDiff.push(file);
-        }
-      }
-
-      // Get diff text only for safe files (within size limit)
-      if (safeFilesToDiff.length > 0) {
-        logger.info(`⚡ Running filtered git diff (${safeFilesToDiff.length} files, ${skippedFilesForSize.length} skipped due to size)`, context);
-        const diffTextResult = await git.diff([baseRevision, headRevision, '--', ...safeFilesToDiff]);
-        diffText = diffTextResult;
-        logger.info(`✅ Filtered diff size: ${(diffText.length / 1024).toFixed(2)} KB`, context);
-        
-        // Get actual insertion/deletion counts for filtered files
-        diffSummary = await getDiffSummaryForFiles(git, baseRevision, headRevision, safeFilesToDiff, context);
-      } else {
-        logger.info(`📭 No files to diff after filtering`, context);
-        diffText = "";
-        diffSummary = [];
-      }
-      revisionInfo = {
-        base: baseRevision,
-        head: headRevision,
-      };
     }
     // Handle specific revision (commit hash, range, etc.)
     else if (params.revision) {
-      if (!validateRevision(params.revision)) {
-        throw new McpError(
-          BaseErrorCode.INVALID_INPUT,
-          `Invalid characters in revision string: ${params.revision}. ` +
-            `Revision must contain only alphanumeric characters and git revision symbols (~, ^, ., /, -, _).`,
-        );
-      }
-
-      logger.debug("Extracting diff for specific revision", {
+      resultData = await extractRevisionChanges(git, params.revision, params.ignoreInstance, maxBlobSize, {
         ...context,
         projectPath,
-        revision: params.revision,
       });
-
-      // Check if it's a range (contains "..")
-      if (params.revision.includes("..")) {
-        const [base, head] = params.revision.split("..");
-        if (!validateRevision(base) || !validateRevision(head)) {
-          throw new McpError(
-            BaseErrorCode.INVALID_INPUT,
-            "Invalid revision range format",
-          );
-        }
-
-        // Filter files early if ignoreInstance provided
-        let filesToDiff: string[] = [];
-        let allChangedFiles: string[] = [];
-        
-        // Get file names first (needed for both ignore and size filtering)
-        logger.info(`🔍 Getting changed files list for range ${base}..${head} (name-only)...`, context);
-        const nameOnlyResult = await git.raw(['diff', '--name-only', base, head]);
-        allChangedFiles = nameOnlyResult.split('\n').filter((f) => f.trim().length > 0);
-        
-        // Filter using ignore patterns if provided
-        if (params.ignoreInstance) {
-          filesToDiff = allChangedFiles.filter((file) => !params.ignoreInstance!.ignores(file));
-          logger.info(`🔍 Git diff filtering: ${filesToDiff.length}/${allChangedFiles.length} files (excluded: ${allChangedFiles.length - filesToDiff.length})`, context);
-        } else {
-          filesToDiff = allChangedFiles;
-        }
-
-        // NEW: Filter by file size before running git diff
-        const safeFilesToDiff: string[] = [];
-        for (const file of filesToDiff) {
-          // Check size at head revision
-          const size = await getGitBlobSize(git, head, file);
-          if (size > maxBlobSize) {
-            skippedFilesForSize.push({
-              path: file,
-              size,
-              reason: `File size (${size} bytes) exceeds the configured limit of ${maxBlobSize} bytes.`
-            });
-            logger.warning(`Skipping large file in diff analysis: ${file}`, {
-              ...context,
-              fileSize: size,
-              limit: maxBlobSize
-            });
-          } else {
-            safeFilesToDiff.push(file);
-          }
-        }
-
-        // Get diff text only for safe files (within size limit)
-        if (safeFilesToDiff.length > 0) {
-          logger.info(`⚡ Running filtered diff (${safeFilesToDiff.length} files in range, ${skippedFilesForSize.length} skipped due to size)`, context);
-          const diffTextResult = await git.diff([base, head, '--', ...safeFilesToDiff]);
-          diffText = diffTextResult;
-          logger.info(`✅ Filtered diff size: ${(diffText.length / 1024).toFixed(2)} KB`, context);
-          
-          // Get actual insertion/deletion counts for filtered files
-          diffSummary = await getDiffSummaryForFiles(git, base, head, safeFilesToDiff, context);
-        } else {
-          logger.info(`📭 No files to diff after filtering`, context);
-          diffText = "";
-          diffSummary = [];
-        }
-        revisionInfo = {
-          base: base.trim(),
-          head: head.trim(),
-        };
-      } else {
-        // Single commit - compare with parent (or empty tree for initial commit)
-        const EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // Git's magic empty tree hash
-        let baseRevision = `${params.revision}^1`;
-
-        try {
-          // Try diffing against the parent first
-          // Filter files early if ignoreInstance provided
-          let filesToDiff: string[] = [];
-          let allChangedFiles: string[] = [];
-          
-          // Get file names first (needed for both ignore and size filtering)
-          logger.info(`🔍 Getting changed files list for commit ${params.revision} (name-only)...`, context);
-          const nameOnlyResult = await git.raw(['diff', '--name-only', baseRevision, params.revision]);
-          allChangedFiles = nameOnlyResult.split('\n').filter((f) => f.trim().length > 0);
-          
-          // Filter using ignore patterns if provided
-          if (params.ignoreInstance) {
-            filesToDiff = allChangedFiles.filter((file) => !params.ignoreInstance!.ignores(file));
-            logger.info(`🔍 Git diff filtering: ${filesToDiff.length}/${allChangedFiles.length} files (excluded: ${allChangedFiles.length - filesToDiff.length})`, context);
-          } else {
-            filesToDiff = allChangedFiles;
-          }
-
-          // NEW: Filter by file size before running git diff
-          const safeFilesToDiff: string[] = [];
-          for (const file of filesToDiff) {
-            // Check size at commit revision
-            const size = await getGitBlobSize(git, params.revision, file);
-            if (size > maxBlobSize) {
-              skippedFilesForSize.push({
-                path: file,
-                size,
-                reason: `File size (${size} bytes) exceeds the configured limit of ${maxBlobSize} bytes.`
-              });
-              logger.warning(`Skipping large file in diff analysis: ${file}`, {
-                ...context,
-                fileSize: size,
-                limit: maxBlobSize
-              });
-            } else {
-              safeFilesToDiff.push(file);
-            }
-          }
-
-          // Get diff text only for safe files (within size limit)
-          if (safeFilesToDiff.length > 0) {
-            logger.info(`⚡ Running filtered diff (${safeFilesToDiff.length} files for commit, ${skippedFilesForSize.length} skipped due to size)`, context);
-            const diffTextResult = await git.diff([baseRevision, params.revision, '--', ...safeFilesToDiff]);
-            diffText = diffTextResult;
-            logger.info(`✅ Filtered diff size: ${(diffText.length / 1024).toFixed(2)} KB`, context);
-            
-            // Get actual insertion/deletion counts for filtered files
-            diffSummary = await getDiffSummaryForFiles(git, baseRevision, params.revision, safeFilesToDiff, context);
-          } else {
-            logger.info(`📭 No files to diff after filtering`, context);
-            diffText = "";
-            diffSummary = [];
-          }
-        } catch (error) {
-          // If it fails, it's likely the initial commit. Fallback to empty tree.
-          logger.debug(
-            `Diff against parent for ${params.revision} failed, trying against empty tree.`,
-            {
-              ...context,
-              error: error instanceof Error ? error.message : String(error),
-            },
-          );
-
-          baseRevision = EMPTY_TREE_HASH;
-          
-          // Filter files early if ignoreInstance provided
-          let filesToDiff: string[] = [];
-          let allChangedFiles: string[] = [];
-          
-          // Get file names first (needed for both ignore and size filtering)
-          logger.info(`🔍 Getting changed files list for first commit ${params.revision} (name-only)...`, context);
-          const nameOnlyResult = await git.raw(['diff', '--name-only', baseRevision, params.revision]);
-          allChangedFiles = nameOnlyResult.split('\n').filter((f) => f.trim().length > 0);
-          
-          // Filter using ignore patterns if provided
-          if (params.ignoreInstance) {
-            filesToDiff = allChangedFiles.filter((file) => !params.ignoreInstance!.ignores(file));
-            logger.info(`🔍 Git diff filtering (first commit): ${filesToDiff.length}/${allChangedFiles.length} files (excluded: ${allChangedFiles.length - filesToDiff.length})`, context);
-          } else {
-            filesToDiff = allChangedFiles;
-          }
-
-          // NEW: Filter by file size before running git diff
-          const safeFilesToDiff: string[] = [];
-          for (const file of filesToDiff) {
-            // Check size at commit revision
-            const size = await getGitBlobSize(git, params.revision, file);
-            if (size > maxBlobSize) {
-              skippedFilesForSize.push({
-                path: file,
-                size,
-                reason: `File size (${size} bytes) exceeds the configured limit of ${maxBlobSize} bytes.`
-              });
-              logger.warning(`Skipping large file in diff analysis: ${file}`, {
-                ...context,
-                fileSize: size,
-                limit: maxBlobSize
-              });
-            } else {
-              safeFilesToDiff.push(file);
-            }
-          }
-
-          // Get diff text only for safe files (within size limit)
-          if (safeFilesToDiff.length > 0) {
-            logger.info(`⚡ Running filtered diff (${safeFilesToDiff.length} files for first commit, ${skippedFilesForSize.length} skipped due to size)`, context);
-            const diffTextResult = await git.diff([baseRevision, params.revision, '--', ...safeFilesToDiff]);
-            diffText = diffTextResult;
-            logger.info(`✅ Filtered diff size: ${(diffText.length / 1024).toFixed(2)} KB`, context);
-            
-            // Get actual insertion/deletion counts for filtered files
-            diffSummary = await getDiffSummaryForFiles(git, baseRevision, params.revision, safeFilesToDiff, context);
-          } else {
-            logger.info(`📭 No files to diff after filtering`, context);
-            diffText = "";
-            diffSummary = [];
-          }
-        }
-
-        revisionInfo = {
-          base: baseRevision,
-          head: params.revision,
-        };
-      }
     } else {
       // Default to uncommitted changes if nothing specified
-      logger.debug("Extracting uncommitted changes (default)", {
+      resultData = await extractUncommittedChanges(git, params.ignoreInstance, maxBlobSize, {
         ...context,
         projectPath,
       });
-
-      // Filter files early if ignoreInstance provided
-      let filesToDiff: string[] = [];
-      let allChangedFiles: string[] = [];
-      
-      // Get file names first (needed for both ignore and size filtering)
-      logger.info(`🔍 Getting uncommitted files list (default, name-only)...`, context);
-      const nameOnlyResult = await git.raw(['diff', '--name-only']);
-      allChangedFiles = nameOnlyResult.split('\n').filter((f) => f.trim().length > 0);
-      
-      // Filter using ignore patterns if provided
-      if (params.ignoreInstance) {
-        filesToDiff = allChangedFiles.filter((file) => !params.ignoreInstance!.ignores(file));
-        logger.info(`🔍 Uncommitted files (default): ${filesToDiff.length}/${allChangedFiles.length} (excluded: ${allChangedFiles.length - filesToDiff.length})`, context);
-      } else {
-        filesToDiff = allChangedFiles;
-      }
-
-      // NEW: Filter by file size before running git diff
-      const safeFilesToDiff: string[] = [];
-      for (const file of filesToDiff) {
-        const size = await getGitBlobSize(git, 'index', file);
-        if (size > maxBlobSize) {
-          skippedFilesForSize.push({
-            path: file,
-            size,
-            reason: `File size (${size} bytes) exceeds the configured limit of ${maxBlobSize} bytes.`
-          });
-          logger.warning(`Skipping large file in diff analysis: ${file}`, {
-            ...context,
-            fileSize: size,
-            limit: maxBlobSize
-          });
-        } else {
-          safeFilesToDiff.push(file);
-        }
-      }
-
-      // Get diff text only for safe files (within size limit)
-      if (safeFilesToDiff.length > 0) {
-        logger.info(`⚡ Running filtered diff (${safeFilesToDiff.length} uncommitted files, default, ${skippedFilesForSize.length} skipped due to size)`, context);
-        const diffTextResult = await git.diff(['--', ...safeFilesToDiff]);
-        diffText = diffTextResult;
-        logger.info(`✅ Filtered diff size: ${(diffText.length / 1024).toFixed(2)} KB`, context);
-        
-        // Get actual insertion/deletion counts for filtered files
-        diffSummary = await getDiffSummaryForFiles(git, undefined, undefined, safeFilesToDiff, context);
-      } else {
-        logger.info(`📭 No uncommitted files to diff after filtering (default)`, context);
-        diffText = "";
-        diffSummary = [];
-      }
-
-      const currentBranch = (await git.revparse(["--abbrev-ref", "HEAD"]).catch(() => "HEAD")).trim();
-      revisionInfo = {
-        base: currentBranch,
-        head: "working directory",
-      };
     }
+
+    // Extract the results from the helper function
+    const diffText = resultData.diffText;
+    const diffSummary = resultData.diffSummary;
+    const revisionInfo = resultData.revisionInfo;
+    const skippedFilesForSize = resultData.skippedFilesForSize;
 
     // Filter files BEFORE extracting diffs to prevent memory overflow
     const filteredSummary = diffSummary
@@ -721,6 +614,7 @@ export async function extractGitDiff(
         revisionInfo,
       },
       files,
+      // Include skipped files information for consumer tools
       skippedFiles: skippedFilesForSize.length > 0 ? skippedFilesForSize : undefined,
     };
   } catch (error) {

@@ -1,5 +1,4 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "@jest/globals";
 
 import {
   type RateLimiter,
@@ -71,64 +70,50 @@ function createTestRedisLimiter(windowMs = 100, maxRequests = 2): RateLimiter {
   });
 }
 
-test("redisRateLimiter - resolveRateLimitKey ile anahtar üretimi tutarlı", () => {
-  assert.equal(
-    resolveRateLimitKey({ authInfo: { userId: "u1" } }),
-    "id:u1",
-  );
-  assert.equal(
-    resolveRateLimitKey({ authInfo: { clientId: "c1" } }),
-    "client:c1",
-  );
-  assert.equal(
-    resolveRateLimitKey({ ip: "127.0.0.1" }),
-    "ip:127.0.0.1",
-  );
-});
+describe("redisRateLimiter", () => {
+  it("resolveRateLimitKey ile anahtar üretimi tutarlı", () => {
+    expect(resolveRateLimitKey({ authInfo: { userId: "u1" } })).toBe("id:u1");
+    expect(resolveRateLimitKey({ authInfo: { clientId: "c1" } })).toBe("client:c1");
+    expect(resolveRateLimitKey({ ip: "127.0.0.1" })).toBe("ip:127.0.0.1");
+  });
 
-test("redisRateLimiter - izin verilen istekler hata üretmez", async () => {
-  const limiter = createTestRedisLimiter();
-  const ctx = { authInfo: { userId: "user-1" } };
+  it("izin verilen istekler hata üretmez", async () => {
+    const limiter = createTestRedisLimiter();
+    const ctx = { authInfo: { userId: "user-1" } };
 
-  await limiter.check?.("http:mcp", ctx);
-  await limiter.check?.("http:mcp", ctx);
-});
-
-test("redisRateLimiter - limit aşıldığında RATE_LIMITED fırlatır", async () => {
-  const limiter = createTestRedisLimiter();
-  const ctx = { authInfo: { userId: "user-2" } };
-
-  await limiter.check?.("http:mcp", ctx);
-  await limiter.check?.("http:mcp", ctx);
-
-  let threw = false;
-  try {
     await limiter.check?.("http:mcp", ctx);
-  } catch (err) {
-    threw = true;
-    assert.ok(err instanceof McpError);
-    assert.equal(err.code, BaseErrorCode.RATE_LIMITED);
-  }
-  assert.equal(threw, true, "Limit aşımında McpError bekleniyordu");
-});
+    await limiter.check?.("http:mcp", ctx);
+  });
 
-test("redisRateLimiter - farklı kimlikler için kovalar ayrılır", async () => {
-  const limiter = createTestRedisLimiter();
-  const ctx1 = { authInfo: { userId: "u1" } };
-  const ctx2 = { authInfo: { userId: "u2" } };
+  it("limit aşıldığında RATE_LIMITED fırlatır", async () => {
+    const limiter = createTestRedisLimiter();
+    const ctx = { authInfo: { userId: "user-2" } };
 
-  await limiter.check?.("http:mcp", ctx1);
-  await limiter.check?.("http:mcp", ctx1);
+    await limiter.check?.("http:mcp", ctx);
+    await limiter.check?.("http:mcp", ctx);
 
-  // u1 için üçüncü istekte hata beklenir
-  await assert.rejects(
-    () => limiter.check?.("http:mcp", ctx1),
-    (err: unknown) =>
-      err instanceof McpError &&
-      err.code === BaseErrorCode.RATE_LIMITED,
-  );
+    await expect(() => limiter.check?.("http:mcp", ctx)).rejects.toThrow(McpError);
+    await expect(() => limiter.check?.("http:mcp", ctx)).rejects.toMatchObject({
+      code: BaseErrorCode.RATE_LIMITED
+    });
+  });
 
-  // u2 bağımsız olmalı
-  await limiter.check?.("http:mcp", ctx2);
-  await limiter.check?.("http:mcp", ctx2);
+  it("farklı kimlikler için kovalar ayrılır", async () => {
+    const limiter = createTestRedisLimiter();
+    const ctx1 = { authInfo: { userId: "u1" } };
+    const ctx2 = { authInfo: { userId: "u2" } };
+
+    await limiter.check?.("http:mcp", ctx1);
+    await limiter.check?.("http:mcp", ctx1);
+
+    // u1 için üçüncü istekte hata beklenir
+    await expect(() => limiter.check?.("http:mcp", ctx1)).rejects.toThrow(McpError);
+    await expect(() => limiter.check?.("http:mcp", ctx1)).rejects.toMatchObject({
+      code: BaseErrorCode.RATE_LIMITED
+    });
+
+    // u2 bağımsız olmalı
+    await limiter.check?.("http:mcp", ctx2);
+    await limiter.check?.("http:mcp", ctx2);
+  });
 });

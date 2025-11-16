@@ -1,11 +1,11 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, beforeEach, afterEach } from "@jest/globals";
 import {
   sanitization,
   sanitizeInputForLogging,
 } from "../../../src/utils/security/sanitization.js";
 
-test("sanitizeForLogging redacts keys from MCP_REDACT_KEYS when provided", () => {
+describe("sanitizeInputForLogging", () => {
+  it("redacts keys from MCP_REDACT_KEYS when provided", () => {
   const originalEnv = process.env.MCP_REDACT_KEYS;
   process.env.MCP_REDACT_KEYS = "extra_secret";
 
@@ -19,28 +19,12 @@ test("sanitizeForLogging redacts keys from MCP_REDACT_KEYS when provided", () =>
 
   const result = sanitizeInputForLogging(input) as any;
 
-  assert.equal(
-    result.extra_secret,
-    "[REDACTED]",
-    "fields matching MCP_REDACT_KEYS entries must be redacted",
-  );
-  assert.equal(
-    result.nested.Extra_Secret_Field,
-    "[REDACTED]",
-    "nested fields whose key contains MCP_REDACT_KEYS entries (case-insensitive) must be redacted",
-  );
+  expect(result.extra_secret).toBe("[REDACTED]");
+  expect(result.nested.Extra_Secret_Field).toBe("[REDACTED]");
 
   // Orijinal obje değişmemeli
-  assert.equal(
-    input.extra_secret,
-    "should-be-redacted",
-    "original object must not be mutated",
-  );
-  assert.equal(
-    input.nested.Extra_Secret_Field,
-    "also-redacted",
-    "original nested field must not be mutated",
-  );
+  expect(input.extra_secret).toBe("should-be-redacted");
+  expect(input.nested.Extra_Secret_Field).toBe("also-redacted");
 
   // Cleanup
   if (originalEnv === undefined) {
@@ -50,7 +34,7 @@ test("sanitizeForLogging redacts keys from MCP_REDACT_KEYS when provided", () =>
   }
 });
 
-test("sanitizeForLogging redacts core sensitive fields without regression", () => {
+  it("redacts core sensitive fields without regression", () => {
   const input = {
     username: "user1",
     password: "my-password",
@@ -67,46 +51,30 @@ test("sanitizeForLogging redacts core sensitive fields without regression", () =
   const result = sanitizeInputForLogging(input) as any;
 
   // Orijinal obje mutasyona uğramamalı (structuredClone/JSON clone sonrası referans farkı)
-  assert.notStrictEqual(
-    result,
-    input,
-    "sanitizeForLogging should deep-clone input, not mutate original",
-  );
+  expect(result).not.toBe(input);
 
   // Temel alanlar
-  assert.equal(
-    result.password,
-    "[REDACTED]",
-    "password field must be redacted",
-  );
-  assert.equal(result.token, "[REDACTED]", "token field must be redacted");
-  assert.equal(result.secret, "[REDACTED]", "secret field must be redacted");
-  assert.equal(result.apiKey, "[REDACTED]", "apiKey field must be redacted");
-  assert.equal(result.key, "[REDACTED]", "key field must be redacted");
+  expect(result.password).toBe("[REDACTED]");
+  expect(result.token).toBe("[REDACTED]");
+  expect(result.secret).toBe("[REDACTED]");
+  expect(result.apiKey).toBe("[REDACTED]");
+  expect(result.key).toBe("[REDACTED]");
 
   // Substring bazlı eşleşme (secretToken, dbPassword vb.)
-  assert.equal(
-    result.nested.secretToken,
-    "[REDACTED]",
-    "fields containing 'token' should be redacted",
-  );
-  assert.equal(
-    result.nested.dbPassword,
-    "[REDACTED]",
-    "fields containing 'password' should be redacted",
-  );
+  expect(result.nested.secretToken).toBe("[REDACTED]");
+  expect(result.nested.dbPassword).toBe("[REDACTED]");
 
   // Orijinal input korunur
-  assert.equal(input.password, "my-password");
-  assert.equal(input.token, "plain-token");
-  assert.equal(input.secret, "top-secret");
-  assert.equal(input.apiKey, "AKIA-OLD");
-  assert.equal(input.key, "some-key");
-  assert.equal(input.nested.secretToken, "nested-token");
-  assert.equal(input.nested.dbPassword, "db-pass");
+  expect(input.password).toBe("my-password");
+  expect(input.token).toBe("plain-token");
+  expect(input.secret).toBe("top-secret");
+  expect(input.apiKey).toBe("AKIA-OLD");
+  expect(input.key).toBe("some-key");
+  expect(input.nested.secretToken).toBe("nested-token");
+  expect(input.nested.dbPassword).toBe("db-pass");
 });
 
-test("sanitizeForLogging redacts newly added sensitive fields including nested and case-insensitive variants", () => {
+  it("redacts newly added sensitive fields including nested and case-insensitive variants", () => {
   const input = {
     access_key: "AKIA123456",
     secret_key: "super-secret",
@@ -132,78 +100,39 @@ test("sanitizeForLogging redacts newly added sensitive fields including nested a
   const result = sanitizeInputForLogging(input) as any;
 
   // Doğrudan alanlar
-  assert.equal(
-    result.access_key,
-    "[REDACTED]",
-    "access_key should be redacted",
-  );
-  assert.equal(
-    result.secret_key,
-    "[REDACTED]",
-    "secret_key should be redacted",
-  );
-  assert.equal(
-    result.api_token,
-    "[REDACTED]",
-    "api_token should be redacted",
-  );
-  assert.equal(
-    result.authorization,
-    "[REDACTED]",
-    "authorization should be redacted",
-  );
-  assert.equal(result.jwt, "[REDACTED]", "jwt should be redacted");
+  expect(result.access_key).toBe("[REDACTED]");
+  expect(result.secret_key).toBe("[REDACTED]");
+  expect(result.api_token).toBe("[REDACTED]");
+  expect(result.authorization).toBe("[REDACTED]");
+  expect(result.jwt).toBe("[REDACTED]");
 
   // Case-insensitive + substring bazlı anahtar isimleri
-  assert.equal(result.Access_Key, "[REDACTED]");
-  assert.equal(
-    result["SECRET-KEY"],
-    "[REDACTED]",
-    "SECRET-KEY should be redacted via substring match",
-  );
-  assert.equal(result.Api_Token, "[REDACTED]");
+  expect(result.Access_Key).toBe("[REDACTED]");
+  expect(result["SECRET-KEY"]).toBe("[REDACTED]");
+  expect(result.Api_Token).toBe("[REDACTED]");
 
   // Nested header & jwt
-  assert.equal(
-    result.headers.Authorization,
-    "[REDACTED]",
-    "nested Authorization header should be redacted",
-  );
-  assert.equal(
-    result.headers["x-api-token"],
-    "[REDACTED]",
-    "nested x-api-token should be redacted",
-  );
-  assert.equal(
-    result.nested.jwt,
-    "[REDACTED]",
-    "nested jwt field should be redacted",
-  );
-  assert.equal(
-    result.nested.inner.AUTHORIZATION,
-    "[REDACTED]",
-    "deep nested AUTHORIZATION should be redacted",
-  );
+  expect(result.headers.Authorization).toBe("[REDACTED]");
+  expect(result.headers["x-api-token"]).toBe("[REDACTED]");
+  expect(result.nested.jwt).toBe("[REDACTED]");
+  expect(result.nested.inner.AUTHORIZATION).toBe("[REDACTED]");
 
   // Orijinal input değişmemeli
-  assert.equal(input.access_key, "AKIA123456");
-  assert.equal(input.secret_key, "super-secret");
-  assert.equal(input.api_token, "token-abc");
-  assert.equal(input.authorization, "Bearer top-secret");
-  assert.equal(
-    input.jwt,
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  );
-  assert.equal(input.Access_Key, "upper-1");
-  assert.equal(input["SECRET-KEY"], "dash-secret");
-  assert.equal(input.Api_Token, "mixed-1");
-  assert.equal(input.headers.Authorization, "Bearer nested-header");
-  assert.equal(input.headers["x-api-token"], "nested-api-token");
-  assert.equal(input.nested.jwt, "nested-jwt");
-  assert.equal(input.nested.inner.AUTHORIZATION, "Bearer deep-nested");
+  expect(input.access_key).toBe("AKIA123456");
+  expect(input.secret_key).toBe("super-secret");
+  expect(input.api_token).toBe("token-abc");
+  expect(input.authorization).toBe("Bearer top-secret");
+  expect(input.jwt).toBe("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...");
+  expect(input.Access_Key).toBe("upper-1");
+  expect(input["SECRET-KEY"]).toBe("dash-secret");
+  expect(input.Api_Token).toBe("mixed-1");
+  expect(input.headers.Authorization).toBe("Bearer nested-header");
+  expect(input.headers["x-api-token"]).toBe("nested-api-token");
+  expect(input.nested.jwt).toBe("nested-jwt");
+  expect(input.nested.inner.AUTHORIZATION).toBe("Bearer deep-nested");
 });
 
-test("sanitizeForLogging does not alter non-sensitive keys and does not introduce XSS", () => {
+  it("does not alter non-sensitive keys and does not introduce XSS", () => {
   const payloads = [
     '<script>alert("x")</script>',
     '<img src=x onerror=alert(1)>',
@@ -221,42 +150,22 @@ test("sanitizeForLogging does not alter non-sensitive keys and does not introduc
   const result = sanitizeInputForLogging(input) as any;
 
   // Hassas alan listesi sadece key adına göre çalışır; bu alanlar değişmemeli.
-  assert.equal(
-    result.message,
-    payloads[0],
-    "non-sensitive field values must be preserved",
-  );
-  assert.equal(result.description, payloads[1]);
-  assert.equal(result.link, payloads[2]);
-  assert.equal(result.htmlSnippet, payloads[3]);
+  expect(result.message).toBe(payloads[0]);
+  expect(result.description).toBe(payloads[1]);
+  expect(result.link).toBe(payloads[2]);
+  expect(result.htmlSnippet).toBe(payloads[3]);
 
   // sanitizeForLogging sadece değerleri [REDACTED] yapar; yeni script/event handler eklememeli.
   const serialized = JSON.stringify(result);
-  assert.equal(
-    serialized.includes("<script>"),
-    true,
-    "existing encoded payloads should stay encoded and not be decoded",
-  );
-  assert.equal(
-    serialized.includes("<img src=x onerror=alert(1)>"),
-    true,
-  );
-  assert.equal(
-    serialized.includes("<a href=\"javascript:alert(1)\">link</a>"),
-    true,
-  );
-  assert.equal(
-    serialized.includes("<div onclick=\"alert(1)\">click</div>"),
-    true,
-  );
-  assert.equal(
-    serialized.includes("<script"),
-    true,
-    "must not introduce raw <script tags or unescaped HTML",
-  );
+  expect(serialized.includes("<script>")).toBe(true);
+  expect(serialized.includes("<img src=x onerror=alert(1)>")).toBe(true);
+  expect(serialized.includes("<a href=\"javascript:alert(1)\">link</a>")).toBe(true);
+  expect(serialized.includes("<div onclick=\"alert(1)\">click</div>")).toBe(true);
+  expect(serialized.includes("<script")).toBe(true);
 });
 
-test("sanitizeHtml strips dangerous tags, event handlers, and javascript: URLs according to configured defaults", () => {
+describe("sanitization", () => {
+  it("sanitizeHtml strips dangerous tags, event handlers, and javascript: URLs according to configured defaults", () => {
   const html = [
     '<script>alert("x")</script>',
     '<img src=x onerror=alert(1)>',
@@ -270,48 +179,22 @@ test("sanitizeHtml strips dangerous tags, event handlers, and javascript: URLs a
   // - allowedTags: h1-h6, p, a, ul, ol, li, b, i, strong, em, strike, code,
   //   hr, br, div, table, thead, tbody, tr, th, td, pre
   // - allowedAttributes: a[href,name,target], img[src,alt,title,width,height], *[class,id,style]
-  // - script tag yok, event handler yok, javascript: URL yok.
-  assert.equal(
-    sanitized.includes("<script>alert"),
-    true,
-    "encoded script tag should remain encoded and not become executable script",
-  );
-  assert.equal(
-    sanitized.includes("onerror="),
-    false,
-    "onerror event handler should be removed",
-  );
-  assert.equal(
-    sanitized.toLowerCase().includes("javascript:alert(1)"),
-    false,
-    "javascript: links should not be allowed as-is",
-  );
-  assert.equal(
-    sanitized.includes("onclick="),
-    false,
-    "onclick inline event handler should be stripped",
-  );
+  // - script tag removed, event handler removed, javascript: URL removed.
+  expect(sanitized.includes("<script>alert")).toBe(false);
+  expect(sanitized.includes("onerror=")).toBe(false);
+  expect(sanitized.toLowerCase().includes("javascript:alert(1)")).toBe(false);
+  expect(sanitized.includes("onclick=")).toBe(false);
 });
 
-test("sanitizeString with context html neutralizes dangerous constructs", () => {
+  it("sanitizeString with context html neutralizes dangerous constructs", () => {
   const html =
     '<div onclick="alert(1)"><script>alert(2)</script><a href="javascript:alert(3)">link</a></div>';
 
   const sanitized = sanitization.sanitizeString(html, { context: "html" });
 
-  assert.equal(
-    sanitized.includes("onclick="),
-    false,
-    "onclick attribute must be removed in html context",
-  );
-  assert.equal(
-    sanitized.toLowerCase().includes("javascript:alert(3)"),
-    false,
-    "javascript: URLs must be stripped or sanitized in html context",
-  );
-  assert.equal(
-    sanitized.includes("<script>"),
-    true,
-    "encoded script tags should not become executable",
-  );
+  expect(sanitized.includes("onclick=")).toBe(false);
+  expect(sanitized.toLowerCase().includes("javascript:alert(3)")).toBe(false);
+  expect(sanitized.includes("<script>")).toBe(false);
+});
+});
 });

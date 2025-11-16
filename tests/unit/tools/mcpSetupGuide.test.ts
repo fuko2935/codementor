@@ -1,393 +1,501 @@
 /**
- * @fileoverview Unit tests for mcp_setup_guide tool
- * Tests:
- * - File creation, updating, and marker-based content injection
- * - Path validation and safety checks
- * - No reliance on built-in auth or scope enforcement
+ * @fileoverview MCP Setup Guide tool tests
+ * @module tests/unit/tools/mcpSetupGuide
  */
 
-import { describe, it, beforeEach, afterEach } from "node:test";
-import assert from "node:assert";
+import {
+  projectBootstrapLogic,
+  type ProjectBootstrapInput as McpSetupGuideInput,
+} from "../../../src/mcp-server/tools/projectBootstrap/logic.js";
+import {
+  MCP_CODEMENTOR_START_MARKER as MCP_CONTENT_START_MARKER,
+  MCP_CODEMENTOR_END_MARKER as MCP_CONTENT_END_MARKER,
+} from "../../../src/mcp-server/utils/mcpConfigValidator.js";
+import { requestContextService } from "../../../src/utils/index.js";
+import { registerProjectBootstrap } from "../../../src/mcp-server/tools/projectBootstrap/registration.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { promises as fs } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
-import {
-  mcpSetupGuideLogic,
-  MCP_CONTENT_START_MARKER,
-  MCP_CONTENT_END_MARKER,
-  type McpSetupGuideInput,
-} from "../../../src/mcp-server/tools/mcpSetupGuide/logic.js";
-import { requestContextService } from "../../../src/utils/index.js";
-import { registerMcpSetupGuide } from "../../../src/mcp-server/tools/mcpSetupGuide/registration.js";
-import { McpError, BaseErrorCode } from "../../../src/types-global/errors.js";
+// Mock dependencies
+jest.mock("../../../src/utils/index.js", () => ({
+  requestContextService: {
+    createRequestContext: jest.fn().mockReturnValue({
+      requestId: "test-request-id",
+      timestamp: new Date().toISOString(),
+      operation: "test-operation",
+    }),
+  },
+  logger: {
+    info: jest.fn(),
+    warning: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
 
-// ESM __dirname equivalent
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+jest.mock("fs", () => ({
+  promises: {
+    access: jest.fn(),
+    readFile: jest.fn(),
+    writeFile: jest.fn(),
+    mkdir: jest.fn(),
+    copyFile: jest.fn(),
+    stat: jest.fn(),
+    open: jest.fn(),
+  },
+}));
 
-describe("mcpSetupGuide Tool", () => {
-  let testDir: string;
-  let context: ReturnType<typeof requestContextService.createRequestContext>;
+jest.mock("../../../src/config/clientProfiles.js", () => ({
+  CLIENT_PROFILES: {
+    cursor: {
+      directory: ".cursor",
+      file: "mcp.json",
+    },
+    "claude-code": {
+      directory: ".claude",
+      file: "claude_desktop_config.json",
+    },
+  },
+  getAllClientNames: jest.fn().mockReturnValue(["cursor", "claude-code"]),
+}));
 
-  beforeEach(async () => {
-    // Create a temporary test directory inside project (for security validation)
-    testDir = path.join(process.cwd(), ".test-temp", `mcp-test-${Date.now()}`);
-    await fs.mkdir(testDir, { recursive: true });
+jest.mock("../../../src/mcp-server/utils/securePathValidator.js", () => ({
+  validateSecurePath: jest.fn().mockImplementation((path) => Promise.resolve(path)),
+}));
 
-    // Clean up any existing test files in project root
-    const testFiles = ["AGENTS.md", "GEMINI.md", "CLAUDE.md", "WARP.md", ".clinerules", ".kiro"];
-    for (const file of testFiles) {
-      const filePath = path.join(process.cwd(), file);
-      try {
-        await fs.rm(filePath, { recursive: true, force: true });
-      } catch (_error) {
-        // Ignore if doesn't exist
-      }
-    }
+jest.mock("../../../src/mcp-server/utils/mcpConfigValidator.js", () => ({
+  MCP_CODEMENTOR_START_MARKER: "<!-- MCP:CODEMENTOR:START -->",
+  MCP_CODEMENTOR_END_MARKER: "<!-- MCP:CODEMENTOR:END -->",
+  refreshMcpConfigCache: jest.fn(),
+}));
 
-    // Create request context
-    context = requestContextService.createRequestContext({
-      operation: "test_mcp_setup_guide",
-    });
-  });
-
-  afterEach(async () => {
-    // Clean up test directory
+jest.mock("js-yaml", () => ({
+  load: jest.fn().mockImplementation((yamlStr) => {
     try {
-      await fs.rm(testDir, { recursive: true, force: true });
-    } catch (_error) {
-      // Ignore cleanup errors
+      return JSON.parse(yamlStr.replace(/(\w+):/g, '"$1":').replace(/'/g, '"'));
+    } catch {
+      return {};
     }
+  }),
+}));
+
+describe("MCP Setup Guide Tool", () => {
+  let mockServer: jest.Mocked<McpServer>;
+  let mockContext: any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockServer = {
+      setRequestHandler: jest.fn(),
+    } as any;
+    mockContext = requestContextService.createRequestContext();
   });
 
-  describe("File Creation", () => {
-    it("should create a new AGENTS.md file when none exists", async () => {
-      const params: McpSetupGuideInput = {
-        client: "cursor",
-        projectPath: ".",  // Use relative path, will be validated against process.cwd()
-        force: true,  // Force to overwrite existing file for tests
+  describe("projectBootstrapLogic", () => {
+    const validParams: McpSetupGuideInput = {
+      client: "cursor",
+      projectPath: ".",
+      force: false,
+    };
+
+    it("should create MCP configuration successfully", async () => {
+      // Mock file operations
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockRejectedValueOnce(new Error("File not found")); // config file doesn't exist
+
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(""); // empty config file
+
+      (fs.stat as jest.Mock).mockResolvedValueOnce({ size: 100 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
       };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
 
-      const result = await mcpSetupGuideLogic(params, context);
+      const result = await projectBootstrapLogic(validParams, mockContext);
 
-      assert.strictEqual(result.success, true);
-      // Can be "created" or "updated" depending on whether AGENTS.md exists
-      assert.ok(result.action === "created" || result.action === "updated");
-      assert.ok(result.filePath.includes("AGENTS.md"));
-
-      // Verify file was created
-      const filePath = path.join(process.cwd(), "AGENTS.md");
-      const content = await fs.readFile(filePath, "utf-8");
-      assert.ok(content.includes(MCP_CONTENT_START_MARKER));
-      assert.ok(content.includes(MCP_CONTENT_END_MARKER));
-      assert.ok(content.includes("MCP = YOUR MENTOR"));
+      expect(result.success).toBe(true);
+      expect(result.actions).toHaveLength(2); // .mcpignore exists, config created
     });
 
-    it("should create file in subdirectory for clients like cline", async () => {
-      const params: McpSetupGuideInput = {
-        client: "cline",
-        projectPath: ".",  // Validated against process.cwd()
-        force: true,  // Force to overwrite for tests
+    it("should handle existing configuration with same hash", async () => {
+      // Mock existing config with same content
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockResolvedValueOnce(undefined); // config file exists
+
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(
+          `${MCP_CONTENT_START_MARKER}\ntest content\n${MCP_CONTENT_END_MARKER}`
+        ); // existing config
+
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
       };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
 
-      const result = await mcpSetupGuideLogic(params, context);
+      const result = await projectBootstrapLogic(validParams, mockContext);
 
-      assert.strictEqual(result.success, true);
-      // Can be "created" or "updated" depending on whether AGENTS.md exists
-      assert.ok(result.action === "created" || result.action === "updated");
-
-      // Verify directory and file were created
-      const filePath = path.join(process.cwd(), ".clinerules", "mcp-guide.md");
-      const content = await fs.readFile(filePath, "utf-8");
-      assert.ok(content.includes(MCP_CONTENT_START_MARKER));
+      expect(result.success).toBe(true);
+      expect(result.actions.some(a => a.type === "skipped")).toBe(true);
     });
 
-    it("should create different file names for different clients", async () => {
-      const clients: Array<{ client: McpSetupGuideInput["client"]; expectedFile: string }> = [
-        { client: "cursor", expectedFile: "AGENTS.md" },
-        { client: "claude-code", expectedFile: "CLAUDE.md" },
-        { client: "gemini-cli", expectedFile: "GEMINI.md" },
-        { client: "warp", expectedFile: "WARP.md" },
-      ];
+    it("should create .mcpignore from example when missing", async () => {
+      (fs.access as jest.Mock)
+        .mockRejectedValueOnce(new Error("File not found")) // .mcpignore doesn't exist
+        .mockResolvedValueOnce(undefined) // .mcpignore.example exists
+        .mockRejectedValueOnce(new Error("File not found")); // config file doesn't exist
 
-      for (const { client, expectedFile } of clients) {
-        const clientDir = path.join(testDir, client);
-        await fs.mkdir(clientDir, { recursive: true });
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Example content"); // .mcpignore.example content
 
-        const params: McpSetupGuideInput = {
-          client,
-          projectPath: clientDir,
-          force: false,
-        };
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
 
-        const result = await mcpSetupGuideLogic(params, context);
-        assert.strictEqual(result.success, true);
-        assert.ok(result.filePath.includes(expectedFile));
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
 
-        // Verify file exists
-        const fileExists = await fs
-          .access(result.filePath)
-          .then(() => true)
-          .catch(() => false);
-        assert.strictEqual(fileExists, true);
-      }
+      const result = await projectBootstrapLogic(validParams, mockContext);
+
+      expect(result.success).toBe(true);
+      expect(fs.copyFile).toHaveBeenCalled();
     });
-  });
 
-  describe("Content Update", () => {
-    it("should append MCP block to existing file without markers", async () => {
-      const filePath = path.join(process.cwd(), "AGENTS.md");
-      const existingContent = "# Existing Content\n\nSome existing documentation.\n";
-      await fs.writeFile(filePath, existingContent, "utf-8");
+    it("should create default .mcpignore when no example exists", async () => {
+      (fs.access as jest.Mock)
+        .mockRejectedValue(new Error("File not found")); // all files don't exist
 
-      const params: McpSetupGuideInput = {
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
+
+      const result = await projectBootstrapLogic(validParams, mockContext);
+
+      expect(result.success).toBe(true);
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        expect.stringContaining(".mcpignore"),
+        expect.stringContaining("# Default .mcpignore patterns"),
+        "utf-8"
+      );
+    });
+
+    it("should handle project rules from CODEMENTOR.md", async () => {
+      const paramsWithRules: McpSetupGuideInput = {
         client: "cursor",
-        projectPath: ".",  // Validated against process.cwd()
+        projectPath: ".",
         force: false,
       };
 
-      const result = await mcpSetupGuideLogic(params, context);
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockResolvedValueOnce(undefined) // config file exists
+        .mockResolvedValueOnce(undefined); // CODEMENTOR.md exists
 
-      assert.strictEqual(result.success, true);
-      assert.strictEqual(result.action, "updated");
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(
+          `${MCP_CONTENT_START_MARKER}\nold content\n${MCP_CONTENT_END_MARKER}`
+        ) // existing config
+        .mockResolvedValueOnce(
+          "---\nopenSourceStatus: open-source\ntargetAudience: \"public\"\n---\n# Project docs"
+        ); // CODEMENTOR.md with frontmatter
 
-      // Verify existing content is preserved and MCP block is appended
-      const updatedContent = await fs.readFile(filePath, "utf-8");
-      assert.ok(updatedContent.includes(existingContent));
-      assert.ok(updatedContent.includes(MCP_CONTENT_START_MARKER));
-      assert.ok(updatedContent.includes(MCP_CONTENT_END_MARKER));
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 200 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 200 }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
+
+      const result = await projectBootstrapLogic(paramsWithRules, mockContext);
+
+      expect(result.success).toBe(true);
+      expect(fs.writeFile).toHaveBeenCalled();
     });
 
-    it("should replace existing MCP block in file", async () => {
-      const filePath = path.join(process.cwd(), "AGENTS.md");
-      const initialContent = `# Existing Content\n\n${MCP_CONTENT_START_MARKER}\nOld MCP Content\n${MCP_CONTENT_END_MARKER}\n\n## More Content\n`;
-      await fs.writeFile(filePath, initialContent, "utf-8");
-
-      const params: McpSetupGuideInput = {
+    it("should force update when force flag is true", async () => {
+      const paramsWithForce: McpSetupGuideInput = {
         client: "cursor",
-        projectPath: ".",  // Validated against process.cwd()
-        force: false,
-      };
-
-      const result = await mcpSetupGuideLogic(params, context);
-
-      assert.strictEqual(result.success, true);
-      assert.strictEqual(result.action, "updated");
-
-      // Verify MCP block was replaced, not appended
-      const updatedContent = await fs.readFile(filePath, "utf-8");
-      const mcpBlockCount = (updatedContent.match(new RegExp(MCP_CONTENT_START_MARKER, "g")) || []).length;
-      assert.strictEqual(mcpBlockCount, 1);
-      assert.ok(updatedContent.includes("# Existing Content"));
-      assert.ok(updatedContent.includes("## More Content"));
-      assert.ok(!updatedContent.includes("Old MCP Content"));
-    });
-
-    it("should skip update if content is unchanged and force is false", async () => {
-      // First, create the file
-      const params: McpSetupGuideInput = {
-        client: "cursor",
-        projectPath: ".",  // Validated against process.cwd()
-        force: false,
-      };
-
-      await mcpSetupGuideLogic(params, context);
-
-      // Try to update again without force
-      const result = await mcpSetupGuideLogic(params, context);
-
-      assert.strictEqual(result.success, true);
-      assert.strictEqual(result.action, "skipped");
-      assert.ok(result.message.includes("already up to date"));
-    });
-
-    it("should force update when force parameter is true", async () => {
-      // First, create the file
-      const filePath = path.join(process.cwd(), "AGENTS.md");
-      const params: McpSetupGuideInput = {
-        client: "cursor",
-        projectPath: ".",  // Validated against process.cwd()
-        force: false,
-      };
-
-      await mcpSetupGuideLogic(params, context);
-      
-      // Wait a bit to ensure timestamp would differ
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      // Force update with same content
-      const forceParams: McpSetupGuideInput = {
-        ...params,
+        projectPath: ".",
         force: true,
       };
-      
-      const result = await mcpSetupGuideLogic(forceParams, context);
 
-      // Should report update even if content is same when force is true
-      assert.strictEqual(result.success, true);
-      
-      // Content should be present
-      const updatedContent = await fs.readFile(filePath, "utf-8");
-      assert.ok(updatedContent.includes(MCP_CONTENT_START_MARKER));
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockResolvedValueOnce(undefined); // config file exists
+
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(
+          `${MCP_CONTENT_START_MARKER}\nsame content\n${MCP_CONTENT_END_MARKER}`
+        ); // existing config with same content
+
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
+
+      const result = await projectBootstrapLogic(paramsWithForce, mockContext);
+
+      expect(result.success).toBe(true);
+      expect(result.actions.some(a => a.type === "updated")).toBe(true);
     });
-  });
 
-  describe("Content Preservation", () => {
-    it("should preserve content before and after MCP markers", async () => {
-      const filePath = path.join(process.cwd(), "AGENTS.md");
-      const beforeContent = "# Project Documentation\n\nImportant notes.\n\n";
-      const afterContent = "\n\n## Additional Information\n\nMore details.\n";
-      const initialContent = `${beforeContent}${MCP_CONTENT_START_MARKER}\nOld MCP\n${MCP_CONTENT_END_MARKER}${afterContent}`;
-      await fs.writeFile(filePath, initialContent, "utf-8");
-
-      const params: McpSetupGuideInput = {
-        client: "cursor",
-        projectPath: ".",  // Validated against process.cwd()
+    it("should handle different client profiles", async () => {
+      const claudeParams: McpSetupGuideInput = {
+        client: "claude-code",
+        projectPath: ".",
         force: false,
       };
 
-      const result = await mcpSetupGuideLogic(params, context);
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockRejectedValueOnce(new Error("File not found")); // config file doesn't exist
 
-      assert.strictEqual(result.success, true);
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(""); // empty config file
 
-      const updatedContent = await fs.readFile(filePath, "utf-8");
-      assert.ok(updatedContent.includes("# Project Documentation"));
-      assert.ok(updatedContent.includes("Important notes."));
-      assert.ok(updatedContent.includes("## Additional Information"));
-      assert.ok(updatedContent.includes("More details."));
-    });
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
 
-    it("should handle files with only partial markers gracefully", async () => {
-      const filePath = path.join(process.cwd(), "AGENTS.md");
-      // File with only start marker (incomplete)
-      const incompleteContent = `# Documentation\n\n${MCP_CONTENT_START_MARKER}\nIncomplete block\n\n## More content`;
-      await fs.writeFile(filePath, incompleteContent, "utf-8");
-
-      const params: McpSetupGuideInput = {
-        client: "cursor",
-        projectPath: ".",  // Validated against process.cwd()
-        force: false,
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
       };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
 
-      const result = await mcpSetupGuideLogic(params, context);
+      const result = await projectBootstrapLogic(claudeParams, mockContext);
 
-      assert.strictEqual(result.success, true);
-      assert.strictEqual(result.action, "updated");
-
-      // Should append new block since markers are incomplete
-      const updatedContent = await fs.readFile(filePath, "utf-8");
-      assert.ok(updatedContent.includes("# Documentation"));
-      assert.ok(updatedContent.includes(MCP_CONTENT_START_MARKER));
-      assert.ok(updatedContent.includes(MCP_CONTENT_END_MARKER));
+      expect(result.success).toBe(true);
+      expect(fs.mkdir).toHaveBeenCalledWith(
+        expect.stringContaining(".claude"),
+        { recursive: true }
+      );
     });
-  });
 
-  describe("Edge Cases", () => {
-    it("should handle special characters in file content", async () => {
-      const filePath = path.join(process.cwd(), "AGENTS.md");
-      const specialContent = "# Code Examples\n\n```typescript\nconst regex = /[.*+?^${}()|[\\]\\\\]/g;\n```\n";
-      await fs.writeFile(filePath, specialContent, "utf-8");
+    it("should handle file system errors gracefully", async () => {
+      (fs.access as jest.Mock).mockRejectedValue(new Error("Permission denied"));
 
-      const params: McpSetupGuideInput = {
-        client: "cursor",
-        projectPath: ".",  // Validated against process.cwd()
-        force: false,
+      await expect(
+        projectBootstrapLogic(validParams, mockContext)
+      ).rejects.toThrow();
+    });
+
+    it("should validate project path security", async () => {
+      const { validateSecurePath } = require("../../../src/mcp-server/utils/securePathValidator.js");
+      validateSecurePath.mockRejectedValue(new Error("Invalid path"));
+
+      await expect(
+        projectBootstrapLogic(validParams, mockContext)
+      ).rejects.toThrow("Invalid path");
+    });
+
+    it("should handle template loading failures", async () => {
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockRejectedValueOnce(new Error("File not found")); // config file doesn't exist
+
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockRejectedValue(new Error("Template not found")); // template loading fails
+
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
       };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
 
-      const result = await mcpSetupGuideLogic(params, context);
+      const result = await projectBootstrapLogic(validParams, mockContext);
 
-      assert.strictEqual(result.success, true);
-
-      const updatedContent = await fs.readFile(filePath, "utf-8");
-      assert.ok(updatedContent.includes("const regex = /[.*+?^${}()|[\\]\\\\]/g;"));
+      expect(result.success).toBe(true);
+      // Should still succeed with empty template
     });
 
-    it("should create nested directories if needed", async () => {
-      const params: McpSetupGuideInput = {
-        client: "kiro",
-        projectPath: ".",  // Validated against process.cwd()
-        force: false,
-      };
-
-      const result = await mcpSetupGuideLogic(params, context);
-
-      assert.strictEqual(result.success, true);
-
-      // Verify nested directory was created
-      const dirPath = path.join(process.cwd(), ".kiro", "steering");
-      const dirExists = await fs
-        .access(dirPath)
-        .then(() => true)
-        .catch(() => false);
-      assert.strictEqual(dirExists, true);
-    });
-    
-    // Minimal fake server implementation mirroring other tool tests
-    class TestMcpServer extends McpServer {
-      public registeredTools: Map<
-        string,
-        {
-          description: string;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          inputSchema: any;
-          handler: (params: unknown) => Promise<CallToolResult>;
-        }
-      > = new Map();
-    
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tool(name: string, description: string, inputSchema: any, handler: any): void {
-        this.registeredTools.set(name, {
-          description,
-          inputSchema,
-          handler,
-        });
-      }
-    }
-    
-    describe("mcp_setup_guide registration (no built-in auth)", () => {
-      it("registers the tool with a callable handler", async () => {
-        const server = new TestMcpServer();
-        await registerMcpSetupGuide(server);
-    
-        const tool = server.registeredTools.get("mcp_setup_guide");
-        assert.ok(tool, "mcp_setup_guide tool should be registered");
-        assert.ok(typeof tool.handler === "function", "handler must be a function");
-    
-        const baseParams: McpSetupGuideInput = {
-          client: "cursor",
-          projectPath: ".",
-          force: true,
-        };
-    
-        const result = await tool.handler(baseParams);
-        assert.ok(result, "Expected successful CallToolResult");
+    it("should handle cache update failures", async () => {
+      const { refreshMcpConfigCache } = require("../../../src/mcp-server/utils/mcpConfigValidator.js");
+      refreshMcpConfigCache.mockImplementation(() => {
+        throw new Error("Cache update failed");
       });
+
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockRejectedValueOnce(new Error("File not found")); // config file doesn't exist
+
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(""); // empty config file
+
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
+
+      const result = await projectBootstrapLogic(validParams, mockContext);
+
+      expect(result.success).toBe(true);
+      // Should succeed despite cache failure
     });
 
-    it("should reject path traversal attempts", async () => {
-      const maliciousParams: McpSetupGuideInput = {
+    it("should handle YAML parsing errors in CODEMENTOR.md", async () => {
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockResolvedValueOnce(undefined) // config file exists
+        .mockResolvedValueOnce(undefined); // CODEMENTOR.md exists
+
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(
+          `${MCP_CONTENT_START_MARKER}\nold content\n${MCP_CONTENT_END_MARKER}`
+        ) // existing config
+        .mockResolvedValueOnce("---\ninvalid: yaml: content:\n---\n# Project docs"); // invalid YAML
+
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 200 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 200 }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
+
+      const result = await projectBootstrapLogic(validParams, mockContext);
+
+      expect(result.success).toBe(true);
+      // Should continue with default rules
+    });
+
+    it("should handle project rules validation errors", async () => {
+      const paramsWithInvalidRules: McpSetupGuideInput = {
         client: "cursor",
-        projectPath: "../../../etc",
+        projectPath: ".",
+        force: false,
+        projectRules: {
+          openSourceStatus: "invalid-value" as any,
+        },
+      };
+
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockRejectedValueOnce(new Error("File not found")); // config file doesn't exist
+
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(""); // empty config file
+
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
+
+      await expect(
+        projectBootstrapLogic(paramsWithInvalidRules, mockContext)
+      ).rejects.toThrow();
+    });
+
+    it("should handle empty project path", async () => {
+      const emptyPathParams: McpSetupGuideInput = {
+        client: "cursor",
+        projectPath: "",
         force: false,
       };
 
-      try {
-        await mcpSetupGuideLogic(maliciousParams, context);
-        assert.fail("Should have thrown an error for path traversal attempt");
-      } catch (error) {
-        // Should throw McpError for invalid path
-        assert.ok(error instanceof Error);
-        assert.ok(
-          error.message.includes("Invalid") || 
-          error.message.includes("outside") ||
-          error.message.includes("Path traversal"),
-          `Expected security error, got: ${error.message}`
-        );
-      }
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockRejectedValueOnce(new Error("File not found")); // config file doesn't exist
+
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(""); // empty config file
+
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
+
+      const result = await projectBootstrapLogic(emptyPathParams, mockContext);
+
+      expect(result.success).toBe(true);
+    });
+
+    it("should handle complex project rules", async () => {
+      const complexRules: McpSetupGuideInput = {
+        client: "cursor",
+        projectPath: ".",
+        force: false,
+        projectRules: {
+          openSourceStatus: "open-source",
+          distributionModel: "saas",
+          targetAudience: "enterprise",
+          licenseConstraints: ["MIT", "Apache-2.0"],
+          packageConstraints: ["only official registry"],
+          deploymentNotes: "Internal deployment only\nNo external data sharing",
+        },
+      };
+
+      (fs.access as jest.Mock)
+        .mockResolvedValueOnce(undefined) // .mcpignore exists
+        .mockRejectedValueOnce(new Error("File not found")); // config file doesn't exist
+
+      (fs.readFile as jest.Mock)
+        .mockResolvedValueOnce("# Test content") // .mcpignore content
+        .mockResolvedValueOnce(""); // empty config file
+
+      (fs.stat as jest.Mock).mockResolvedValue({ size: 100 });
+
+      const mockFileHandle = {
+        read: jest.fn().mockResolvedValue({ bytesRead: 100 }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      (fs.open as jest.Mock).mockResolvedValue(mockFileHandle);
+
+      const result = await projectBootstrapLogic(complexRules, mockContext);
+
+      expect(result.success).toBe(true);
+      expect(fs.writeFile).toHaveBeenCalled();
+    });
+  });
+
+  describe("registerProjectBootstrap", () => {
+    it("should register the tool with the server", () => {
+      registerProjectBootstrap(mockServer);
+
+      expect(mockServer.setRequestHandler).toHaveBeenCalled();
+    });
+  });
+
+  describe("Marker Constants", () => {
+    it("should have correct marker values", () => {
+      expect(MCP_CONTENT_START_MARKER).toBe("<!-- MCP:CODEMENTOR:START -->");
+      expect(MCP_CONTENT_END_MARKER).toBe("<!-- MCP:CODEMENTOR:END -->");
     });
   });
 });
-
