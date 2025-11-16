@@ -16,10 +16,11 @@ import {
 /**
  * Registers the `project_bootstrap` tool.
  *
- * This is the REQUIRED FIRST STEP for all MCP workflows:
- * - Generates/updates AI client configuration files (AGENTS.md / client docs)
- * - Injects the canonical MCP usage guide and workflow
- * - Embeds project-specific rules (Project-Specific Rules block)
+ * This is the REQUIRED FIRST STEP for all MCP workflows. It prepares the project for
+ * analysis by creating essential configuration files:
+ * - Creates/updates AI client configuration (e.g., AGENTS.md) with a full MCP usage guide
+ * - Creates a default .mcpignore file to optimize context by excluding irrelevant files
+ * - Embeds project-specific rules and constraints into the guide for the AI to follow
  * - Documents .gitignore + .mcpignore based context control
  */
 export const registerProjectBootstrap = async (
@@ -27,7 +28,7 @@ export const registerProjectBootstrap = async (
 ): Promise<void> => {
   const toolName = "project_bootstrap";
   const toolDescription =
-    "🔧 PROJECT BOOTSTRAP - REQUIRED FIRST STEP: Creates or updates AI client configuration with MCP usage guide, project-specific rules, and context control. Run this once per project before using analysis tools.";
+    "🔧 PROJECT BOOTSTRAP - **REQUIRED FIRST STEP**: Prepares the project for analysis. Creates/updates AI client configuration (e.g., AGENTS.md) with a full MCP usage guide and creates a default .mcpignore file. Run this once per project before using any other analysis tools.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({

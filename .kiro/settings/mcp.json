@@ -14,7 +14,8 @@
       "autoApprove": [
         "gemini_codebase_analyzer",
         "calculate_token_count",
-        "project_bootstrap"
+        "project_bootstrap",
+        "mcp_setup_guide"
       ]
     }
   }

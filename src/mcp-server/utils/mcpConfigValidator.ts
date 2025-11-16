@@ -151,25 +151,25 @@ export async function validateMcpConfigExists(
   if (!configCheck.exists) {
     const errorMessage =
       `\n` +
-      `█████████████████████████████████████████████████████████████████\n` +
-      `█                                                               █\n` +
-      `█  🚨 STOP - YOU MUST RUN 'mcp_setup_guide' TOOL FIRST 🚨     █\n` +
-      `█                                                               █\n` +
-      `█████████████████████████████████████████████████████████████████\n\n` +
+      `██████████████████████████████████████████████████████████████████\n` +
+      `█                                                                █\n` +
+      `█  🚨 STOP - YOU MUST RUN 'project_bootstrap' TOOL FIRST 🚨     █\n` +
+      `█                                                                █\n` +
+      `██████████████████████████████████████████████████████████████████\n\n` +
       `⛔ THIS TOOL CANNOT RUN WITHOUT SETUP ⛔\n\n` +
-      `REQUIRED FIRST STEP (takes 1 second):\n` +
-      `Call mcp_setup_guide tool NOW:\n\n` +
-      `  mcp_setup_guide({ \n` +
-      `    client: "cursor",    // or: gemini-cli, claude-code, warp, cline, etc.\n` +
+      `REQUIRED FIRST STEP (takes 2 seconds):\n` +
+      `Call the project_bootstrap tool NOW:\n\n` +
+      `  project_bootstrap({ \n` +
+      `    client: "cursor",    // or: gemini-cli, claude-code, warp, cline, kiro, etc.\n` +
       `    projectPath: "."\n` +
       `  })\n\n` +
-      `After setup completes, you can use all MCP analysis tools.\n\n` +
+      `After setup completes, you can use all other MCP analysis tools.\n\n` +
       `WHY THIS IS REQUIRED:\n` +
-      `The setup guide provides essential documentation on how to use MCP tools\n` +
-      `correctly. This ensures efficient analysis and avoids token limits or\n` +
-      `incorrect operations. It takes 1 second to run.\n\n` +
+      `The bootstrap tool creates essential configuration files (e.g., AGENTS.md, .mcpignore)\n` +
+      `and injects a guide on how to use all MCP tools correctly. This ensures\n` +
+      `efficient analysis and avoids token limits or incorrect operations.\n\n` +
       `❌ DO NOT try to analyze files manually\n` +
-      `✅ DO call mcp_setup_guide first`;
+      `✅ DO call project_bootstrap first`;
 
     logger.warning("MCP config validation failed - setup required", {
       ...context,
@@ -181,7 +181,7 @@ export async function validateMcpConfigExists(
       errorMessage,
       {
         projectPath,
-        requiredAction: "call_mcp_setup_guide",
+        requiredAction: "call_project_bootstrap",
         availableClients: Object.keys(CLIENT_PROFILES),
       },
     );
@@ -225,7 +225,7 @@ export async function warnIfMcpConfigMissing(
       {
         ...context,
         projectPath,
-        recommendation: "call_mcp_setup_guide",
+        recommendation: "call_project_bootstrap",
       },
     );
   }

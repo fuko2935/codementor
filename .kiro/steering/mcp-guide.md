@@ -255,15 +255,7 @@ AI asistanları bu kuralları "hard constraint" olarak ele almalı ve önerileri
 bunlarla çelişmeyecek şekilde üretmelidir.
 
 ```yaml
-openSourceStatus: open-source
-distributionModel: library
-targetAudience: "developers"
-licenseConstraints:
-  - "MIT/Apache-2.0 compatible"
-packageConstraints:
-  - "Use official npm registry"
-deploymentNotes: |
-  MCP server for local-first AI-powered codebase analysis
+{{PROJECT_RULES_YAML}}
 ```
 
 Yorumlayıcı İlkeler:

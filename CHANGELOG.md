@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### 🗑️ Deprecated & Removed
+
+**`mcp_setup_guide` tool has been removed** - Use `project_bootstrap` instead
+
+The legacy `mcp_setup_guide` tool has been completely removed from the codebase. All its functionality is now provided by the more advanced `project_bootstrap` tool.
+
+#### Migration:
+- **Old:** `mcp_setup_guide({ client: "cursor", projectPath: "." })`
+- **New:** `project_bootstrap({ client: "cursor", projectPath: "." })`
+
+#### Why the change?
+- `project_bootstrap` is a superset of `mcp_setup_guide` with additional features:
+  - ✅ Creates/manages `.mcpignore` file automatically
+  - ✅ Supports project-specific rules via `projectRules` parameter
+  - ✅ Smarter content hashing for idempotent updates
+  - ✅ Better error messages and validation
+
+#### What changed:
+- 🗑️ Removed `src/mcp-server/tools/mcpSetupGuide/` directory
+- 📝 Updated error messages to recommend `project_bootstrap`
+- 📝 Updated all documentation references
+
 ## [3.0.0] - 2025-01-16
 
 ### 🚨 BREAKING CHANGE: Project Renamed to CodeMentor

@@ -56,11 +56,11 @@ Bu rehber, AI asistanlarının MCP araçlarını doğru, güvenli ve verimli kul
   - Doğru: `{"tool_name":"gemini_dynamic_expert_analyze","params":{"question":"Auth mimarisi","expertPrompt":"<prompt>"}}`
   - Yanlış: `{"tool_name":"gemini_dynamic_expert_analyze","params":{"question":"..."}}`
   - Not: Boyut limitleri geçerli.
-- mcp_setup_guide:
-  - Parametreler: `client`, `projectPath`, `force`.
-  - Doğru: `{"tool_name":"mcp_setup_guide","params":{"client":"cursor","projectPath":"."}}`
-  - Yanlış: `{"tool_name":"mcp_setup_guide","params":{"client":"unknown-client"}}`
-  - Not: Diğer araçlardan önce.
+- project_bootstrap:
+  - Parametreler: `client`, `projectPath`, `projectRules`, `force`.
+  - Doğru: `{"tool_name":"project_bootstrap","params":{"client":"kiro","projectPath":"."}}`
+  - Yanlış: `{"tool_name":"project_bootstrap","params":{"client":"unknown-client"}}`
+  - Not: Diğer araçlardan önce çalıştırılmalı. `.mcpignore` ve config dosyası oluşturur.
 
 ---
 
@@ -73,7 +73,7 @@ Bu rehber, AI asistanlarının MCP araçlarını doğru, güvenli ve verimli kul
 - Analyzer’ı büyük projede zorlamak.
 - `includeChanges`'ı `review` olmadan.
 - Orchestrator adımını atlamak (`groupsData` aktarmamak).
-- `mcp_setup_guide`'ı atlamak.
+- `project_bootstrap`'ı atlamak.
 
 ---
 
