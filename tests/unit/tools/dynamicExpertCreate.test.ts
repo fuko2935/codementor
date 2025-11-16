@@ -3,7 +3,7 @@
  * and authorization behavior for the gemini_dynamic_expert_create tool.
  */
 
-import { describe, it, beforeEach, afterEach, expect } from "@jest/globals";
+import { describe, it, beforeEach, afterEach, expect, jest } from "@jest/globals";
 import { promises as fs } from "fs";
 import path from "path";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -87,16 +87,18 @@ describe("dynamicExpertCreateLogic limits", () => {
   
   describe("gemini_dynamic_expert_create registration (no built-in auth)", () => {
     it("registers the tool with a callable handler", async () => {
-      const server = new TestMcpServer();
-      await registerDynamicExpertCreate(server);
+      const testServer = new TestMcpServer();
+      await registerDynamicExpertCreate(testServer.server);
 
-      const tools = server.getTools();
+      const tools = testServer.getTools();
       const tool = tools.get("gemini_dynamic_expert_create");
       expect(tool).toBeDefined();
-      expect(typeof tool.handler).toBe("function");
-
-      const result = await callTool(tool.handler);
-      expect(result).toBeDefined();
+      
+      if (tool) {
+        expect(typeof tool.handler).toBe("function");
+        const result = await callTool(tool.handler);
+        expect(result).toBeDefined();
+      }
     });
   });
 
@@ -133,5 +135,51 @@ describe("dynamicExpertCreateLogic limits", () => {
     await expect(
       dynamicExpertCreateLogic(params, context)
     ).rejects.toThrow(/total size exceeds 100MB limit/i);
+  });
+
+  // Integration tests - require real LLM API calls
+  // Skip in CI/CD or when SKIP_INTEGRATION_TESTS=true
+  describe.skip("dynamicExpertCreateLogic behavior (integration tests)", () => {
+    it("creates expert prompt with projectPath provided", async () => {
+      const params: DynamicExpertCreateInput = {
+        projectPath: testDir,
+        expertiseHint: "React performance optimization",
+        ignoreMcpignore: false,
+        temporaryIgnore: [],
+      };
+
+      const result = await dynamicExpertCreateLogic(params, context);
+      
+      expect(result).toBeDefined();
+      expect(typeof result).toBe("string");
+      expect(result.length).toBeGreaterThan(0);
+    }, 30000);
+
+    it("creates expert prompt without projectPath (hint only)", async () => {
+      const params: DynamicExpertCreateInput = {
+        expertiseHint: "Security vulnerability analysis",
+        ignoreMcpignore: false,
+        temporaryIgnore: [],
+      };
+
+      const result = await dynamicExpertCreateLogic(params, context);
+      
+      expect(result).toBeDefined();
+      expect(typeof result).toBe("string");
+      expect(result.length).toBeGreaterThan(0);
+    }, 30000);
+
+    it("throws VALIDATION_ERROR when projectPath is invalid", async () => {
+      const params: DynamicExpertCreateInput = {
+        projectPath: "/nonexistent/path",
+        expertiseHint: "Test expert",
+        ignoreMcpignore: false,
+        temporaryIgnore: [],
+      };
+
+      await expect(
+        dynamicExpertCreateLogic(params, context)
+      ).rejects.toThrow(McpError);
+    });
   });
 });

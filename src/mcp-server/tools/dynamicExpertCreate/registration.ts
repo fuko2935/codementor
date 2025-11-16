@@ -41,12 +41,17 @@ export const registerDynamicExpertCreate = async (
               projectPath: params.projectPath,
             });
           try {
-            const result = await dynamicExpertCreateLogic(params, toolContext);
+            const expertPrompt = await dynamicExpertCreateLogic(params, toolContext);
+            
+            const responseText = params.projectPath
+              ? `# Dynamic Expert Created Successfully!\n\n## Project: ${params.projectPath}\n\n---\n\n## Generated Expert Prompt\n\n\`\`\`\n${expertPrompt}\n\`\`\``
+              : `# Dynamic Expert Created Successfully!\n\n## Generated Expert Prompt\n\n\`\`\`\n${expertPrompt}\n\`\`\``;
+            
             return {
               content: [
                 {
                   type: "text",
-                  text: `# Dynamic Expert Created Successfully!\n\n## Project: ${result.projectPath}\n**Files Processed:** ${result.filesProcessed}\n**Total Characters:** ${result.totalCharacters.toLocaleString()}\n\n---\n\n## Generated Expert Prompt\n\n\`\`\`\n${result.expertPrompt}\n\`\`\``,
+                  text: responseText,
                 },
               ],
               isError: false,

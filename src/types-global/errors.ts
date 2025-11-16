@@ -45,8 +45,6 @@ export enum BaseErrorCode {
   INITIALIZATION_FAILED = "INITIALIZATION_FAILED",
   /** A service was used before it was properly initialized. */
   SERVICE_NOT_INITIALIZED = "SERVICE_NOT_INITIALIZED",
-  /** A generic error occurred during a database operation. */
-  DATABASE_ERROR = "DATABASE_ERROR",
   /** An error occurred while loading or interacting with an extension. */
   EXTENSION_ERROR = "EXTENSION_ERROR",
   /** An error occurred during the shutdown phase of a service or module. */

@@ -30,11 +30,12 @@ export async function callTool(
 /**
  * Test MCP Server class that matches the expected interface
  */
-export class TestMcpServer extends McpServer {
+export class TestMcpServer {
   private tools = new Map<string, { handler: ToolHandler }>();
+  private mcpServer: McpServer;
 
   constructor() {
-    super({
+    this.mcpServer = new McpServer({
       name: "test-server",
       version: "1.0.0"
     }, {
@@ -44,16 +45,20 @@ export class TestMcpServer extends McpServer {
     });
   }
 
-  tool(name: string, cb: any): void {
-    // Extract the handler from the callback function
-    // The MCP SDK passes a callback that returns the tool definition
-    const toolDef = cb();
-    this.tools.set(name, {
-      handler: toolDef.handler,
-    });
+  tool(name: string, description: string, schema: any, handler: ToolHandler): any {
+    // Store the tool with its handler for testing
+    this.tools.set(name, { handler });
+    
+    // Call the real MCP server's tool method
+    return this.mcpServer.tool(name, description, schema, handler);
   }
 
   getTools() {
     return this.tools;
+  }
+
+  // Expose other McpServer methods if needed
+  get server() {
+    return this.mcpServer;
   }
 }

@@ -22,7 +22,6 @@ import { BaseErrorCode } from "../types-global/errors.js";
 import { registerProjectBootstrap } from "./tools/projectBootstrap/index.js";
 import { registerGeminiCodebaseAnalyzer } from "./tools/geminiCodebaseAnalyzer/index.js";
 import { registerDynamicExpertCreate } from "./tools/dynamicExpertCreate/index.js";
-import { registerDynamicExpertAnalyze } from "./tools/dynamicExpertAnalyze/index.js";
 import { registerCalculateTokenCount } from "./tools/calculateTokenCount/index.js";
 import { registerProjectOrchestratorCreate } from "./tools/projectOrchestratorCreate/index.js";
 import { registerProjectOrchestratorAnalyze } from "./tools/projectOrchestratorAnalyze/index.js";
@@ -97,7 +96,6 @@ async function createMcpServerInstance(): Promise<McpServer> {
         await registerProjectBootstrap(server);
         await registerGeminiCodebaseAnalyzer(server);
         await registerDynamicExpertCreate(server);
-        await registerDynamicExpertAnalyze(server);
         await registerCalculateTokenCount(server);
         await registerProjectOrchestratorCreate(server);
         await registerProjectOrchestratorAnalyze(server);
