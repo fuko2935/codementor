@@ -1,35 +1,67 @@
-# MCP Ignore File - Context Optimization
-# This file works ON TOP of .gitignore
-# Use it to exclude files from MCP context that you don't want AI to analyze
-# 
+# =============================================================================
+# MCP IGNORE - AI ANALYSIS OPTIMIZATION
+# This file works ON TOP of .gitignore to exclude files from AI analysis
+# =============================================================================
 # How it works:
 # 1. .gitignore patterns are loaded first
 # 2. .mcpignore patterns are added on top (additive)
 # 3. All MCP tools respect both files
 #
-# Copy this file to .mcpignore and customize as needed
+# Purpose: Limit AI context to only relevant source code for better analysis
+# =============================================================================
 
-# Test files
+# 1. DEPENDENCIES & BUILD ARTIFACTS (Most Critical)
+# These files are meaningless to AI and pollute the context
+# -----------------------------------------------------------------------------
+node_modules/
+dist/
+dist-test/
+build/
+out/
+target/
+.cache/
+.parcel-cache/
+.tscache/
+*.tsbuildinfo
+*.js.map
+*.mjs.map
+*.cjs.map
+*.min.js
+*.min.css
+
+# 2. TEST FILES
+# Tests should be in git, but usually not needed for AI analysis
+# -----------------------------------------------------------------------------
 **/*.test.ts
 **/*.test.js
 **/*.spec.ts
 **/*.spec.js
 **/tests/**
 **/test/**
-__tests__/**
+__tests__/
 *.test.*
 
-# Documentation (exclude all markdown except README)
+# 3. DOCUMENTATION
+# Prevents AI from reading docs instead of analyzing code
+# README.md is kept as it's the main project summary
+# -----------------------------------------------------------------------------
 docs/**
 *.md
 !README.md
+!CONTRIBUTING.md
 
-# Build artifacts (if not already in .gitignore)
-*.map
-*.min.js
-*.min.css
+# 4. LOGS, ENVIRONMENT & SECURITY FILES
+# API keys, logs, and temporary files should not be in AI context
+# -----------------------------------------------------------------------------
+logs/
+*.log
+.env*
+*.pem
+*.key
 
-# Large data files
+# 5. LARGE DATA & BINARY FILES
+# Protects token limits and excludes irrelevant content
+# -----------------------------------------------------------------------------
 *.json
 *.csv
 *.xlsx
@@ -37,38 +69,56 @@ docs/**
 *.db
 *.sqlite
 *.sqlite3
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.wasm
+*.zip
+*.gz
+*.tar
+*.rar
+*.7z
 
-# Generated files
+# 6. AUTO-GENERATED FILES
+# -----------------------------------------------------------------------------
 **/generated/**
 **/*.generated.ts
 **/*.generated.js
-
-# Migration files
 **/migrations/**
 **/migration/**
 
-# Configuration examples
+# 7. CONFIGURATION EXAMPLES
+# -----------------------------------------------------------------------------
 *.example.*
 *.sample.*
 *.template.*
 
-# Logs and temporary files
-*.log
+# 8. TEMPORARY FILES
+# -----------------------------------------------------------------------------
 *.tmp
 *.temp
 *.cache
+*.bak
 
-# MCP internal cache
-.mcp/cache/**
-
-# IDE and editor files
-.vscode/**
-.idea/**
+# 9. OS, IDE & EDITOR FILES
+# -----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
 *.swp
 *.swo
 *~
 
-# Coverage reports
-coverage/**
-.nyc_output/**
+# 10. TEST COVERAGE REPORTS
+# -----------------------------------------------------------------------------
+coverage/
+.nyc_output/
 *.lcov
+
+# 11. MCP INTERNAL CACHE
+# -----------------------------------------------------------------------------
+.mcp/cache/**
