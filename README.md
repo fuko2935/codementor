@@ -239,6 +239,31 @@ The `analysisMode` parameter supports the following modes:
 - **`review`** - Code change review with git diff analysis ⭐ NEW
 
 ---
+
+## Custom Analysis Modes with create_analysis_mode
+
+The `create_analysis_mode` tool enables you to create custom expert system prompts for specialized code analysis. It supports three modes: manual definition, AI-assisted generation, and project-specific AI generation.
+
+### Quick Example
+
+```json
+{
+  "tool_name": "create_analysis_mode",
+  "params": {
+    "expertiseHint": "Create a security-focused code reviewer",
+    "withAi": true,
+    "projectPath": ".",
+    "returnFormat": "prompt_only"
+  }
+}
+```
+
+The generated prompt can then be used with `gemini_codebase_analyzer`'s `customExpertPrompt` parameter for specialized analysis.
+
+**📖 For detailed documentation, examples, and best practices, see [docs/tools/create_analysis_mode.md](docs/tools/create_analysis_mode.md)**
+
+---
+
 ## Security / Authentication
 
 ### API Key Authentication (HTTP Transport)

@@ -33,7 +33,11 @@ export const registerGeminiCodebaseAnalyzer = async (
 ): Promise<void> => {
   const toolName = "gemini_codebase_analyzer";
   const toolDescription =
-    "Analyzes an entire project codebase with advanced AI-powered insights using different analysis modes (general, security, performance, review, etc.). " +
+    "Analyzes an entire project codebase with advanced AI-powered insights. Supports two workflow modes: " +
+    "1) Traditional analysis using analysisMode parameter (general, security, performance, review, etc.) " +
+    "2) Custom expert persona-based analysis using customExpertPrompt parameter for specialized analysis modes. " +
+    "The customExpertPrompt enables creating specialized expert personas that can provide deeper, domain-specific analysis " +
+    "by using the 'gemini_dynamic_expert_create' tool first, then analyzing with this custom prompt. " +
     "For code review with git diffs, use analysisMode='review' with includeChanges parameter. " +
     "WARNING: May cause performance issues or timeouts on very large projects. " +
     "For large codebases, please use the 'project_orchestrator_create' and 'project_orchestrator_analyze' tools for a more stable, multi-step analysis. " +
