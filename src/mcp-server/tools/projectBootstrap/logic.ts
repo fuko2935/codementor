@@ -405,6 +405,48 @@ async function updateConfigCache(
 }
 
 /**
+ * Ensures the .gitignore file exists and contains an entry for the MCP cache directory.
+ * This function is idempotent and safe to call multiple times.
+ *
+ * @param normalizedPath The validated, absolute path to the project directory.
+ * @param context The request context for logging.
+ * @returns A promise that resolves with an object indicating the action taken.
+ */
+async function ensureGitignoreHasMcpCache(
+  normalizedPath: string,
+  context: RequestContext,
+): Promise<{ type: "created" | "updated" | "exists"; file: string }> {
+  const gitignorePath = path.join(normalizedPath, ".gitignore");
+  const mcpCacheEntry = ".mcp/cache/";
+
+  try {
+    const content = await fs.readFile(gitignorePath, "utf-8");
+    const lines = content.split(/\r?\n/);
+    const hasEntry = lines.some((line) => line.trim() === mcpCacheEntry);
+
+    if (hasEntry) {
+      logger.debug(".gitignore already contains .mcp/cache/ entry", { ...context });
+      return { type: "exists", file: ".gitignore" };
+    } else {
+      // Append the entry to the existing file
+      const contentToAppend = (content.trim().length > 0 && !content.endsWith("\n") ? "\n" : "") + mcpCacheEntry + "\n";
+      await fs.appendFile(gitignorePath, contentToAppend, "utf-8");
+      logger.info("Appended .mcp/cache/ to .gitignore", { ...context });
+      return { type: "updated", file: ".gitignore" };
+    }
+  } catch (error) {
+    // If the file doesn't exist, create it
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      await fs.writeFile(gitignorePath, mcpCacheEntry + "\n", "utf-8");
+      logger.info("Created .gitignore with .mcp/cache/ entry", { ...context });
+      return { type: "created", file: ".gitignore" };
+    }
+    // For any other read/write error, re-throw it
+    throw error;
+  }
+}
+
+/**
  * Core logic for the project_bootstrap tool.
  */
 export async function projectBootstrapLogic(
@@ -420,6 +462,10 @@ export async function projectBootstrapLogic(
   );
 
   const actions: Array<{type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string}> = [];
+
+  // Manage .gitignore for MCP cache
+  const gitignoreAction = await ensureGitignoreHasMcpCache(normalizedPath, context);
+  actions.push(gitignoreAction);
 
   // Manage .mcpignore file (FR-2)
   const mcpignorePath = path.join(normalizedPath, ".mcpignore");

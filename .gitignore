@@ -193,4 +193,3 @@ data/
 # MCP SPECIFIC
 # =============================================================================
 # MCP cache files - temporary, machine-specific, should not be committed
-.mcp/cache/
