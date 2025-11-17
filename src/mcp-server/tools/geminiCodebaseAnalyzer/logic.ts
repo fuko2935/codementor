@@ -140,7 +140,7 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     .optional()
     .describe(
       "Custom expert persona/system prompt. If provided, this prompt is used instead of the standard analysisMode, " +
-      "enabling specialized domain-specific analysis. Combine with 'gemini_dynamic_expert_create' tool for creating " +
+      "enabling specialized domain-specific analysis. Combine with 'create_analysis_mode' tool for creating " +
       "dedicated expert personas before analysis.",
     ),
 });
