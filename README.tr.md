@@ -170,15 +170,34 @@ Son N commit:
 - Otomatik orkestrasyon: `autoOrchestrate=true` ile büyük projelerde grup bazlı analiz
 
 #### Otomatik Orkestrasyon (büyük projeler)
+#### Büyük Projeleri Yönetme
 
-- `gemini_codebase_analyzer` aracı artık büyük projeler için yerleşik orkestrasyon yeteneklerine sahip
-- Token sınırı aşıldığında otomatik gruplandırılmış analize geçmek için `autoOrchestrate=true` ayarlayın
-- `orchestratorThreshold` (varsayılan `0.75`) `tokenCount / maxTokens` temelinde ne zaman orkestrasyon tetikleneceğini kontrol eder
-- Herhangi bir proje boyutu için orkestrasyonu zorlamak için `orchestratorThreshold: 0` ayarlayın
-- Orkestrasyon modunda `analysisMode: "review"` desteklenmez; akış `analysisMode: "general"` moduna geçer ve sonuçları grup toplu analizlerinden sentezler
-- Bu sorunsuz bir deneyim sağlar - artık ayrı `project_orchestrator_create` ve `project_orchestrator_analyze` araçlarına ihtiyaç yok (kullanım dışı)
+Token sınırlarını aşan projeler için şu stratejileri kullanın:
 
-> **⚠️ Not:** Ayrı `project_orchestrator_create` ve `project_orchestrator_analyze` araçları artık kullanım dışıdır. Aynı işlevsellik için daha iyi entegrasyonla `autoOrchestrate=true` parametresiyle `gemini_codebase_analyzer` kullanın.
+1. **`.mcpignore` Kullanın**: Gereksiz dosyaları hariç tutmak için desenler ekleyin (`.gitignore` benzeri)
+   ```
+   node_modules/
+   dist/
+   *.test.ts
+   docs/
+   ```
+
+2. **`temporaryIgnore` Kullanın**: Belirli bir analiz için dosyaları hariç tutun
+   ```json
+   {
+     "projectPath": "./",
+     "question": "Çekirdek mantığı analiz et",
+     "temporaryIgnore": ["tests/**", "docs/**"]
+   }
+   ```
+
+3. **Alt dizinleri analiz edin**: Projenizin belirli bölümlerine odaklanın
+   ```json
+   {
+     "projectPath": "./src/core",
+     "question": "Çekirdek işlevselliği incele"
+   }
+   ```
 
 ---
 

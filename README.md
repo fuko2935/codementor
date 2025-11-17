@@ -216,16 +216,34 @@ The `gemini_codebase_analyzer` tool now supports code review mode with git diff 
 - **Edge Case Handling**: Works with initial commits, binary files, and empty diffs
 - **Large File Protection**: Files exceeding `MAX_GIT_BLOB_SIZE_BYTES` (default 4MB) are automatically skipped to prevent memory issues. Skipped files are reported in the analysis output.
 
-#### Auto-Orchestration (large projects)
+#### Handling Large Projects
 
-- The `gemini_codebase_analyzer` tool now includes built-in orchestration capabilities for large projects
-- Set `autoOrchestrate=true` to automatically fall back to grouped analysis when token limits are exceeded
-- `orchestratorThreshold` (default `0.75`) controls when to trigger orchestration based on `tokenCount / maxTokens`
-- Set `orchestratorThreshold: 0` to force orchestration for any project size
-- In orchestration mode, `analysisMode: "review"` is not supported; the flow switches to `analysisMode: "general"` and synthesizes results from grouped batches
-- This provides a seamless experience - you no longer need separate `project_orchestrator_create` and `project_orchestrator_analyze` tools (deprecated)
+For projects that exceed token limits, use these strategies:
 
-> **⚠️ Note:** The separate `project_orchestrator_create` and `project_orchestrator_analyze` tools are now deprecated. Use `gemini_codebase_analyzer` with `autoOrchestrate=true` for the same functionality with better integration.
+1. **Use `.mcpignore`**: Add patterns to exclude unnecessary files (similar to `.gitignore`)
+   ```
+   node_modules/
+   dist/
+   *.test.ts
+   docs/
+   ```
+
+2. **Use `temporaryIgnore`**: Exclude files for a specific analysis
+   ```json
+   {
+     "projectPath": "./",
+     "question": "Analyze core logic",
+     "temporaryIgnore": ["tests/**", "docs/**"]
+   }
+   ```
+
+3. **Analyze subdirectories**: Focus on specific parts of your project
+   ```json
+   {
+     "projectPath": "./src/core",
+     "question": "Review core functionality"
+   }
+   ```
 
 ### Analysis Modes
 

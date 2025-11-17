@@ -19,7 +19,6 @@ import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
 import { extractGitDiff, type ExtractGitDiffParams } from "../../utils/gitDiffAnalyzer.js";
 import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
-import { orchestrateFullAnalysis } from "../../services/orchestrationService.js";
 
 // Önceden tanımlanmış analiz modları
 const standardAnalysisModes = [
@@ -452,69 +451,31 @@ export async function geminiCodebaseAnalyzerLogic(
 
     if (!sizeValidation.valid) {
       if (validatedParams.autoOrchestrate) {
-        logger.info("Auto-orchestrating due to project size exceeding token limit", {
+        logger.warning("Auto-orchestration requested but orchestrator has been removed", {
           ...context,
           tokenCount: sizeValidation.tokenCount,
           maxTokens,
         });
-
-        // Note: Orchestrator does not yet support 'review' mode with git diff analysis or custom modes.
-        // If analysisMode is 'review' or starts with 'custom:', we fall back to 'general' mode for orchestration.
-        // This means diff analysis and custom prompts will be skipped, but the project can still be analyzed.
-        type OrchestratorMode = "general" | "implementation" | "refactoring" | "explanation" | "debugging" | "audit" | "security" | "performance" | "testing" | "documentation";
         
-        /**
-         * Resolves the appropriate orchestrator mode based on the requested analysis mode.
-         * Falls back to 'general' if the mode is not supported by the orchestrator.
-         */
-        const resolveOrchestratorMode = (mode?: string): OrchestratorMode => {
-          if (
-            mode &&
-            mode !== "review" &&
-            !mode.startsWith("custom:") &&
-            standardAnalysisModes.includes(mode as any)
-          ) {
-            return mode as OrchestratorMode;
+        // Orchestrator has been removed - suggest using .mcpignore instead
+        throw new McpError(
+          BaseErrorCode.VALIDATION_ERROR,
+          `Project size exceeds token limits (${(sizeValidation.tokenCount ?? 0).toLocaleString()} tokens, limit ${maxTokens.toLocaleString()}).\n\n` +
+          `The auto-orchestration feature has been removed. Please use one of these alternatives:\n` +
+          `1. Add patterns to .mcpignore to exclude unnecessary files\n` +
+          `2. Use temporaryIgnore parameter to exclude files for this analysis\n` +
+          `3. Analyze a subdirectory instead of the entire project\n\n` +
+          `Example .mcpignore patterns:\n` +
+          `  node_modules/\n` +
+          `  dist/\n` +
+          `  *.test.ts\n` +
+          `  docs/`,
+          {
+            tokenCount: sizeValidation.tokenCount,
+            maxTokens,
+            suggestion: "Use .mcpignore or temporaryIgnore to reduce project size"
           }
-          return "general";
-        };
-        
-        const orchestratorMode = resolveOrchestratorMode(validatedParams.analysisMode);
-        
-        // Use orchestration service for full workflow
-        const analyzeRes = await orchestrateFullAnalysis(
-          normalizedPath,
-          validatedParams.question,
-          orchestratorMode,
-          validatedParams.maxTokensPerGroup ?? 900000,
-          validatedParams.temporaryIgnore,
-          validatedParams.ignoreMcpignore,
-          params.geminiApiKey,
-          context
         );
-
-        // File count is now included in the response
-        const filesProcessed = analyzeRes.filesProcessed ?? 0;
-
-        let headerNote =
-          `⚠ Orchestrator fallback used automatically.\n` +
-          `Reason: Project size exceeded token limits (${(sizeValidation.tokenCount ?? 0).toLocaleString()} tokens, limit ${maxTokens.toLocaleString()}).\n` +
-          `The analysis below is synthesized from grouped batches.\n`;
-        if (validatedParams.analysisMode === "review") {
-          headerNote += `Note: 'review' mode is not yet supported in orchestrator fallback; switched to 'general'.\n`;
-        }
-        if (validatedParams.analysisMode && validatedParams.analysisMode.startsWith('custom:')) {
-          headerNote += `Note: Custom analysis modes are not yet supported in orchestrator fallback; switched to 'general'.\n`;
-        }
-        headerNote += `\n`;
-
-        return {
-          analysis: headerNote + analyzeRes.analysis,
-          filesProcessed,
-          totalCharacters: 0,
-          projectPath: normalizedPath,
-          question: validatedParams.question,
-        };
       }
 
       // Not auto orchestrating: throw with helpful guidance
