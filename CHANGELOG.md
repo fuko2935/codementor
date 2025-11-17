@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [4.0.2] - 2025-01-16
+
+### 📝 Documentation
+
+**Fixed Stale References**
+- Updated tool descriptions to reference `create_analysis_mode` instead of removed `gemini_dynamic_expert_create`
+- Fixed `customExpertPrompt` parameter description in `gemini_codebase_analyzer`
+- Fixed tool description in `gemini_codebase_analyzer` registration
+
 ## [4.0.1] - 2025-01-16
 
 ### 🐛 Hotfix
