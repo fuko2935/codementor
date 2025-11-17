@@ -60,7 +60,9 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
   // YENİ MANTIK: `analysisMode` artık standart enum veya "custom:..." string'i olabilir.
   analysisMode: z.union([
       z.enum(standardAnalysisModes),
-      z.string().startsWith("custom:", { message: "Custom mode must start with 'custom:'" })
+      z.string().refine((val) => val.startsWith("custom:"), {
+        message: "Custom mode must start with 'custom:'"
+      })
     ])
     .default("general")
     .optional()

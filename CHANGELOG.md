@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [4.1.2] - 2025-01-17
+
+### 🐛 Bug Fixes
+
+**Custom Analysis Mode Validation**
+- Fixed regex validation error in `analysisMode` parameter
+- Changed from `startsWith()` to `refine()` for proper Zod validation
+- Custom modes now work correctly with `custom:mode-name` format
+
 ## [4.1.1] - 2025-01-17
 
 ### 🐛 Bug Fixes
