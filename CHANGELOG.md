@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [4.0.0] - 2025-01-16
+
+### 🗑️ BREAKING CHANGES - Removed
+
+**Deprecated Tools Removed**
+- Removed `create_analysis_mode` tool (superseded by direct analysis modes)
+- Removed `gemini_dynamic_expert_create` tool (functionality consolidated)
+- Removed `gemini_dynamic_expert_analyze` tool (functionality consolidated)
+- Removed `customExpertPrompt` parameter from `gemini_codebase_analyzer`
+- Cleaned up all related documentation and test files
+- Removed unused dependencies: `zod-to-json-schema`, `ts-jest`
+
+**Rationale:** These tools added unnecessary complexity. The standard `analysisMode` parameter in `gemini_codebase_analyzer` provides sufficient flexibility for different analysis types.
+
 ## [3.0.6] - 2025-01-16
 
 ### 🐛 Bug Fixes

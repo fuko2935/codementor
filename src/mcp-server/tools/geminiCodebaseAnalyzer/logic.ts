@@ -38,9 +38,8 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     .min(1, "Question cannot be empty.")
     .max(50000, "Question cannot exceed 50000 characters.")
     .describe(
-      "Your question about the codebase. Works with both traditional analysisMode parameters and customExpertPrompt workflows. " +
-      "Examples: 'What does this project do?', 'Find potential bugs', 'Explain the architecture', 'How to add a new feature?', 'Review code quality', " +
-      "or specialized questions for custom expert personas (e.g., 'As a security expert, analyze this codebase for vulnerabilities')",
+      "Your question about the codebase. " +
+      "Examples: 'What does this project do?', 'Find potential bugs', 'Explain the architecture', 'How to add a new feature?', 'Review code quality'",
     ),
   analysisMode: z
     .enum([
@@ -134,14 +133,6 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     .optional()
     .describe(
       "Optional max tokens per orchestrator group (default ~900k if not provided).",
-    ),
-  customExpertPrompt: z
-    .string()
-    .optional()
-    .describe(
-      "Custom expert persona/system prompt. If provided, this prompt is used instead of the standard analysisMode, " +
-      "enabling specialized domain-specific analysis. Combine with 'gemini_dynamic_expert_create' tool for creating " +
-      "dedicated expert personas before analysis.",
     ),
 });
 
@@ -590,16 +581,9 @@ These files were skipped to prevent memory issues during analysis. To include th
       });
     }
 
-    // Create the mega prompt using custom expert prompt or mode-specific system prompt
-    let systemPrompt: string;
-    
-    // Use customExpertPrompt if provided, otherwise use analysisMode
-    if (validatedParams.customExpertPrompt && validatedParams.customExpertPrompt.trim()) {
-      systemPrompt = validatedParams.customExpertPrompt.trim();
-    } else {
-      const analysisMode = validatedParams.analysisMode || "general";
-      systemPrompt = getSystemPrompt(analysisMode);
-    }
+    // Create the mega prompt using mode-specific system prompt
+    const analysisMode = validatedParams.analysisMode || "general";
+    const systemPrompt = getSystemPrompt(analysisMode);
 
     // Build prompt with optional changes section
     let megaPrompt = `${systemPrompt}

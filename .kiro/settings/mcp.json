@@ -15,8 +15,7 @@
         "gemini_codebase_analyzer",
         "calculate_token_count",
         "project_bootstrap",
-        "mcp_setup_guide",
-        "gemini_dynamic_expert_create"
+        "mcp_setup_guide"
       ]
     }
   }

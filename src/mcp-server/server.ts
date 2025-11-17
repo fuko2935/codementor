@@ -21,11 +21,9 @@ import { ErrorHandler, logger, requestContextService } from "../utils/index.js";
 import { BaseErrorCode } from "../types-global/errors.js";
 import { registerProjectBootstrap } from "./tools/projectBootstrap/index.js";
 import { registerGeminiCodebaseAnalyzer } from "./tools/geminiCodebaseAnalyzer/index.js";
-import { registerDynamicExpertCreate } from "./tools/dynamicExpertCreate/index.js";
 import { registerCalculateTokenCount } from "./tools/calculateTokenCount/index.js";
 import { registerProjectOrchestratorCreate } from "./tools/projectOrchestratorCreate/index.js";
 import { registerProjectOrchestratorAnalyze } from "./tools/projectOrchestratorAnalyze/index.js";
-import { registerCreateAnalysisMode } from "./tools/createAnalysisMode/index.js";
 import { startHttpTransport } from "./transports/httpTransport.js";
 import { connectStdioTransport } from "./transports/stdioTransport.js";
 import { warmupTreeSitter } from "./utils/codeParser.js";
@@ -96,11 +94,9 @@ async function createMcpServerInstance(): Promise<McpServer> {
         // Register project bootstrap first - required for other tools
         await registerProjectBootstrap(server);
         await registerGeminiCodebaseAnalyzer(server);
-        await registerDynamicExpertCreate(server);
         await registerCalculateTokenCount(server);
         await registerProjectOrchestratorCreate(server);
         await registerProjectOrchestratorAnalyze(server);
-        await registerCreateAnalysisMode(server);
 
         logger.info("Resources and tools registered successfully", context);
       });

@@ -156,12 +156,6 @@ AI asistanları bu sıralamayı takip etmelidir.
   - Adım 1: `project_orchestrator_create`
   - Adım 2: `project_orchestrator_analyze` (Adım 1'den gelen `fileGroupsData` ile)
 
-### 4.5. `gemini_dynamic_expert_create` & `gemini_dynamic_expert_analyze`
-
-- Amaç:
-  - Proje bağlamında özel uzman persona oluşturmak ve bu uzmanla detaylı analiz yapmak.
-- Ne zaman:
-  - Belirli teknoloji/alan odaklı derin analiz gerektiğinde.
 
 ---
 
@@ -174,13 +168,13 @@ flowchart TD
   TOKENS -->|Within limits| ANALYZER[Use gemini_codebase_analyzer]
   TOKENS -->|Too large| ORCH_CREATE[Use project_orchestrator_create]
   ORCH_CREATE --> ORCH_ANALYZE[Use project_orchestrator_analyze]
-  ANALYZER --> OPTIONAL_EXPERT[Optionally: dynamic_expert_* tools]
-  ORCH_ANALYZE --> OPTIONAL_EXPERT
+  
+  
 ```
 
 Temel ilkeler:
 
 - `project_bootstrap` ÇALIŞMADAN:
-  - Kritik analiz araçları (`gemini_codebase_analyzer`, `project_orchestrator_*`, `dynamic_expert_*`) çalışmamalı;
+  - Kritik analiz araçları (`gemini_codebase_analyzer`, `project_orchestrator_*` çalışmamalı;
   - Bunun yerine kullanıcıya önce bootstrap çağrısı önerilmelidir.
 - Bu rehber ve içindeki kurallar, AI için tek kanonik referanstır.

@@ -69,6 +69,3 @@ docs/**
 coverage/**
 .nyc_output/**
 *.lcov
-
-
-CHANGELOG.md

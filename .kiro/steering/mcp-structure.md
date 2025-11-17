@@ -49,8 +49,6 @@ mcp-server/
 │   ├── geminiCodebaseAnalyzer/ # Main codebase analysis tool
 │   ├── projectOrchestratorCreate/  # Large project grouping (step 1)
 │   ├── projectOrchestratorAnalyze/ # Large project analysis (step 2)
-│   ├── dynamicExpertCreate/    # Custom expert persona generation
-│   ├── dynamicExpertAnalyze/   # Expert-guided analysis
 │   ├── calculateTokenCount/    # Token counting utility
 │   ├── mcpSetupGuide/          # MCP setup documentation
 │   └── projectBootstrap/       # Project initialization

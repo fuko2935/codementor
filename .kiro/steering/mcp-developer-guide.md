@@ -174,8 +174,6 @@ mcp-server/
 │   ├── geminiCodebaseAnalyzer/ # Main codebase analysis tool
 │   ├── projectOrchestratorCreate/  # Large project grouping (step 1)
 │   ├── projectOrchestratorAnalyze/ # Large project analysis (step 2)
-│   ├── dynamicExpertCreate/    # Custom expert persona generation
-│   ├── dynamicExpertAnalyze/   # Expert-guided analysis
 │   ├── calculateTokenCount/    # Token counting utility
 │   ├── mcpSetupGuide/          # MCP setup documentation
 │   └── projectBootstrap/       # Project initialization
@@ -2689,8 +2687,6 @@ Before starting development, understand which tools are active and which are ref
 | `gemini_codebase_analyzer` | ✅ Active | Main codebase analysis tool | `src/mcp-server/tools/geminiCodebaseAnalyzer/` |
 | `project_orchestrator_create` | ✅ Active | Large project grouping (step 1) | `src/mcp-server/tools/projectOrchestratorCreate/` |
 | `project_orchestrator_analyze` | ✅ Active | Large project analysis (step 2) | `src/mcp-server/tools/projectOrchestratorAnalyze/` |
-| `gemini_dynamic_expert_create` | ✅ Active | Custom expert persona generation | `src/mcp-server/tools/dynamicExpertCreate/` |
-| `gemini_dynamic_expert_analyze` | ✅ Active | Expert-guided analysis | `src/mcp-server/tools/dynamicExpertAnalyze/` |
 | `calculate_token_count` | ✅ Active | Token counting utility | `src/mcp-server/tools/calculateTokenCount/` |
 | `project_bootstrap` | ✅ Active | Project initialization with MCP guide | `src/mcp-server/tools/projectBootstrap/` |
 | `mcp_setup_guide` | ⚠️ Superseded | Legacy setup guide (use `project_bootstrap`) | `src/mcp-server/tools/mcpSetupGuide/` |

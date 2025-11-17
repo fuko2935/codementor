@@ -4,7 +4,7 @@
  *
  * Note:
  * - Built-in auth/scope enforcement has been removed.
- * - These tests verify registration, handler invocation, and customExpertPrompt functionality.
+ * - These tests verify registration and handler invocation.
  * - LLM API calls are mocked to avoid real API requests.
  */
 
@@ -62,87 +62,7 @@ describe("gemini_codebase_analyzer registration (no built-in auth)", () => {
   });
 });
 
-// Integration tests - require real LLM API calls
-// Skip in CI/CD or when SKIP_INTEGRATION_TESTS=true
-describe.skip("geminiCodebaseAnalyzerLogic with customExpertPrompt (integration tests)", () => {
-  let testDir: string;
-  let context: ReturnType<typeof requestContextService.createRequestContext>;
-
-  beforeEach(async () => {
-    await fs.mkdir(TEST_ROOT, { recursive: true });
-    testDir = await fs.mkdtemp(path.join(TEST_ROOT, "analyzer-"));
-    await seedMcpGuide(testDir);
-    
-    // Create a simple test file
-    await fs.writeFile(
-      path.join(testDir, "test.ts"),
-      "export const hello = 'world';",
-      "utf-8"
-    );
-    
-    context = requestContextService.createRequestContext({
-      operation: "geminiCodebaseAnalyzerTest",
-    });
-  });
-
-  afterEach(async () => {
-    await fs.rm(testDir, { recursive: true, force: true });
-  });
-
-  it("uses customExpertPrompt when provided", async () => {
-    const customPrompt = "You are a security expert. Analyze this codebase for vulnerabilities.";
-    
-    const params: GeminiCodebaseAnalyzerInput = {
-      projectPath: testDir,
-      question: "Find security issues",
-      customExpertPrompt: customPrompt,
-      ignoreMcpignore: false,
-      temporaryIgnore: ["AGENTS.md"],
-    };
-
-    const result = await geminiCodebaseAnalyzerLogic(params, context);
-    
-    expect(result).toBeDefined();
-    expect(result.analysis).toBeDefined();
-    expect(typeof result.analysis).toBe("string");
-    expect(result.filesProcessed).toBeGreaterThan(0);
-  }, 30000);
-
-  it("uses analysisMode when customExpertPrompt is not provided", async () => {
-    const params: GeminiCodebaseAnalyzerInput = {
-      projectPath: testDir,
-      question: "What does this code do?",
-      analysisMode: "general",
-      ignoreMcpignore: false,
-      temporaryIgnore: ["AGENTS.md"],
-    };
-
-    const result = await geminiCodebaseAnalyzerLogic(params, context);
-    
-    expect(result).toBeDefined();
-    expect(result.analysis).toBeDefined();
-    expect(typeof result.analysis).toBe("string");
-    expect(result.filesProcessed).toBeGreaterThan(0);
-  }, 30000);
-
-  it("prefers customExpertPrompt over analysisMode when both provided", async () => {
-    const customPrompt = "You are a performance expert.";
-    
-    const params: GeminiCodebaseAnalyzerInput = {
-      projectPath: testDir,
-      question: "Analyze performance",
-      analysisMode: "general",
-      customExpertPrompt: customPrompt,
-      ignoreMcpignore: false,
-      temporaryIgnore: ["AGENTS.md"],
-    };
-
-    const result = await geminiCodebaseAnalyzerLogic(params, context);
-    
-    expect(result).toBeDefined();
-    expect(result.analysis).toBeDefined();
-  }, 30000);
-});
+// Integration tests removed - customExpertPrompt feature has been deprecated
 
 // Integration test - requires real LLM API calls
 describe.skip("geminiCodebaseAnalyzerLogic autoOrchestrate behavior (integration test)", () => {
