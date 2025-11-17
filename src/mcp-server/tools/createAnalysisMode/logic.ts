@@ -3,7 +3,8 @@
  * @module src/mcp-server/tools/createAnalysisMode/logic
  */
 import { z } from "zod";
-import fs from "fs";
+import { promises as fs } from "fs";
+import path from "path";
 import { logger, type RequestContext } from "../../../utils/index.js";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
@@ -58,7 +59,16 @@ export const CreateAnalysisModeInputSchema = z.object({
   
   temporaryIgnore: z.array(z.string())
     .optional()
-    .describe("Additional ignore patterns for this run only.")
+    .describe("Additional ignore patterns for this run only."),
+
+  // YENİ ALAN: saveAs
+  saveAs: z.string()
+    .optional()
+    .describe("If provided, saves the generated prompt to '.mcp/analysis_modes/<saveAs>.md' for later use with 'gemini_codebase_analyzer'. Use a short, descriptive, file-safe name (e.g., 'my_security_reviewer').")
+    .refine(
+      (name) => !name || /^[a-zA-Z0-9_-]+$/.test(name),
+      { message: "saveAs must only contain alphanumeric characters, underscores, and hyphens." }
+    )
 });
 
 // ============================================================================
@@ -98,6 +108,11 @@ export interface CreateAnalysisModeResponse {
    * Preserved for reference and traceability
    */
   sourceHint: string;
+
+  /**
+   * YENİ ALAN: Path where the mode was saved, if `saveAs` was provided.
+   */
+  savedPath?: string;
 }
 
 // ============================================================================
@@ -544,12 +559,35 @@ export async function createAnalysisModeLogic(
         );
     }
     
+    // YENİ MANTIK: `saveAs` parametresi varsa dosyayı kaydet
+    if (params.saveAs) {
+        // Güvenlik için proje yolunu doğrula, yoksa BASE_DIR kullan
+        const projectDir = params.projectPath 
+            ? await validateSecurePath(params.projectPath, BASE_DIR, context)
+            : BASE_DIR;
+
+        const modesDir = path.join(projectDir, '.mcp', 'analysis_modes');
+        await fs.mkdir(modesDir, { recursive: true });
+
+        // saveAs zaten Zod ile sanitize edildi, tekrar etmeye gerek yok.
+        const savePath = path.join(modesDir, `${params.saveAs}.md`);
+        
+        await fs.writeFile(savePath, response.analysisModePrompt, 'utf-8');
+        response.savedPath = path.relative(BASE_DIR, savePath); // Proje köküne göre rölatif yol
+        
+        logger.info("Custom analysis mode saved to file", {
+            ...context,
+            path: response.savedPath
+        });
+    }
+
     // Log operation completion (Requirement 7.4)
     logger.info("createAnalysisMode operation completed successfully", {
       ...context,
       modeType: response.modeType,
       promptLength: response.analysisModePrompt.length,
-      sourceHintLength: response.sourceHint.length
+      sourceHintLength: response.sourceHint.length,
+      savedPath: response.savedPath
     });
     
     return response;

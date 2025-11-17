@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+## [4.1.1] - 2025-01-17
+
+### 🐛 Bug Fixes
+
+**Test Suite Fixes**
+- Fixed custom analysis modes test suite to use correct test framework (Jest instead of Vitest)
+- Fixed RequestContext mock to include required `timestamp` field
+- Fixed type annotations in test parameters
+
+## [4.1.0] - 2025-01-17
+
+### ✨ New Features
+
+**Custom Analysis Modes**
+- Added `saveAs` parameter to `create_analysis_mode` tool for saving custom modes
+- Custom modes are saved to `.mcp/analysis_modes/<name>.md`
+- `gemini_codebase_analyzer` now supports `custom:mode-name` format in `analysisMode` parameter
+- Custom modes can be reused across multiple analyses
+- Custom modes are version-controllable and shareable with teams
+
+**Enhanced Integration**
+- `analysisMode` parameter now accepts both standard modes and custom modes
+- Automatic loading of custom modes from file system
+- Security: File names are sanitized to prevent path traversal
+- Orchestrator fallback includes warnings for unsupported custom modes
+
+**Documentation**
+- Added comprehensive `CUSTOM_ANALYSIS_MODES.md` guide
+- Updated README.md with custom modes usage examples
+- Added example custom mode file (`.mcp/analysis_modes/test-security-expert.md`)
+
+### 🔄 Changes
+
+**Deprecations**
+- `customExpertPrompt` parameter marked as deprecated (still functional for backward compatibility)
+- Users encouraged to use custom modes instead for better organization and reusability
+
+### 🧪 Testing
+
+- Added unit tests for custom analysis modes
+- Added validation tests for mode name sanitization
+
 ## [4.0.2] - 2025-01-16
 
 ### 📝 Documentation

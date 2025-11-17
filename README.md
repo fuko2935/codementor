@@ -240,27 +240,52 @@ The `analysisMode` parameter supports the following modes:
 
 ---
 
-## Custom Analysis Modes with create_analysis_mode
+## Custom Analysis Modes
 
-The `create_analysis_mode` tool enables you to create custom expert system prompts for specialized code analysis. It supports three modes: manual definition, AI-assisted generation, and project-specific AI generation.
+CodeMentor now supports **custom analysis modes** that allow you to create, save, and reuse specialized expert prompts for code analysis.
 
-### Quick Example
+### Creating a Custom Mode
+
+Use `create_analysis_mode` with the `saveAs` parameter to save your custom mode:
 
 ```json
 {
   "tool_name": "create_analysis_mode",
   "params": {
-    "expertiseHint": "Create a security-focused code reviewer",
+    "expertiseHint": "Create a React performance optimization expert",
     "withAi": true,
-    "projectPath": ".",
-    "returnFormat": "prompt_only"
+    "saveAs": "react-perf-expert"
   }
 }
 ```
 
-The generated prompt can then be used with `gemini_codebase_analyzer`'s `customExpertPrompt` parameter for specialized analysis.
+This creates `.mcp/analysis_modes/react-perf-expert.md` in your project.
 
-**📖 For detailed documentation, examples, and best practices, see [docs/tools/create_analysis_mode.md](docs/tools/create_analysis_mode.md)**
+### Using a Custom Mode
+
+Reference your saved mode in `gemini_codebase_analyzer` with the `custom:` prefix:
+
+```json
+{
+  "tool_name": "gemini_codebase_analyzer",
+  "params": {
+    "projectPath": ".",
+    "analysisMode": "custom:react-perf-expert",
+    "question": "Analyze the ProductDetail component for performance issues"
+  }
+}
+```
+
+### Benefits
+
+- ✅ **Reusable**: Create once, use many times
+- ✅ **Shareable**: Commit to version control for team use
+- ✅ **Flexible**: Manual, AI-assisted, or project-specific modes
+- ✅ **Organized**: Stored in `.mcp/analysis_modes/` directory
+
+**📖 For complete documentation, see [CUSTOM_ANALYSIS_MODES.md](CUSTOM_ANALYSIS_MODES.md)**
+
+**📖 For create_analysis_mode tool details, see [docs/tools/create_analysis_mode.md](docs/tools/create_analysis_mode.md)**
 
 ---
 

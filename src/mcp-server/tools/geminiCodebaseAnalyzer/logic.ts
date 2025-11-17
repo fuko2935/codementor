@@ -22,6 +22,21 @@ import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
 import { projectOrchestratorCreateLogic } from "../projectOrchestratorCreate/logic.js";
 import { projectOrchestratorAnalyzeLogic } from "../projectOrchestratorAnalyze/logic.js";
 
+// Önceden tanımlanmış analiz modları
+const standardAnalysisModes = [
+  "general",
+  "implementation",
+  "refactoring",
+  "explanation",
+  "debugging",
+  "audit",
+  "security",
+  "performance",
+  "testing",
+  "documentation",
+  "review",
+] as const;
+
 /**
  * Base Zod schema for the `gemini_codebase_analyzer` tool (before refinements).
  * This is used for MCP tool registration which requires `.shape` property.
@@ -42,24 +57,15 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
       "Examples: 'What does this project do?', 'Find potential bugs', 'Explain the architecture', 'How to add a new feature?', 'Review code quality', " +
       "or specialized questions for custom expert personas (e.g., 'As a security expert, analyze this codebase for vulnerabilities')",
     ),
-  analysisMode: z
-    .enum([
-      "general",
-      "implementation",
-      "refactoring",
-      "explanation",
-      "debugging",
-      "audit",
-      "security",
-      "performance",
-      "testing",
-      "documentation",
-      "review",
+  // YENİ MANTIK: `analysisMode` artık standart enum veya "custom:..." string'i olabilir.
+  analysisMode: z.union([
+      z.enum(standardAnalysisModes),
+      z.string().startsWith("custom:", { message: "Custom mode must start with 'custom:'" })
     ])
     .default("general")
     .optional()
     .describe(
-      "Analysis mode that guides the type of analysis to perform. Options: general, implementation, refactoring, explanation, debugging, audit, security, performance, testing, documentation, review",
+      "Analysis mode. Use a standard mode (e.g., 'security', 'review') or a custom saved mode with 'custom:your-mode-name'.",
     ),
   includeChanges: z
     .object({
@@ -139,7 +145,7 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     .string()
     .optional()
     .describe(
-      "Custom expert persona/system prompt. If provided, this prompt is used instead of the standard analysisMode, " +
+      "DEPRECATED: Use custom analysis modes instead. Custom expert persona/system prompt. If provided, this prompt is used instead of the standard analysisMode, " +
       "enabling specialized domain-specific analysis. Combine with 'create_analysis_mode' tool for creating " +
       "dedicated expert personas before analysis.",
     ),
@@ -198,6 +204,44 @@ const MAX_TOTAL_SIZE = 100 * 1024 * 1024;
  * Maximum allowed number of files to process.
  */
 const MAX_FILE_COUNT = 1000;
+
+// YENİ YARDIMCI FONKSİYON
+/**
+ * Loads a custom analysis mode prompt from the file system.
+ * @param modeName - The sanitized name of the custom mode.
+ * @param projectPath - The validated, absolute path to the project.
+ * @param context - The request context.
+ * @returns The content of the custom prompt file.
+ * @throws {McpError} if the mode file is not found.
+ */
+async function loadCustomModePrompt(
+  modeName: string,
+  projectPath: string,
+  context: RequestContext,
+): Promise<string> {
+  const modePath = path.join(projectPath, '.mcp', 'analysis_modes', `${modeName}.md`);
+  logger.debug(`Attempting to load custom analysis mode`, { ...context, path: modePath });
+
+  try {
+    const prompt = await fs.readFile(modePath, 'utf-8');
+    if (!prompt.trim()) {
+      throw new Error("Custom mode file is empty.");
+    }
+    logger.info(`Successfully loaded custom analysis mode: ${modeName}`, context);
+    return prompt;
+  } catch (error) {
+    logger.error(`Custom analysis mode '${modeName}' not found or is empty.`, {
+      ...context,
+      path: modePath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new McpError(
+      BaseErrorCode.NOT_FOUND,
+      `Custom analysis mode '${modeName}' not found. Please create it first using the 'create_analysis_mode' tool with the 'saveAs' parameter.`,
+      { modeName, expectedPath: modePath }
+    );
+  }
+}
 
 /**
  * Prepares the full context of a project by reading all files and combining them.
@@ -414,16 +458,24 @@ export async function geminiCodebaseAnalyzerLogic(
         });
 
         // Step 1: Create groups
-        // Note: Orchestrator does not yet support 'review' mode with git diff analysis.
-        // If analysisMode is 'review', we fall back to 'general' mode for orchestration.
-        // This means diff analysis will be skipped, but the project can still be analyzed.
+        // Note: Orchestrator does not yet support 'review' mode with git diff analysis or custom modes.
+        // If analysisMode is 'review' or starts with 'custom:', we fall back to 'general' mode for orchestration.
+        // This means diff analysis and custom prompts will be skipped, but the project can still be analyzed.
+        type OrchestratorMode = "general" | "implementation" | "refactoring" | "explanation" | "debugging" | "audit" | "security" | "performance" | "testing" | "documentation";
+        const orchestratorMode: OrchestratorMode = (validatedParams.analysisMode && 
+                                  validatedParams.analysisMode !== "review" && 
+                                  !validatedParams.analysisMode.startsWith('custom:') &&
+                                  standardAnalysisModes.includes(validatedParams.analysisMode as any)) 
+          ? validatedParams.analysisMode as OrchestratorMode
+          : "general";
+        
         const createRes = await projectOrchestratorCreateLogic(
           {
             projectPath: normalizedPath,
             temporaryIgnore: validatedParams.temporaryIgnore,
             ignoreMcpignore: validatedParams.ignoreMcpignore,
             question: validatedParams.question,
-            analysisMode: (validatedParams.analysisMode && validatedParams.analysisMode !== "review") ? validatedParams.analysisMode : "general",
+            analysisMode: orchestratorMode,
             maxTokensPerGroup: validatedParams.maxTokensPerGroup,
             geminiApiKey: params.geminiApiKey,
           },
@@ -447,7 +499,7 @@ export async function geminiCodebaseAnalyzerLogic(
             projectPath: normalizedPath,
             temporaryIgnore: validatedParams.temporaryIgnore,
             question: validatedParams.question,
-            analysisMode: (validatedParams.analysisMode && validatedParams.analysisMode !== "review") ? validatedParams.analysisMode : "general",
+            analysisMode: orchestratorMode,
             fileGroupsData: createRes.groupsData,
             maxTokensPerGroup: validatedParams.maxTokensPerGroup,
             geminiApiKey: params.geminiApiKey,
@@ -461,6 +513,9 @@ export async function geminiCodebaseAnalyzerLogic(
           `The analysis below is synthesized from grouped batches.\n`;
         if (validatedParams.analysisMode === "review") {
           headerNote += `Note: 'review' mode is not yet supported in orchestrator fallback; switched to 'general'.\n`;
+        }
+        if (validatedParams.analysisMode && validatedParams.analysisMode.startsWith('custom:')) {
+          headerNote += `Note: Custom analysis modes are not yet supported in orchestrator fallback; switched to 'general'.\n`;
         }
         headerNote += `\n`;
 
@@ -590,14 +645,24 @@ These files were skipped to prevent memory issues during analysis. To include th
       });
     }
 
-    // Create the mega prompt using custom expert prompt or mode-specific system prompt
+    // YENİ MANTIK: Sistem prompt'unu belirle
     let systemPrompt: string;
-    
-    // Use customExpertPrompt if provided, otherwise use analysisMode
+    const analysisMode = validatedParams.analysisMode || "general";
+
     if (validatedParams.customExpertPrompt && validatedParams.customExpertPrompt.trim()) {
+      // Geriye dönük uyumluluk için customExpertPrompt'u önceliklendir
       systemPrompt = validatedParams.customExpertPrompt.trim();
+      logger.info("Using provided 'customExpertPrompt'.", context);
+    } else if (analysisMode.startsWith('custom:')) {
+      // Özel modu yükle
+      const modeName = analysisMode.substring('custom:'.length);
+      // Güvenlik: Dosya adı olarak kullanmadan önce sanitize et
+      if (!/^[a-zA-Z0-9_-]+$/.test(modeName)) {
+        throw new McpError(BaseErrorCode.VALIDATION_ERROR, `Invalid custom mode name format: ${modeName}`);
+      }
+      systemPrompt = await loadCustomModePrompt(modeName, normalizedPath, context);
     } else {
-      const analysisMode = validatedParams.analysisMode || "general";
+      // Standart modu kullan
       systemPrompt = getSystemPrompt(analysisMode);
     }
 
