@@ -19,7 +19,7 @@ export const registerProjectOrchestratorCreate = async (
 ): Promise<void> => {
   const toolName = "project_orchestrator_create";
   const toolDescription =
-    "🎭 PROJECT ORCHESTRATOR CREATE - STEP 1: Create intelligent groups for massive projects to stay within token limits.";
+    "🎭 [DEPRECATED] PROJECT ORCHESTRATOR CREATE - Use 'gemini_codebase_analyzer' with 'autoOrchestrate=true' instead. This tool is kept for backward compatibility only.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({

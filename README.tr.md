@@ -118,10 +118,10 @@ Neden Redis?
 
 ## Araç Öne Çıkanlar
 
-- Kapsamlı proje analizi ve orkestrasyon
+- Kapsamlı proje analizi ve entegre orkestrasyon - ayrı araçlara gerek yok
 - Hedefli kod arama ve bilgiyi çıkarma yardımcıları
 - Token muhasebesi (Gemini uyumlu)
-- Büyük projeler için grup bazlı analiz
+- Büyük projeler için yerleşik gruplanmış analiz
 
 ---
 
@@ -167,7 +167,18 @@ Son N commit:
 - Makine tarafından okunabilir yapılandırılmış diff girdisi
 - Tüm kod tabanıyla birlikte bağlam içinde analiz
 - Büyük dosya koruması: `MAX_GIT_BLOB_SIZE_BYTES` üzerinde kalanlar atlanır ve raporlanır
-- Otomatik orkestrasyon: `autoOrchestrate=true` ile token sınırında gruplanmış analiz akışına geçiş
+- Otomatik orkestrasyon: `autoOrchestrate=true` ile büyük projelerde grup bazlı analiz
+
+#### Otomatik Orkestrasyon (büyük projeler)
+
+- `gemini_codebase_analyzer` aracı artık büyük projeler için yerleşik orkestrasyon yeteneklerine sahip
+- Token sınırı aşıldığında otomatik gruplandırılmış analize geçmek için `autoOrchestrate=true` ayarlayın
+- `orchestratorThreshold` (varsayılan `0.75`) `tokenCount / maxTokens` temelinde ne zaman orkestrasyon tetikleneceğini kontrol eder
+- Herhangi bir proje boyutu için orkestrasyonu zorlamak için `orchestratorThreshold: 0` ayarlayın
+- Orkestrasyon modunda `analysisMode: "review"` desteklenmez; akış `analysisMode: "general"` moduna geçer ve sonuçları grup toplu analizlerinden sentezler
+- Bu sorunsuz bir deneyim sağlar - artık ayrı `project_orchestrator_create` ve `project_orchestrator_analyze` araçlarına ihtiyaç yok (kullanım dışı)
+
+> **⚠️ Not:** Ayrı `project_orchestrator_create` ve `project_orchestrator_analyze` araçları artık kullanım dışıdır. Aynı işlevsellik için daha iyi entegrasyonla `autoOrchestrate=true` parametresiyle `gemini_codebase_analyzer` kullanın.
 
 ---
 

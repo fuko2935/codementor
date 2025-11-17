@@ -19,7 +19,7 @@ export const registerProjectOrchestratorAnalyze = async (
 ): Promise<void> => {
   const toolName = "project_orchestrator_analyze";
   const toolDescription =
-    "🎭 PROJECT ORCHESTRATOR ANALYZE - STEP 2: Analyze each group and combine results into a single report.";
+    "🎭 [DEPRECATED] PROJECT ORCHESTRATOR ANALYZE - Use 'gemini_codebase_analyzer' with 'autoOrchestrate=true' instead. This tool is kept for backward compatibility only.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({

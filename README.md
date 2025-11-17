@@ -165,7 +165,7 @@ The server exposes a comprehensive analysis workflow including:
 - **Targeted code search** utilities for locating files, functions, or patterns inside large repositories.
 - **Knowledge capture tools** for usage guides, FAQ synthesis, and report generation.
 - **Token accounting** (Gemini-compatible) to plan safe response sizes.
-- **Project orchestration helpers** that break large codebases into manageable analysis batches.
+- **Unified codebase analysis** with built-in orchestration for large projects - no separate tools needed.
 
 Each tool validates input with Zod schemas and automatically records structured logs that include the request context ID for easy tracing.
 
@@ -218,10 +218,15 @@ The `gemini_codebase_analyzer` tool now supports code review mode with git diff 
 
 #### Auto-Orchestration (large projects)
 
-- Set `autoOrchestrate=true` on `gemini_codebase_analyzer` to automatically fall back to the project orchestrator when token limits are exceeded.
-- `orchestratorThreshold` (default `0.75`) controls when to suggest/fallback based on `tokenCount / maxTokens`.
-- In fallback, `analysisMode: "review"` is not supported; the flow switches to `analysisMode: "general"` and synthesizes results from grouped batches.
-- Prefer `.mcpignore` to trim context; for very large repositories use `project_orchestrator_create` → `project_orchestrator_analyze`.
+- The `gemini_codebase_analyzer` tool now includes built-in orchestration capabilities for large projects
+- Set `autoOrchestrate=true` to automatically fall back to grouped analysis when token limits are exceeded
+- `orchestratorThreshold` (default `0.75`) controls when to trigger orchestration based on `tokenCount / maxTokens`
+- Set `orchestratorThreshold: 0` to force orchestration for any project size
+- In orchestration mode, `analysisMode: "review"` is not supported; the flow switches to `analysisMode: "general"` and synthesizes results from grouped batches
+- This provides a seamless experience - you no longer need separate `project_orchestrator_create` and `project_orchestrator_analyze` tools (deprecated)
+
+> **⚠️ Note:** The separate `project_orchestrator_create` and `project_orchestrator_analyze` tools are now deprecated. Use `gemini_codebase_analyzer` with `autoOrchestrate=true` for the same functionality with better integration.
+
 ### Analysis Modes
 
 The `analysisMode` parameter supports the following modes:

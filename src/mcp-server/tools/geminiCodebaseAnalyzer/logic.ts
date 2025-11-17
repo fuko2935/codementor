@@ -19,8 +19,7 @@ import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
 import { extractGitDiff, type ExtractGitDiffParams } from "../../utils/gitDiffAnalyzer.js";
 import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
-import { projectOrchestratorCreateLogic } from "../projectOrchestratorCreate/logic.js";
-import { projectOrchestratorAnalyzeLogic } from "../projectOrchestratorAnalyze/logic.js";
+import { orchestrateFullAnalysis } from "../../services/orchestrationService.js";
 
 // Önceden tanımlanmış analiz modları
 const standardAnalysisModes = [
@@ -459,55 +458,43 @@ export async function geminiCodebaseAnalyzerLogic(
           maxTokens,
         });
 
-        // Step 1: Create groups
         // Note: Orchestrator does not yet support 'review' mode with git diff analysis or custom modes.
         // If analysisMode is 'review' or starts with 'custom:', we fall back to 'general' mode for orchestration.
         // This means diff analysis and custom prompts will be skipped, but the project can still be analyzed.
         type OrchestratorMode = "general" | "implementation" | "refactoring" | "explanation" | "debugging" | "audit" | "security" | "performance" | "testing" | "documentation";
-        const orchestratorMode: OrchestratorMode = (validatedParams.analysisMode && 
-                                  validatedParams.analysisMode !== "review" && 
-                                  !validatedParams.analysisMode.startsWith('custom:') &&
-                                  standardAnalysisModes.includes(validatedParams.analysisMode as any)) 
-          ? validatedParams.analysisMode as OrchestratorMode
-          : "general";
         
-        const createRes = await projectOrchestratorCreateLogic(
-          {
-            projectPath: normalizedPath,
-            temporaryIgnore: validatedParams.temporaryIgnore,
-            ignoreMcpignore: validatedParams.ignoreMcpignore,
-            question: validatedParams.question,
-            analysisMode: orchestratorMode,
-            maxTokensPerGroup: validatedParams.maxTokensPerGroup,
-            geminiApiKey: params.geminiApiKey,
-          },
-          context,
+        /**
+         * Resolves the appropriate orchestrator mode based on the requested analysis mode.
+         * Falls back to 'general' if the mode is not supported by the orchestrator.
+         */
+        const resolveOrchestratorMode = (mode?: string): OrchestratorMode => {
+          if (
+            mode &&
+            mode !== "review" &&
+            !mode.startsWith("custom:") &&
+            standardAnalysisModes.includes(mode as any)
+          ) {
+            return mode as OrchestratorMode;
+          }
+          return "general";
+        };
+        
+        const orchestratorMode = resolveOrchestratorMode(validatedParams.analysisMode);
+        
+        // Use orchestration service for full workflow
+        const analyzeRes = await orchestrateFullAnalysis(
+          normalizedPath,
+          validatedParams.question,
+          orchestratorMode,
+          validatedParams.maxTokensPerGroup ?? 900000,
+          validatedParams.temporaryIgnore,
+          validatedParams.ignoreMcpignore,
+          params.geminiApiKey,
+          context
         );
 
-        // Derive file count from groups blob if available
-        let filesProcessed = 0;
-        try {
-          const blob = JSON.parse(createRes.groupsData) as {
-            totalFiles?: number;
-          };
-          filesProcessed = blob.totalFiles ?? 0;
-        } catch {
-          // ignore parse issues; keep defaults
-        }
-
-        // Step 2: Analyze groups
-        const analyzeRes = await projectOrchestratorAnalyzeLogic(
-          {
-            projectPath: normalizedPath,
-            temporaryIgnore: validatedParams.temporaryIgnore,
-            question: validatedParams.question,
-            analysisMode: orchestratorMode,
-            fileGroupsData: createRes.groupsData,
-            maxTokensPerGroup: validatedParams.maxTokensPerGroup,
-            geminiApiKey: params.geminiApiKey,
-          },
-          context,
-        );
+        // File count is now included in the response
+        const filesProcessed = analyzeRes.filesProcessed ?? 0;
 
         let headerNote =
           `⚠ Orchestrator fallback used automatically.\n` +

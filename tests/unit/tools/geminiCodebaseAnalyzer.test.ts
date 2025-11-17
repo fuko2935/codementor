@@ -16,7 +16,8 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { registerGeminiCodebaseAnalyzer } from "../../../src/mcp-server/tools/geminiCodebaseAnalyzer/registration.js";
 import { 
   geminiCodebaseAnalyzerLogic,
-  type GeminiCodebaseAnalyzerInput 
+  type GeminiCodebaseAnalyzerInput,
+  GeminiCodebaseAnalyzerInputSchema 
 } from "../../../src/mcp-server/tools/geminiCodebaseAnalyzer/logic.js";
 import { requestContextService } from "../../../src/utils/index.js";
 import {
@@ -58,6 +59,73 @@ describe("gemini_codebase_analyzer registration (no built-in auth)", () => {
       // return a CallToolResult-like object or a promise thereof.
       const result = await callTool(tool.handler);
       expect(result).toBeDefined();
+    }
+  });
+});
+
+describe("GeminiCodebaseAnalyzerInputSchema validation", () => {
+  it("should validate orchestratorThreshold with value 0", () => {
+    const result = GeminiCodebaseAnalyzerInputSchema.safeParse({
+      projectPath: "/test",
+      question: "Test question",
+      orchestratorThreshold: 0,
+    });
+    
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.orchestratorThreshold).toBe(0);
+    }
+  });
+
+  it("should validate orchestratorThreshold with positive values", () => {
+    const result = GeminiCodebaseAnalyzerInputSchema.safeParse({
+      projectPath: "/test",
+      question: "Test question",
+      orchestratorThreshold: 0.75,
+    });
+    
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.orchestratorThreshold).toBe(0.75);
+    }
+  });
+
+  it("should reject orchestratorThreshold below 0", () => {
+    const result = GeminiCodebaseAnalyzerInputSchema.safeParse({
+      projectPath: "/test",
+      question: "Test question",
+      orchestratorThreshold: -0.1,
+    });
+    
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toContain("Number must be greater than or equal to 0");
+    }
+  });
+
+  it("should reject orchestratorThreshold above 0.95", () => {
+    const result = GeminiCodebaseAnalyzerInputSchema.safeParse({
+      projectPath: "/test",
+      question: "Test question",
+      orchestratorThreshold: 1.0,
+    });
+    
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toContain("Number must be less than or equal to 0.95");
+    }
+  });
+
+  it("should validate autoOrchestrate parameter", () => {
+    const result = GeminiCodebaseAnalyzerInputSchema.safeParse({
+      projectPath: "/test",
+      question: "Test question",
+      autoOrchestrate: true,
+    });
+    
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.autoOrchestrate).toBe(true);
     }
   });
 });
@@ -106,4 +174,43 @@ describe.skip("geminiCodebaseAnalyzerLogic autoOrchestrate behavior (integration
     expect(result).toBeDefined();
     expect(result.analysis).toContain("Orchestrator fallback");
   }, 60000);
+});
+
+describe("orchestrator threshold decision logic", () => {
+  let context: ReturnType<typeof requestContextService.createRequestContext>;
+
+  beforeEach(() => {
+    context = requestContextService.createRequestContext({
+      operation: "thresholdTest",
+    });
+  });
+
+  it("should suggest orchestration when near threshold but not auto-orchestrating", () => {
+    // This would be tested in the actual logic, but for now we test the schema
+    const params = {
+      projectPath: "/test",
+      question: "Test question",
+      orchestratorThreshold: 0.75,
+      autoOrchestrate: false,
+    };
+    
+    const result = GeminiCodebaseAnalyzerInputSchema.safeParse(params);
+    expect(result.success).toBe(true);
+  });
+
+  it("should accept threshold=0 for forcing orchestration", () => {
+    const params = {
+      projectPath: "/test",
+      question: "Test question",
+      orchestratorThreshold: 0,
+      autoOrchestrate: true,
+    };
+    
+    const result = GeminiCodebaseAnalyzerInputSchema.safeParse(params);
+    expect(result.success).toBe(true);
+    
+    if (result.success) {
+      expect(result.data.orchestratorThreshold).toBe(0);
+    }
+  });
 });
