@@ -39,10 +39,8 @@ export const registerGeminiCodebaseAnalyzer = async (
     "The customExpertPrompt enables creating specialized expert personas that can provide deeper, domain-specific analysis " +
     "by using the 'create_analysis_mode' tool first, then analyzing with this custom prompt. " +
     "For code review with git diffs, use analysisMode='review' with includeChanges parameter. " +
-    "WARNING: May cause performance issues or timeouts on very large projects. " +
-    "For large codebases, please use the 'project_orchestrator_create' and 'project_orchestrator_analyze' tools for a more stable, multi-step analysis. " +
-    "Optionally set 'autoOrchestrate=true' to automatically switch to the project orchestrator when project size approaches the token limit; " +
-    "use 'orchestratorThreshold' (default 0.75) and 'maxTokensPerGroup' to tune behavior.";
+    "For large projects, use the '.mcpignore' file or 'temporaryIgnore' parameter to exclude irrelevant files and directories. " +
+    "You can also analyze subdirectories individually by adjusting the 'projectPath' parameter.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({

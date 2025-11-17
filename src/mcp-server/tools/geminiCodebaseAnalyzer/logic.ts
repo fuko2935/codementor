@@ -122,7 +122,7 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     .optional()
     .default(false)
     .describe(
-      "If true, automatically use project orchestrator when project size approaches or exceeds token limits.",
+      "DEPRECATED: This parameter is no longer functional. The orchestrator has been removed. Use .mcpignore to manage large projects.",
     ),
   orchestratorThreshold: z
     .number()
@@ -131,7 +131,7 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     .optional()
     .default(0.75)
     .describe(
-      "When tokenCount / maxTokens >= threshold, orchestrator is suggested (or used if autoOrchestrate=true). Default: 0.75",
+      "DEPRECATED: This parameter is no longer functional. The orchestrator has been removed.",
     ),
   maxTokensPerGroup: z
     .number()
@@ -139,7 +139,7 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     .max(950000)
     .optional()
     .describe(
-      "Optional max tokens per orchestrator group (default ~900k if not provided).",
+      "DEPRECATED: This parameter is no longer functional. The orchestrator has been removed.",
     ),
   customExpertPrompt: z
     .string()
@@ -292,8 +292,8 @@ async function prepareFullContext(
       throw new McpError(
         BaseErrorCode.VALIDATION_ERROR,
         `Project too large: ${files.length} files found (maximum ${MAX_FILE_COUNT} allowed). ` +
-          `For large projects, please use the \`project_orchestrator_create\` and \`project_orchestrator_analyze\` tools instead, ` +
-          `which handle large codebases more efficiently by splitting them into manageable groups.`,
+          `To analyze large projects, use .mcpignore to exclude unnecessary files (node_modules, dist, tests, etc.) ` +
+          `or use the temporaryIgnore parameter to exclude files for this specific analysis.`,
         {
           fileCount: files.length,
           maxFileCount: MAX_FILE_COUNT,
@@ -315,7 +315,7 @@ async function prepareFullContext(
           throw new McpError(
             BaseErrorCode.VALIDATION_ERROR,
             `Project too large: processed ${processedFiles} files (maximum ${MAX_FILE_COUNT} allowed). ` +
-              `For large projects, please use the \`project_orchestrator_create\` and \`project_orchestrator_analyze\` tools instead.`,
+              `Use .mcpignore or temporaryIgnore to exclude unnecessary files.`,
             {
               processedFiles,
               maxFileCount: MAX_FILE_COUNT,
@@ -333,8 +333,7 @@ async function prepareFullContext(
             BaseErrorCode.VALIDATION_ERROR,
             `Project too large: total size exceeds ${MAX_TOTAL_SIZE / (1024 * 1024)}MB limit ` +
               `(current: ${Math.round(totalSize / (1024 * 1024))}MB). ` +
-              `For large projects, please use the \`project_orchestrator_create\` and \`project_orchestrator_analyze\` tools instead, ` +
-              `which handle large codebases more efficiently by splitting them into manageable groups.`,
+              `Use .mcpignore to exclude large files/directories or analyze a subdirectory instead of the entire project.`,
             {
               currentSize: totalSize,
               maxSize: MAX_TOTAL_SIZE,
@@ -478,13 +477,14 @@ export async function geminiCodebaseAnalyzerLogic(
         );
       }
 
-      // Not auto orchestrating: throw with helpful guidance
-      const guidance =
-        `\n\nÖneri: Büyük projeler için 'project_orchestrator_create' ve 'project_orchestrator_analyze' araçlarını kullanın ` +
-        `veya bu aracı 'autoOrchestrate=true' ile çağırın. Eşik ayarı için 'orchestratorThreshold' (varsayılan 0.75).`;
+      // Project exceeds token limits - provide helpful guidance
       throw new McpError(
         BaseErrorCode.VALIDATION_ERROR,
-        (sizeValidation.error || "Project size exceeds token limit") + guidance,
+        `Project size exceeds token limits (${(sizeValidation.tokenCount ?? 0).toLocaleString()} tokens, limit ${maxTokens.toLocaleString()}).\n\n` +
+        `To analyze large projects:\n` +
+        `1. Add patterns to .mcpignore to exclude unnecessary files (node_modules/, dist/, *.test.ts, docs/)\n` +
+        `2. Use temporaryIgnore parameter to exclude files for this analysis\n` +
+        `3. Analyze a subdirectory instead of the entire project (adjust projectPath)`,
         {
           tokenCount: sizeValidation.tokenCount,
           maxTokens,
