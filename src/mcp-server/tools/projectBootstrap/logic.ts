@@ -389,7 +389,7 @@ async function updateConfigCache(
 
   try {
     // Delegate to centralized cache in mcpConfigValidator
-    refreshMcpConfigCache(normalizedPath, entry);
+    await refreshMcpConfigCache(normalizedPath, entry);
   } catch (error) {
     logger.warning("Failed to refresh global MCP config validator cache", {
       tool: "project_bootstrap",
@@ -522,12 +522,14 @@ build/
 
   actions.push(targetAction);
 
-  await updateConfigCache(normalizedPath, validatedFilePath, validated.client, context).catch((err) => {
+  try {
+    await updateConfigCache(normalizedPath, validatedFilePath, validated.client, context);
+  } catch (err) {
     logger.warning("[projectBootstrapLogic] Cache update failed (warn+continue)", {
       ...context,
       err: err instanceof Error ? err.message : String(err),
     });
-  });
+  }
 
   const summary = "Idempotent bootstrap complete. Verified .mcpignore and updated client configuration file with the latest MCP guide.";
   const message = `Success: ${actions.map((a) => `${a.type} ${a.file}${a.details ? ` (${a.details})` : ""}`).join(", ")}`;

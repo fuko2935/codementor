@@ -58,6 +58,9 @@ docs/**
 *.temp
 *.cache
 
+# MCP internal cache
+.mcp/cache/**
+
 # IDE and editor files
 .vscode/**
 .idea/**
