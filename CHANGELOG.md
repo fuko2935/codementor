@@ -1,8 +1,38 @@
 # Changelog
 
-## [Unreleased]
+## [5.0.1] - 2025-01-18
 
-### 🚀 Major Enhancement: Integrated Project Orchestration
+### 🔧 Bug Fixes
+- **Fixed**: Removed all references to deleted orchestrator tools from error messages
+- **Fixed**: Updated tool description to remove orchestrator references
+- **Fixed**: Marked `autoOrchestrate`, `orchestratorThreshold`, `maxTokensPerGroup` as DEPRECATED in schema
+- **Improved**: All error messages now provide clear guidance using `.mcpignore` and `temporaryIgnore`
+
+## [5.0.0] - 2025-01-18
+
+### 💥 BREAKING CHANGES
+- **Removed**: `project_orchestrator_create` tool completely removed
+- **Removed**: `project_orchestrator_analyze` tool completely removed
+- **Removed**: `orchestrationService.ts` removed
+- **Removed**: `autoOrchestrate` feature removed from `gemini_codebase_analyzer`
+
+### 📝 Migration Guide
+For large projects, use these alternatives:
+1. **Use `.mcpignore`**: Add patterns to exclude unnecessary files (node_modules/, dist/, *.test.ts)
+2. **Use `temporaryIgnore`**: Exclude files for specific analysis
+3. **Analyze subdirectories**: Focus on specific parts of your project
+
+### 🎯 Rationale
+- Simplified codebase by removing complex orchestration logic
+- Reduced maintenance burden
+- Clearer user experience with explicit file exclusion
+- Removed 1,675 lines of code
+
+## [4.2.0] - 2025-01-18 (Deprecated)
+
+### ⚠️ This version was superseded by v5.0.0
+
+### 🚀 Major Enhancement: Integrated Project Orchestration (REMOVED IN v5.0.0)
 
 **Unified Analysis Workflow**
 - **✨ Integrated Orchestration**: `gemini_codebase_analyzer` now includes built-in orchestration capabilities for large projects
