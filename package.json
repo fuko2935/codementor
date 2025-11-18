@@ -87,7 +87,7 @@
     "tree-sitter-php": "^0.20.3",
     "tree-sitter-python": "^0.20.4",
     "tree-sitter-ruby": "^0.20.3",
-    "tree-sitter-rust": "^0.20.4"
+    "tree-sitter-rust": "^0.24.0"
   },
   "keywords": [
     "typescript",
