@@ -54,8 +54,7 @@ export async function prepareFullContext(
     throw new McpError(
       BaseErrorCode.VALIDATION_ERROR,
       `Project too large: ${files.length} files found (maximum ${MAX_FILE_COUNT} allowed). ` +
-        `For large projects, please use the \`project_orchestrator_create\` and \`project_orchestrator_analyze\` tools instead, ` +
-        `which handle large codebases more efficiently by splitting them into manageable groups.`,
+        `Use .mcpignore to exclude unnecessary files (node_modules/, dist/, *.test.ts) or analyze a subdirectory instead.`,
       {
         fileCount: files.length,
         maxFileCount: MAX_FILE_COUNT,
@@ -76,7 +75,7 @@ export async function prepareFullContext(
         throw new McpError(
           BaseErrorCode.VALIDATION_ERROR,
           `Project too large: processed ${processedFiles} files (maximum ${MAX_FILE_COUNT} allowed). ` +
-            `For large projects, please use the \`project_orchestrator_create\` and \`project_orchestrator_analyze\` tools instead.`,
+            `Use .mcpignore or temporaryIgnore to exclude unnecessary files.`,
           {
             processedFiles,
             maxFileCount: MAX_FILE_COUNT,
@@ -94,8 +93,7 @@ export async function prepareFullContext(
           BaseErrorCode.VALIDATION_ERROR,
           `Project too large: total size exceeds ${MAX_TOTAL_SIZE / (1024 * 1024)}MB limit ` +
             `(current: ${Math.round(totalSize / (1024 * 1024))}MB). ` +
-            `For large projects, please use the \`project_orchestrator_create\` and \`project_orchestrator_analyze\` tools instead, ` +
-            `which handle large codebases more efficiently by splitting them into manageable groups.`,
+            `Use .mcpignore to exclude large files/directories or analyze a subdirectory instead.`,
           {
             currentSize: totalSize,
             maxSize: MAX_TOTAL_SIZE,

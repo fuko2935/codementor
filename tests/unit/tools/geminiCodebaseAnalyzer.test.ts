@@ -47,7 +47,7 @@ async function seedMcpGuide(directory: string): Promise<void> {
 describe("gemini_codebase_analyzer registration (no built-in auth)", () => {
   it("registers the tool with a callable handler", async () => {
     const testServer = new TestMcpServer();
-    await registerGeminiCodebaseAnalyzer(testServer.server);
+    await registerGeminiCodebaseAnalyzer(testServer as any);
 
     const tools = testServer.getTools();
     const tool = tools.get("gemini_codebase_analyzer");

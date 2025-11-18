@@ -126,7 +126,7 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     ),
   orchestratorThreshold: z
     .number()
-    .min(0.1)
+    .min(0)
     .max(0.95)
     .optional()
     .default(0.75)
@@ -449,34 +449,6 @@ export async function geminiCodebaseAnalyzerLogic(
       typeof tokenCount === "number" ? tokenCount / maxTokens >= threshold : false;
 
     if (!sizeValidation.valid) {
-      if (validatedParams.autoOrchestrate) {
-        logger.warning("Auto-orchestration requested but orchestrator has been removed", {
-          ...context,
-          tokenCount: sizeValidation.tokenCount,
-          maxTokens,
-        });
-        
-        // Orchestrator has been removed - suggest using .mcpignore instead
-        throw new McpError(
-          BaseErrorCode.VALIDATION_ERROR,
-          `Project size exceeds token limits (${(sizeValidation.tokenCount ?? 0).toLocaleString()} tokens, limit ${maxTokens.toLocaleString()}).\n\n` +
-          `The auto-orchestration feature has been removed. Please use one of these alternatives:\n` +
-          `1. Add patterns to .mcpignore to exclude unnecessary files\n` +
-          `2. Use temporaryIgnore parameter to exclude files for this analysis\n` +
-          `3. Analyze a subdirectory instead of the entire project\n\n` +
-          `Example .mcpignore patterns:\n` +
-          `  node_modules/\n` +
-          `  dist/\n` +
-          `  *.test.ts\n` +
-          `  docs/`,
-          {
-            tokenCount: sizeValidation.tokenCount,
-            maxTokens,
-            suggestion: "Use .mcpignore or temporaryIgnore to reduce project size"
-          }
-        );
-      }
-
       // Project exceeds token limits - provide helpful guidance
       throw new McpError(
         BaseErrorCode.VALIDATION_ERROR,
@@ -645,9 +617,9 @@ ${validatedParams.question}`;
     const response = await result.response;
     const analysis = response.text();
 
-    // Prepend recommendation note if near threshold (but not auto-orchestrating)
+    // Prepend recommendation note if near threshold
     let finalAnalysis = analysis;
-    if (shouldSuggest && !validatedParams.autoOrchestrate) {
+    if (shouldSuggest) {
       const ratioPct =
         typeof tokenCount === "number"
           ? Math.round((tokenCount / maxTokens) * 100)
@@ -655,8 +627,7 @@ ${validatedParams.question}`;
       const note =
         `ℹ Recommendation: Project size is near the token limit` +
         (typeof ratioPct === "number" ? ` (~${ratioPct}%)` : "") +
-        `. Consider using project orchestrator (set autoOrchestrate=true) ` +
-        `or adjust orchestratorThreshold (default 0.75).`;
+        `. Consider using .mcpignore to exclude unnecessary files or analyze a subdirectory.`;
       finalAnalysis = `${note}\n\n${analysis}`;
     }
 

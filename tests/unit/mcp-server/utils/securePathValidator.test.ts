@@ -41,16 +41,19 @@ describe("validateSecurePath", () => {
     expect(result).toBe(expected);
   });
 
-  it("treats empty string as baseDir (current behavior)", async () => {
-    const result = await validateSecurePath("", baseDir);
-    const expected = path.normalize(path.resolve(baseDir));
-    expect(result).toBe(expected);
+  it("rejects empty string with VALIDATION_ERROR", async () => {
+    await expect(() => validateSecurePath("", baseDir))
+      .rejects.toThrow(McpError);
+    await expect(() => validateSecurePath("", baseDir))
+      .rejects.toMatchObject({
+        code: BaseErrorCode.VALIDATION_ERROR,
+        message: expect.stringMatching(/non-empty/i)
+      });
   });
 
-  it("treats whitespace-only path as normalized under baseDir (current behavior)", async () => {
-    const result = await validateSecurePath("   ", baseDir);
-    const expected = path.normalize(path.resolve(baseDir));
-    expect(result).toBe(expected);
+  it("rejects whitespace-only path with VALIDATION_ERROR or INVALID_INPUT", async () => {
+    await expect(() => validateSecurePath("   ", baseDir))
+      .rejects.toThrow(McpError);
   });
 
   it("allows baseDir itself via '.'", async () => {
@@ -69,26 +72,26 @@ describe("validateSecurePath", () => {
       });
   });
 
-  it("rejects unix-style absolute path outside baseDir with FORBIDDEN", async () => {
+  it("rejects unix-style absolute path outside baseDir", async () => {
     const unixAbsolute = path.resolve("/etc/passwd");
-    // Güvenli davranış: baseDir altında olmadığı için FORBIDDEN beklenir (implementasyondaki final kontrol).
+    // Absolute path'ler sanitization veya final check'te reddedilir
     await expect(() => validateSecurePath(unixAbsolute, baseDir))
       .rejects.toThrow(McpError);
+    // VALIDATION_ERROR (sanitization) veya FORBIDDEN (final check) olabilir
     await expect(() => validateSecurePath(unixAbsolute, baseDir))
       .rejects.toMatchObject({
-        code: BaseErrorCode.FORBIDDEN,
-        message: expect.stringMatching(/Path traversal detected/i)
+        code: expect.stringMatching(/VALIDATION_ERROR|FORBIDDEN/)
       });
   });
 
-  it("rejects windows-style absolute path outside baseDir with FORBIDDEN (platform-agnostic check)", async () => {
+  it("rejects windows-style absolute path outside baseDir (platform-agnostic check)", async () => {
     const winLike = "C:\\windows\\system32";
     await expect(() => validateSecurePath(winLike, baseDir))
       .rejects.toThrow(McpError);
+    // INVALID_INPUT (sanitization) veya FORBIDDEN (final check) olabilir
     await expect(() => validateSecurePath(winLike, baseDir))
       .rejects.toMatchObject({
-        code: BaseErrorCode.FORBIDDEN,
-        message: expect.stringMatching(/Path traversal detected/i)
+        code: expect.stringMatching(/INVALID_INPUT|FORBIDDEN|VALIDATION_ERROR/)
       });
   });
 

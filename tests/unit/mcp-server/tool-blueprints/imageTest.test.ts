@@ -23,8 +23,12 @@ function getRegisteredToolHandler(server: McpServer, name: string): ToolHandler 
   const tools = anyServer.tools;
   expect(tools).toBeDefined();
 
-  const tool = tools.get(name);
-  expect(tool).toBeDefined(`Tool '${name}' should be registered`);
+  const tool = tools?.get(name);
+  expect(tool).toBeDefined();
+
+  if (!tool) {
+    throw new Error(`Tool '${name}' should be registered`);
+  }
 
   return tool.handler;
 }

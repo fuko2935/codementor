@@ -14,6 +14,11 @@ export async function callTool(
   params: unknown,
 ): Promise<CallToolResult> {
   const toolsMap = (server as unknown as { tools: Map<string, unknown> }).tools;
+  
+  if (!toolsMap) {
+    throw new Error(`Tools map not found on server instance.`);
+  }
+  
   const tool = toolsMap.get(toolName) as
     | {
         handler: ToolHandler;

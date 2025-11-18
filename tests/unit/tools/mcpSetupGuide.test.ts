@@ -488,7 +488,7 @@ describe("MCP Setup Guide Tool", () => {
     it("should register the tool with the server", () => {
       registerProjectBootstrap(mockServer);
 
-      expect(mockServer.setRequestHandler).toHaveBeenCalled();
+      expect(mockServer.tool).toHaveBeenCalled();
     });
   });
 

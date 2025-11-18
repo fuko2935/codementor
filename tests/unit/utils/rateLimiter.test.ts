@@ -2,6 +2,7 @@ import {
   RateLimiter,
   resolveRateLimitKey,
   type RequestContextLike,
+  type RateLimiterConfig,
 } from "../../../src/utils/security/rateLimiter.js";
 import { BaseErrorCode, McpError } from "../../../src/types-global/errors.js";
 import { expect } from "@jest/globals";
@@ -13,7 +14,7 @@ function assertNotRateLimited(fn: () => void, message?: string): void {
   try {
     fn();
   } catch (err) {
-    expect.fail(
+    throw new Error(
       message ??
         `Expected call to be allowed, but received error: ${String(err)}`,
     );
@@ -26,7 +27,7 @@ function assertNotRateLimited(fn: () => void, message?: string): void {
 function assertRateLimited(fn: () => void, expectedKeyHint?: string): void {
   try {
     fn();
-    expect.fail("Expected rate limiter to throw, but call was allowed");
+    throw new Error("Expected rate limiter to throw, but call was allowed");
   } catch (err) {
     expect(err).toBeInstanceOf(McpError);
     expect((err as McpError).code).toBe(BaseErrorCode.RATE_LIMITED);
@@ -44,7 +45,7 @@ function assertRateLimited(fn: () => void, expectedKeyHint?: string): void {
  * - Very long cleanupInterval to avoid side-effect timer churn impacting tests.
  */
 function createTestLimiter(
-  overrides: Partial<ConstructorParameters<typeof RateLimiter>[0]> = {},
+  overrides: Partial<RateLimiterConfig> = {},
 ): RateLimiter {
   const limiter = new RateLimiter({
     windowMs: 100,
