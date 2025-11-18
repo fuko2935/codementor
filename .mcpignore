@@ -43,12 +43,17 @@ __tests__/
 
 # 3. DOCUMENTATION
 # Prevents AI from reading docs instead of analyzing code
-# README.md is kept as it's the main project summary
+# Keep essential project documentation and AI steering rules
 # -----------------------------------------------------------------------------
 docs/**
 *.md
 !README.md
+!README.*.md
 !CONTRIBUTING.md
+!CHANGELOG.md
+!SETUP.md
+!PUBLISH.md
+!.kiro/steering/*.md
 
 # 4. LOGS, ENVIRONMENT & SECURITY FILES
 # API keys, logs, and temporary files should not be in AI context
@@ -62,13 +67,15 @@ logs/
 # 5. LARGE DATA & BINARY FILES
 # Protects token limits and excludes irrelevant content
 # -----------------------------------------------------------------------------
-*.json
+# Data files
 *.csv
 *.xlsx
 *.xls
 *.db
 *.sqlite
 *.sqlite3
+
+# Binary files
 *.png
 *.jpg
 *.jpeg
