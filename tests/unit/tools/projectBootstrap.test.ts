@@ -86,6 +86,12 @@ Old content
         expect(content).toContain("<!-- MCP:CODEMENTOR:START -->");
 
         // Should contain new content
-        expect(content).toContain("CodeMentor AI - Çalışma Protokolü (v5)");
+        // Should contain new content
+        expect(content).toContain("CodeMentor AI - Kıdemli Mühendis Protokolü (v6.0 - Ultimate)");
+
+        // Should contain project tree
+        expect(content).toContain("Proje Bağlamı ve Haritası");
+        expect(content).not.toContain("{{PROJECT_TREE}}");
+        expect(content).toContain("AGENTS.md"); // Should list the file itself in the tree
     });
 });

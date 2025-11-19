@@ -26,6 +26,7 @@ import {
 } from "../../utils/mcpConfigValidator.js";
 
 import yaml from "js-yaml";
+import { glob } from "glob";
 // ESM __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -106,6 +107,47 @@ export function loadAndValidateProjectRules(
       });
     }
     return null;
+  }
+}
+
+/**
+ * Projenin üst düzey dizin yapısını görsel bir ağaç olarak oluşturur.
+ * AI'ın projeyi "görmesini" sağlar. Derinliği sınırlar (level 2).
+ */
+async function generateProjectTree(projectPath: string, context: RequestContext): Promise<string> {
+  try {
+    // 2 seviye derinlik, sadece klasörler ve önemli dosyalar
+    const files = await glob("**/*", {
+      cwd: projectPath,
+      ignore: [
+        "node_modules/**",
+        "dist/**",
+        ".git/**",
+        "coverage/**",
+        "**/*.log"
+      ],
+      maxDepth: 2, // Çok derinleşip token harcamasın
+      mark: true,  // Klasörlerin sonuna / koyar
+    });
+
+    // Basit bir ağaç görselleştirmesi
+    // Not: Gerçek 'tree' komutu kadar güzel olmayabilir ama iş görür.
+    // AI için önemli olan hiyerarşiyi anlamaktır.
+    const treeLines = files.sort().map(f => {
+      const depth = f.split('/').length - 1;
+      const prefix = depth === 0 ? '├── ' : '│   '.repeat(depth) + '├── ';
+      return `${prefix}${path.basename(f)}`;
+    });
+
+    if (treeLines.length > 50) {
+      // Çok fazla dosya varsa özetle
+      return treeLines.slice(0, 50).join('\n') + '\n... (ve daha fazlası)';
+    }
+
+    return treeLines.join('\n');
+  } catch (error) {
+    logger.warning("Proje ağacı oluşturulamadı", { ...context, error });
+    return "(Proje ağacı oluşturulamadı)";
   }
 }
 
@@ -543,7 +585,15 @@ build/
 
   const rulesBlockResult = await generateProjectRulesBlock(effectiveRules || {}, context);
   const guideTemplate = await generateMcpGuideContent(validated.client, context);
-  const innerBlock = guideTemplate.replace(/\{\{rules\}\}/g, rulesBlockResult.rendered).trimEnd();
+
+  // 1. Proje Ağacını Oluştur (YENİ)
+  const projectTree = await generateProjectTree(normalizedPath, context);
+
+  // Hem Kuralları Hem de Ağacı Enjekte Et
+  const innerBlock = guideTemplate
+    .replace(/\{\{rules\}\}/g, rulesBlockResult.rendered)
+    .replace(/\{\{PROJECT_TREE\}\}/g, "```\n" + projectTree + "\n```")
+    .trimEnd();
 
   const newHash = crypto.createHash("md5").update(innerBlock).digest("hex");
 
