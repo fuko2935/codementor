@@ -1,127 +1,111 @@
-# 🧠 CodeMentor AI - Gelişmiş Çalışma Protokolü
+# 🧠 CodeMentor AI - Çalışma Protokolü (v5)
 
-Bu dosya, bu projede çalışan AI asistanları (Sen) için **Kesin Doğruluk Kaynağıdır (Single Source of Truth)**.
-Aşağıdaki kurallar, araç kullanım stratejileri ve bağlam yönetimi prensipleri **zorunludur**.
-
----
-
-## 1. 🛡️ Temel Prensipler ve Güvenlik
-
-1.  **Önce Güvenlik**: Asla API anahtarlarını, şifreleri veya hassas verileri loglara yazma veya analiz çıktısına ekleme.
-2.  **Yıkıcı Değil**: Kod tabanını analiz ederken dosyaları değiştirmezsin (read-only). Önerilerini kod blokları halinde sun.
-3.  **Bağlam Farkındalığı**: Kullanıcı sana "bu proje ne yapıyor?" dediğinde, tüm dosyaları okumaya çalışma. Önce yapıyı anla, sonra derinleş.
+Bu dosya, bu projede çalışan AI asistanları için **Tek Doğruluk Kaynağıdır**.
+Mevcut araç setine göre optimize edilmiştir.
 
 ---
 
-## 2. 🔄 Analiz Düşünce Zinciri (Chain of Thought)
+## 1. 🛠️ Aktif Araç Seti ve Yetenekler
 
-Her karmaşık istek için şu döngüyü uygula:
+Sadece aşağıdaki 4 araca erişimin var. Olmayan araçları (örn: orchestrator) halüsinasyon görme.
 
-1.  **KEŞİF (Scout)**: Projenin büyüklüğünü ve yapısını anla.
-    *   *Araç:* `calculate_token_count`
-2.  **STRATEJİ (Plan)**: Token sayısı sınırların üzerindeyse bağlamı daralt.
-    *   *Strateji:* `.mcpignore` kurallarını kontrol et veya `temporaryIgnore` kullan.
-3.  **ANALİZ (Action)**: Sorunu çözmek için en uygun mod ile analiz yap.
-    *   *Araç:* `gemini_codebase_analyzer`
-4.  **DOĞRULAMA (Verify)**: Cevabın kullanıcının sorusunu tam karşıladığından emin ol.
-
----
-
-## 3. 🛠️ Araç Kullanım Stratejileri (v5.0+)
-
-**DİKKAT:** Eski `project_orchestrator` araçları kaldırılmıştır. Büyük projeler için aşağıdaki "Akıllı Bağlam Yönetimi"ni uygula.
-
-### A. Ana Analiz Aracı: `gemini_codebase_analyzer`
-
-Bu senin ana silahındır. Sadece `projectPath` ve `question` vermek yetersizdir; parametreleri akıllıca kullan:
-
-*   **Genel Analiz**:
-    ```json
-    {
-      "projectPath": ".",
-      "analysisMode": "general",
-      "question": "Projenin mimarisini açıkla"
-    }
-    ```
-
-*   **Kod İnceleme (Code Review)**:
-    *Kullanıcı bir PR veya değişiklik kontrolü istediğinde:*
-    ```json
-    {
-      "projectPath": ".",
-      "analysisMode": "review",
-      "includeChanges": { "revision": "." }, // . = working directory, veya commit hash
-      "question": "Bu değişikliklerdeki güvenlik açıklarını ve mantık hatalarını bul"
-    }
-    ```
-
-*   **Uzman Modu (Custom Persona)**:
-    *Özel bir uzmanlık gerekiyorsa (örn: React Performans Uzmanı):*
-    ```json
-    {
-      "projectPath": ".",
-      "analysisMode": "custom:react-perf-expert", // Önceden oluşturulmuşsa
-      "question": "Render döngülerini optimize et"
-    }
-    ```
-
-### B. Bağlam Yöneticisi: `calculate_token_count`
-
-Analize başlamadan önce maliyeti ve fizibiliteyi ölç.
-
-*   Eğer token sayısı > 1.000.000 ise:
-    *   Kullanıcıyı uyar.
-    *   Analizi alt klasörlere böl (örn: `./src/backend` ve `./src/frontend` ayrı ayrı).
-    *   `temporaryIgnore` kullanarak gereksiz klasörleri (test, docs, legacy) hariç tut.
-
-### C. Uzman Oluşturucu: `create_analysis_mode`
-
-Kullanıcı sık sık belirli bir tür analiz istiyorsa (örn: "Her zaman güvenlik odaklı bak"), ona özel bir mod oluşturmayı teklif et.
-
-```json
-{
-  "expertiseHint": "Sen paranoyak bir güvenlik uzmanısın. Her satırda SQL Injection ve XSS ararsın.",
-  "saveAs": "paranoid-security",
-  "withAi": true,
-  "projectPath": "."
-}
-```
+| Araç | Amaç | Ne Zaman Kullanılır? |
+| :--- | :--- | :--- |
+| **`calculate_token_count`** | Proje veya metin boyutunu ölçer. | Analize başlamadan önce maliyet/boyut kontrolü için. |
+| **`gemini_codebase_analyzer`** | Kod analizi, inceleme ve soru cevaplama. | Ana analiz aracıdır. Kod okuma, mimari analiz ve PR incelemeleri için. |
+| **`create_analysis_mode`** | Uzman persona oluşturma. | Kullanıcı spesifik bir uzmanlık (örn: Güvenlik, SEO) istediğinde. |
+| **`project_bootstrap`** | Konfigürasyon yönetimi. | Proje kurallarını güncellemek veya `.mcpignore` oluşturmak için. |
 
 ---
 
-## 4. 📉 Akıllı Bağlam Yönetimi (Büyük Projeler İçin)
+## 2. 📉 Büyük Projelerle Çalışma Stratejisi (Token Limiti Yönetimi)
 
-Token limitine takılmamak için `gemini_codebase_analyzer` kullanırken `temporaryIgnore` parametresini agresif kullan:
+Eğer proje çok büyükse veya `calculate_token_count` yüksek sonuç veriyorsa (> 1M token), analizi bölmen gerekir. Otomatik bir "orkestratör" yoktur; stratejiyi sen yönetmelisin.
 
-**Senaryo:** Kullanıcı sadece veritabanı katmanını soruyor.
-**Yanlış:** Tüm projeyi analiz etmek.
-**Doğru:**
+### Strateji A: Odaklanmış Analiz (Sub-directory)
+Tüm projeyi analiz etmek yerine, sadece ilgili klasöre odaklan.
+
+*   **Kullanıcı:** "Backend'deki auth sorununu bul."
+*   **Yanlış:** `projectPath: "."` (Tüm projeyi okur, token limitini patlatır)
+*   **Doğru:** `projectPath: "src/backend/auth"` (Sadece ilgili modülü okur)
+
+### Strateji B: Gürültü Filtreleme (temporaryIgnore)
+Analizle ilgisi olmayan dosyaları hariç tut.
+
 ```json
 {
   "projectPath": ".",
-  "question": "Veritabanı şemasını analiz et",
+  "question": "Çekirdek iş mantığını analiz et",
   "temporaryIgnore": [
-    "frontend/**",
-    "**/*.test.ts",
-    "docs/**",
-    "scripts/**"
+    "**/*.test.ts",  // Testler
+    "docs/**",       // Dokümantasyon
+    "scripts/**",    // Build scriptleri
+    "ui/**"          // UI kodları (Backend soruluyorsa)
   ]
 }
 ```
 
 ---
 
-## 5. ⚠️ Yasaklı Hareketler (Anti-Patterns)
+## 3. 📝 Kod İnceleme (Code Review) Modu
 
-1.  **Orchestrator Kullanımı:** `project_orchestrator_create` veya `analyze` araçlarını çağırma. Bunlar kaldırıldı.
-2.  **Körlemesine Analiz:** Token sayısını kontrol etmeden devasa bir repoyu (örn: Linux kernel) analiz etmeye çalışma.
-3.  **API Key Sorma:** Kullanıcıdan asla API key isteme. Bunlar environment variable olarak tanımlı olmalıdır.
-4.  **Halüsinasyon Dosyalar:** Var olmayan dosyaları okumaya çalışma, önce `ls` veya dosya listesi isteme yetkin yoksa `calculate_token_count` ile dosya varlığını dolaylı teyit et.
+Kullanıcı bir Pull Request (PR) veya son değişiklikleri incelemeni isterse `review` modunu kullan.
+
+**Son Değişiklikleri İncele:**
+```json
+{
+  "projectPath": ".",
+  "analysisMode": "review",
+  "includeChanges": { "revision": "." }, // . = Kaydedilmemiş değişiklikler
+  "question": "Bu değişikliklerdeki güvenlik açıklarını ve bug potansiyellerini incele."
+}
+```
+
+**Belirli Bir Commiti İncele:**
+```json
+{
+  "projectPath": ".",
+  "analysisMode": "review",
+  "includeChanges": { "revision": "a1b2c3d" },
+  "question": "Bu commit projenin geri kalanını nasıl etkiliyor?"
+}
+```
 
 ---
 
-## 6. Project-Specific Rules (Kullanıcı Kuralları)
+## 4. 🎭 Uzman Modları (Custom Personas)
 
-Aşağıdaki kurallar, bu proje için **Anayasa** niteliğindedir. Yaptığın her öneri bu kurallarla uyumlu olmalıdır.
+Kullanıcı derinlemesine, alan-spesifik bir analiz istiyorsa standart modlar yerine özel bir uzman yarat.
+
+**Adım 1: Uzmanı Yarat**
+```json
+{
+  "tool_name": "create_analysis_mode",
+  "params": {
+    "expertiseHint": "Sen kıdemli bir React Performans Mühendisisin. Re-render döngülerini ve bellek kaçaklarını avlarsın.",
+    "saveAs": "react-perf",
+    "withAi": true,
+    "projectPath": "."
+  }
+}
+```
+
+**Adım 2: Uzmanı Kullan**
+```json
+{
+  "tool_name": "gemini_codebase_analyzer",
+  "params": {
+    "projectPath": ".",
+    "analysisMode": "custom:react-perf",
+    "question": "Dashboard bileşenindeki yavaşlığın sebebi ne?"
+  }
+}
+```
+
+---
+
+## 5. 🛡️ Proje Kuralları (Project Rules)
+
+Bu projeye özel, değiştirilemez kurallar aşağıdadır. Tüm önerilerin bu kurallarla uyumlu olmalıdır.
 
 {{rules}}

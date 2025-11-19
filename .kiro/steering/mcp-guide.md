@@ -1,7 +1,6 @@
 # AI Assistant Configuration
 
 <!-- MCP:CODEMENTOR:START -->
-<!-- MCP:CODEMENTOR:START -->
 # 🧠 CodeMentor AI - Gelişmiş Çalışma Protokolü
 
 Bu dosya, bu projede çalışan AI asistanları (Sen) için **Kesin Doğruluk Kaynağıdır (Single Source of Truth)**.
@@ -128,9 +127,31 @@ Token limitine takılmamak için `gemini_codebase_analyzer` kullanırken `tempor
 
 Aşağıdaki kurallar, bu proje için **Anayasa** niteliğindedir. Yaptığın her öneri bu kurallarla uyumlu olmalıdır.
 
+## Project-Specific Rules
+
+Bu bölüm, proje için AI asistanlarının uyması gereken bağlam ve kısıtları içerir.
+`project_bootstrap` aracı tarafından otomatik yönetilir ve aşağıdaki YAML bloğu
+üzerinden yapılandırılır.
+
+AI için kurallar:
+
+- Bu blokta belirtilen politika ve sınırlamalar, diğer tüm genel önerilerin önündedir.
+- Lisans/paket kısıtları ile çelişen bağımlılık önerileri yapılmamalıdır.
+- "proprietary", "internal-only" vb. ifadeler varsa, dışa veri sızdırma veya
+  kod/paylaşım önerilerinden kaçınılmalıdır.
+- Dağıtım modeli ve hedef kitleye uygun olmayan mimari/dependency kararları
+  önermekten kaçınılmalıdır.
+
 ```yaml
-{{PROJECT_RULES_YAML}}
-```
+openSourceStatus: open-source
+distributionModel: library
+targetAudience: "developers"
+licenseConstraints:
+  - "MIT"
+packageConstraints:
+  - "official npm registry"
+deploymentNotes: |
+  npm package for MCP server implementation
 <!-- MCP:CODEMENTOR:END -->
 <!-- MCP:CODEMENTOR:END -->
 <!-- MCP:CODEMENTOR:END -->

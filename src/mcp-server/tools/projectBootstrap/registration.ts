@@ -28,7 +28,7 @@ export const registerProjectBootstrap = async (
 ): Promise<void> => {
   const toolName = "project_bootstrap";
   const toolDescription =
-    "🔧 PROJECT BOOTSTRAP - **REQUIRED FIRST STEP**: Prepares the project for analysis. Creates/updates AI client configuration (e.g., AGENTS.md) with a full MCP usage guide and creates a default .mcpignore file. Run this once per project before using any other analysis tools.";
+    "🔧 PROJECT BOOTSTRAP - **REQUIRED FIRST STEP**: Initializes the project for AI analysis. Creates essential configuration files and an optimized MCP guide tailored for the current toolset (v5+). Run this once per project.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({
@@ -92,10 +92,10 @@ export const registerProjectBootstrap = async (
               handledError instanceof McpError
                 ? handledError
                 : new McpError(
-                    BaseErrorCode.INTERNAL_ERROR,
-                    "An unexpected error occurred during project_bootstrap",
-                    { originalError: String(error) },
-                  );
+                  BaseErrorCode.INTERNAL_ERROR,
+                  "An unexpected error occurred during project_bootstrap",
+                  { originalError: String(error) },
+                );
 
             return {
               content: [

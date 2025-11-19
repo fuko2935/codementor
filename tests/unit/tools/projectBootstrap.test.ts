@@ -86,6 +86,6 @@ Old content
         expect(content).toContain("<!-- MCP:CODEMENTOR:START -->");
 
         // Should contain new content
-        expect(content).toContain("CodeMentor AI - Gelişmiş Çalışma Protokolü");
+        expect(content).toContain("CodeMentor AI - Çalışma Protokolü (v5)");
     });
 });
