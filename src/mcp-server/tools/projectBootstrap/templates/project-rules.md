@@ -14,4 +14,4 @@ AI için kurallar:
   önermekten kaçınılmalıdır.
 
 ```yaml
-{{PROJECT_RULES_YAML}}
+{{rules}}

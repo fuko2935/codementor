@@ -20,6 +20,8 @@ import { validateSecurePath } from "../../utils/securePathValidator.js";
 import {
   MCP_CODEMENTOR_START_MARKER as MCP_BLOCK_START_MARKER,
   MCP_CODEMENTOR_END_MARKER as MCP_BLOCK_END_MARKER,
+  MCP_CONTENT_START_MARKER as LEGACY_BLOCK_START_MARKER,
+  MCP_CONTENT_END_MARKER as LEGACY_BLOCK_END_MARKER,
   refreshMcpConfigCache,
 } from "../../utils/mcpConfigValidator.js";
 
@@ -109,13 +111,24 @@ export function loadAndValidateProjectRules(
 
 /**
  * Extract managed block between custom markers with line positions.
+ * Supports both new (CODEMENTOR) and legacy (GEMINI-MCP-LOCAL) markers.
  */
 export function extractManagedBlock(content: string): { block: string; startLine: number; endLine: number } | null {
   const lines = content.split(/\r?\n/);
-  const startIdx = lines.findIndex((line) => line.trim() === MCP_BLOCK_START_MARKER);
+
+  // Try new markers first
+  let startIdx = lines.findIndex((line) => line.trim() === MCP_BLOCK_START_MARKER);
+  let endMarker = MCP_BLOCK_END_MARKER;
+
+  // If not found, try legacy markers
+  if (startIdx === -1) {
+    startIdx = lines.findIndex((line) => line.trim() === LEGACY_BLOCK_START_MARKER);
+    endMarker = LEGACY_BLOCK_END_MARKER;
+  }
+
   if (startIdx === -1) return null;
 
-  const endIdx = lines.slice(startIdx + 1).findIndex((line) => line.trim() === MCP_BLOCK_END_MARKER);
+  const endIdx = lines.slice(startIdx + 1).findIndex((line) => line.trim() === endMarker);
   if (endIdx === -1) return null;
 
   const fullEndIdx = startIdx + 1 + endIdx;
@@ -168,29 +181,23 @@ export function insertManagedBlock(
 }
 
 /**
- * Load client-specific MCP guide template with fallbacks.
- * Uses async file operations for consistency with the rest of the codebase.
+ * Load the master MCP guide template.
+ * Ignores the client parameter and always loads templates/mcp-guide.md.
  */
 export async function loadClientTemplate(client: ClientName): Promise<string> {
   const baseDir = __dirname;
-  const clientPath = path.join(baseDir, './templates', `${client}-mcp-guide.md`);
-  
+  // Always use the master template
+  const mcpPath = path.join(baseDir, './templates', 'mcp-guide.md');
+
   try {
-    return (await fs.readFile(clientPath, 'utf-8')).trimEnd();
-  } catch {
-    // First fallback: generic mcp-guide.md
-    const mcpPath = path.join(baseDir, './templates', 'mcp-guide.md');
-    try {
-      return (await fs.readFile(mcpPath, 'utf-8')).trimEnd();
-    } catch {
-      // Second fallback: default-mcp-guide.md
-      const defaultPath = path.join(baseDir, './templates', 'default-mcp-guide.md');
-      try {
-        return (await fs.readFile(defaultPath, 'utf-8')).trimEnd();
-      } catch {
-        return ''; // Ultimate fallback
-      }
-    }
+    return (await fs.readFile(mcpPath, 'utf-8')).trimEnd();
+  } catch (error) {
+    // If master template is missing, this is a critical error
+    throw new McpError(
+      BaseErrorCode.INTERNAL_ERROR,
+      `Critical: Master MCP guide template not found at ${mcpPath}`,
+      { path: mcpPath }
+    );
   }
 }
 export const ProjectBootstrapInputSchema = z.object({
@@ -223,12 +230,12 @@ export type ProjectBootstrapInput = z.infer<typeof ProjectBootstrapInputSchema>;
 export interface ProjectBootstrapResponse {
   success: boolean;
   message: string;
-  actions: Array<{type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string}>;
+  actions: Array<{ type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string }>;
   summary: string;
 }
 
 // Placeholder used in the template for injecting project rules YAML.
-const PROJECT_RULES_PLACEHOLDER = "{{PROJECT_RULES_YAML}}";
+const PROJECT_RULES_PLACEHOLDER = "{{rules}}";
 
 /**
  * Generate the base MCP guide content from template.
@@ -461,7 +468,7 @@ export async function projectBootstrapLogic(
     context,
   );
 
-  const actions: Array<{type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string}> = [];
+  const actions: Array<{ type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string }> = [];
 
   // Manage .gitignore for MCP cache
   const gitignoreAction = await ensureGitignoreHasMcpCache(normalizedPath, context);
@@ -552,9 +559,9 @@ build/
     if (extracted) {
       currentHash = crypto.createHash("md5").update(extracted.block).digest("hex");
     }
-  } catch {}
+  } catch { }
 
-  let targetAction: {type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string};
+  let targetAction: { type: "created" | "updated" | "skipped" | "exists"; file: string; details?: string };
   let newContent: string;
 
   if (fileExists && extracted && currentHash === newHash && !validated.force) {

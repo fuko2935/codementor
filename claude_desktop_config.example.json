@@ -2,7 +2,11 @@
   "mcpServers": {
     "codementor": {
       "command": "npx",
-      "args": ["-y", "codementor"],
+      "args": [
+        "-y",
+        "codementor",
+        "mcp"
+      ],
       "env": {
         "LLM_DEFAULT_PROVIDER": "gemini-cli",
         "LLM_DEFAULT_MODEL": "gemini-2.5-pro"
