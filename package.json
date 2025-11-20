@@ -1,6 +1,6 @@
 {
   "name": "codementor-mcp",
-  "version": "5.0.8",
+  "version": "5.0.9",
   "description": "Local-first AI-powered codebase analysis tool for stdio or HTTP transports using environment-supplied provider credentials.",
   "main": "dist/index.js",
   "bin": {
