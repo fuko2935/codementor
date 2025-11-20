@@ -3,4 +3,5 @@
  * @module src/mcp-server/services
  */
 
-export * from "./aiGroupingService.js";
+// No services currently exported
+// This file is kept for future service additions

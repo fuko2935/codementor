@@ -140,12 +140,12 @@ export async function validateProjectSize(
     // Check if token count exceeds limit
     if (tokenCount > effectiveMaxTokens) {
       const errorMessage =
-        `Projenizin boyutu çok büyük (${tokenCount.toLocaleString()} token, limit: ${effectiveMaxTokens.toLocaleString()}).\n\n` +
-        `Lütfen şunları kontrol edin:\n` +
-        `- .gitignore dosyanızda node_modules, dist, build klasörleri ignore edilmiş mi?\n` +
-        `- .mcpignore dosyası oluşturup ek dosya/klasörleri ignore ettiniz mi?\n` +
-        `- Gereksiz büyük binary, video, image dosyaları var mı?\n\n` +
-        `İpucu: Büyük projeler için project_orchestrator_create aracını kullanabilirsiniz.`;
+        `Project size exceeds token limit (${tokenCount.toLocaleString()} tokens, limit: ${effectiveMaxTokens.toLocaleString()}).\n\n` +
+        `Please check:\n` +
+        `- Are node_modules, dist, build folders ignored in .gitignore?\n` +
+        `- Have you created a .mcpignore file to exclude additional files/folders?\n` +
+        `- Are there unnecessary large binary, video, or image files?\n\n` +
+        `Tip: For large projects, analyze subdirectories separately or use the temporaryIgnore parameter.`;
 
       logger.warning("Project size exceeds token limit", {
         ...requestContext,

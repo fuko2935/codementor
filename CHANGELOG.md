@@ -1,6 +1,6 @@
 # Changelog
 
-## [5.1.0] - 2025-11-20
+## [5.1.0] - 2025-01-20
 
 ### ✨ New Features
 
@@ -11,14 +11,17 @@
   - Support last N commits with `count` parameter
   - Returns `gitDiffTokens` and `gitDiffCharacters` in response
   - Graceful degradation: continues without git diff if extraction fails
+  - Perfect for planning code review analysis before running `gemini_codebase_analyzer`
 
 #### `create_analysis_mode` Tool
 - **Added**: `list` action to list all available analysis modes
   - Lists both standard and custom modes
   - Returns mode metadata (name, path, type, size)
+  - Helps discover available analysis personas
 - **Added**: `delete` action to remove custom analysis modes
   - Validates mode name to prevent path traversal
   - Returns deleted mode information
+  - Enables cleanup of unused custom modes
 - **Enhanced**: `create` action remains default for backward compatibility
 
 ### 🔒 Security
@@ -39,6 +42,12 @@
   "includeChanges": { "revision": "." }
 }
 
+// Count tokens for last 5 commits
+{
+  "projectPath": ".",
+  "includeChanges": { "count": 5 }
+}
+
 // List all analysis modes
 {
   "action": "list"
@@ -50,6 +59,12 @@
   "modeName": "my-custom-mode"
 }
 ```
+
+### 📝 Documentation Updates
+- **Updated**: All orchestrator references removed from documentation
+- **Updated**: Error messages now suggest `.mcpignore` and subdirectory analysis
+- **Updated**: Tool status tables reflect current active tools
+- **Added**: v5.1.0 features documented in all relevant guides
 
 ## [5.0.1] - 2025-01-18
 

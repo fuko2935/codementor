@@ -444,7 +444,7 @@ export async function processData(
 - Stream large files instead of loading into memory
 - Use pagination for large result sets
 - Respect `MAX_GIT_BLOB_SIZE_BYTES` for git operations
-- Use project orchestrator for large codebases
+- Use .mcpignore patterns or analyze subdirectories for large codebases
 
 ### Caching
 

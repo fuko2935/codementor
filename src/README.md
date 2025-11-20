@@ -6,30 +6,42 @@ The `src` directory contains the TypeScript sources that power the `codementor` 
 
 | Path                      | Purpose                                                                                                  |
 | ------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `simple-server.ts`        | CLI entry that registers tools, resolves provider API keys, and connects to the STDIO or HTTP transport. |
-| `config/`                 | Loads environment variables with Zod validation and exposes `config.providerApiKeys`.                    |
-| `mcp-server/`             | Optional modular server scaffolding (create/register tools, HTTP & STDIO transports, auth middleware).   |
-| `services/llm-providers/` | OpenRouter helper kept for reference when integrating additional providers.                              |
+| `index.ts`                | Main entry point and CLI bootstrap that initializes the server and handles STDIO or HTTP transport.     |
+| `config/`                 | Loads environment variables with Zod validation and exposes configuration settings.                      |
+| `mcp-server/`             | Modular server scaffolding (tool registration, HTTP & STDIO transports, auth middleware).                |
+| `services/llm-providers/` | LLM provider integrations (Gemini CLI, OpenRouter, etc.) for AI-powered analysis.                       |
 | `utils/`                  | Shared utilities: logging, error handling, request context tracking, metrics, parsing, security.         |
-| `index.ts`                | Programmatic bootstrap for embedding the MCP server in other runtimes.                                   |
+| `types-global/`           | Global type definitions and error codes used across the codebase.                                        |
 
 ## Coding Guidelines
 
-1. **Request Contexts** – Create a `RequestContext` as soon as you enter tool or transport code. Pass it through to logging and downstream helpers.
+1. **Request Contexts** – Create a `RequestContext` as soon as you enter tool or transport code. Pass it through to logging and downstream helpers for traceability.
 2. **Validation** – Define Zod schemas next to the tool logic. Use `.describe()` generously so calling LLMs receive user-friendly help text.
-3. **Provider Keys** – Always use `resolveProviderApiKeys` / `requireProviderApiKeys` (from `simple-server.ts`) instead of reading `process.env` directly.
-4. **Logging** – Use the shared Winston logger (`utils/internal/logger` or the instance defined in `simple-server.ts`). Never `console.log` arbitrary text when running on STDIO.
+3. **Configuration** – Always use the `config` object from `src/config/` instead of reading `process.env` directly. This ensures validation and type safety.
+4. **Logging** – Use the shared Winston logger from `utils/internal/logger`. Never use `console.log` when running on STDIO transport as it breaks the protocol.
 5. **Separation of Concerns** – Keep heavy business logic in helper functions. Catch errors at the boundary, format them with the `ErrorHandler`, and return structured results.
+6. **Security** – Always validate file paths with `validateSecurePath` to prevent path traversal attacks. Sanitize sensitive data before logging.
 
-## Adding a Tool to `simple-server.ts`
+## Adding a New Tool
 
-1. Define a Zod schema for the tool parameters.
-2. Parse the incoming request (`request.params.arguments`).
-3. Resolve provider credentials with the shared helper if the tool calls out to an external API.
-4. Execute the logic; throw errors on failure.
-5. Return a `{ content: [{ type: "text", text: "..." }] }` payload on success.
+Tools are organized in `src/mcp-server/tools/` with a consistent structure:
 
-For larger features, consider moving the implementation into `src/mcp-server` and exposing a wrapper inside the CLI.
+```
+tools/myTool/
+├── index.ts         # Barrel file: exports registerMyTool
+├── logic.ts         # Schema, types, and pure business logic
+└── registration.ts  # MCP registration and error handling
+```
+
+**Steps:**
+1. Create the tool directory structure
+2. Define Zod schema with `.describe()` on all fields
+3. Implement pure logic function that throws `McpError` on failure
+4. Create registration handler that wraps logic in try-catch
+5. Register the tool in `src/mcp-server/server.ts`
+6. Write unit tests for the logic function
+
+For detailed guidelines, see `.kiro/steering/mcp-workflows.md` in the repository.
 
 ## Testing & Debugging
 

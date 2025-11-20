@@ -111,12 +111,12 @@ export function loadAndValidateProjectRules(
 }
 
 /**
- * Projenin üst düzey dizin yapısını görsel bir ağaç olarak oluşturur.
- * AI'ın projeyi "görmesini" sağlar. Derinliği sınırlar (level 2).
+ * Generates a visual tree of the project's top-level directory structure.
+ * Allows AI to "see" the project. Limits depth (level 2).
  */
 async function generateProjectTree(projectPath: string, context: RequestContext): Promise<string> {
   try {
-    // 2 seviye derinlik, sadece klasörler ve önemli dosyalar
+    // 2 levels depth, only folders and important files
     const files = await glob("**/*", {
       cwd: projectPath,
       ignore: [
@@ -126,13 +126,13 @@ async function generateProjectTree(projectPath: string, context: RequestContext)
         "coverage/**",
         "**/*.log"
       ],
-      maxDepth: 2, // Çok derinleşip token harcamasın
-      mark: true,  // Klasörlerin sonuna / koyar
+      maxDepth: 2, // Don't go too deep to save tokens
+      mark: true,  // Appends / to directories
     });
 
-    // Basit bir ağaç görselleştirmesi
-    // Not: Gerçek 'tree' komutu kadar güzel olmayabilir ama iş görür.
-    // AI için önemli olan hiyerarşiyi anlamaktır.
+    // Simple tree visualization
+    // Note: Might not be as pretty as the real 'tree' command but works.
+    // Hierarchy is what matters for AI.
     const treeLines = files.sort().map(f => {
       const depth = f.split('/').length - 1;
       const prefix = depth === 0 ? '├── ' : '│   '.repeat(depth) + '├── ';
@@ -140,14 +140,14 @@ async function generateProjectTree(projectPath: string, context: RequestContext)
     });
 
     if (treeLines.length > 50) {
-      // Çok fazla dosya varsa özetle
-      return treeLines.slice(0, 50).join('\n') + '\n... (ve daha fazlası)';
+      // Summarize if too many files
+      return treeLines.slice(0, 50).join('\n') + '\n... (and more)';
     }
 
     return treeLines.join('\n');
   } catch (error) {
-    logger.warning("Proje ağacı oluşturulamadı", { ...context, error });
-    return "(Proje ağacı oluşturulamadı)";
+    logger.warning("Could not generate project tree", { ...context, error });
+    return "(Project tree could not be generated)";
   }
 }
 
@@ -586,10 +586,10 @@ build/
   const rulesBlockResult = await generateProjectRulesBlock(effectiveRules || {}, context);
   const guideTemplate = await generateMcpGuideContent(validated.client, context);
 
-  // 1. Proje Ağacını Oluştur (YENİ)
+  // 1. Generate Project Tree (NEW)
   const projectTree = await generateProjectTree(normalizedPath, context);
 
-  // Hem Kuralları Hem de Ağacı Enjekte Et
+  // Inject Both Rules and Tree
   const innerBlock = guideTemplate
     .replace(/\{\{rules\}\}/g, rulesBlockResult.rendered)
     .replace(/\{\{PROJECT_TREE\}\}/g, "```\n" + projectTree + "\n```")

@@ -82,12 +82,27 @@ Analize başlamadan önce maliyeti ve fizibiliteyi ölç.
 
 Kullanıcı sık sık belirli bir tür analiz istiyorsa (örn: "Her zaman güvenlik odaklı bak"), ona özel bir mod oluşturmayı teklif et.
 
+**Yeni (v5.1.0):** Artık `list` ve `delete` aksiyonları da destekleniyor!
+
 ```json
+// Yeni mod oluştur
 {
+  "action": "create",
   "expertiseHint": "Sen paranoyak bir güvenlik uzmanısın. Her satırda SQL Injection ve XSS ararsın.",
   "saveAs": "paranoid-security",
   "withAi": true,
   "projectPath": "."
+}
+
+// Tüm modları listele
+{
+  "action": "list"
+}
+
+// Bir modu sil
+{
+  "action": "delete",
+  "modeName": "paranoid-security"
 }
 ```
 

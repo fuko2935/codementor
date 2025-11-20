@@ -54,7 +54,6 @@ CodeMentor is a lightweight Model Context Protocol (MCP) server for local-first 
 **Core Capabilities:**
 - Codebase Analysis with AI-powered insights
 - Code Review via Git diff integration
-- Project Orchestration for large codebases
 - Token Management for Gemini models
 - Multi-Transport (STDIO/HTTP)
 

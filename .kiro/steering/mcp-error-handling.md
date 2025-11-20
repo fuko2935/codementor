@@ -509,7 +509,7 @@ if (tokenCount > MAX_PROJECT_TOKENS) {
     {
       tokenCount,
       maxTokens: MAX_PROJECT_TOKENS,
-      suggestion: "Use project orchestrator or add .mcpignore patterns"
+      suggestion: "Use .mcpignore patterns or analyze subdirectories"
     }
   );
 }

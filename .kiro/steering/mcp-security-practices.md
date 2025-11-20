@@ -392,7 +392,7 @@ if (tokenCount > MAX_PROJECT_TOKENS) {
     {
       tokenCount,
       maxTokens: MAX_PROJECT_TOKENS,
-      suggestion: "Use .mcpignore to exclude files or use project orchestrator"
+      suggestion: "Use .mcpignore to exclude files or analyze subdirectories"
     }
   );
 }

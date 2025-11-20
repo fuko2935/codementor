@@ -22,9 +22,9 @@ CodeMentor is a lightweight Model Context Protocol (MCP) server for local-first 
 
 - **Codebase Analysis**: Comprehensive project analysis with AI-powered insights, code search, and pattern detection
 - **Code Review**: Git diff integration for reviewing uncommitted changes, specific commits, or commit ranges (see [Workflows](#6-workflows) for implementation details)
-- **Project Orchestration**: Intelligent grouping for large codebases that exceed token limits (see [Architecture & Technology Stack](#2-architecture--technology-stack) for technical details)
-- **Token Management**: Accurate token counting for Gemini models to plan safe response sizes
+- **Token Management**: Accurate token counting for Gemini models to plan safe response sizes, with git diff support for code review planning
 - **Multi-Transport**: Supports both STDIO (for IDE/desktop clients) and HTTP (for web/remote access) (see [Architecture & Technology Stack](#2-architecture--technology-stack) for transport configuration)
+- **Custom Analysis Modes**: Create, manage, and reuse specialized expert personas for domain-specific analysis
 
 ### Target Users
 
@@ -172,10 +172,8 @@ mcp-server/
 │   └── auth/                   # Authentication strategies (JWT, OAuth)
 ├── tools/                       # MCP tool implementations
 │   ├── geminiCodebaseAnalyzer/ # Main codebase analysis tool
-│   ├── projectOrchestratorCreate/  # Large project grouping (step 1)
-│   ├── projectOrchestratorAnalyze/ # Large project analysis (step 2)
 │   ├── calculateTokenCount/    # Token counting utility
-│   ├── mcpSetupGuide/          # MCP setup documentation
+│   ├── createAnalysisMode/     # Custom analysis mode management
 │   └── projectBootstrap/       # Project initialization
 ├── tool-blueprints/            # Reference implementations (not active)
 │   ├── echoTool/              # Minimal synchronous tool example
@@ -183,8 +181,6 @@ mcp-server/
 │   └── imageTest/             # Binary data handling example
 ├── resource-blueprints/        # Resource examples (not active)
 │   └── echoResource/          # Basic resource template
-├── services/                   # Server-specific services
-│   └── aiGroupingService.ts   # AI-powered file grouping
 └── utils/                      # Server-specific utilities
     ├── codeParser.ts          # AST parsing & metadata extraction
     ├── gitDiffAnalyzer.ts     # Git diff processing
@@ -969,7 +965,7 @@ See [Documentation Standards](#2-architecture--technology-stack) for JSDoc patte
 - Stream large files instead of loading into memory
 - Use pagination for large result sets
 - Respect `MAX_GIT_BLOB_SIZE_BYTES` for git operations
-- Use project orchestrator for large codebases
+- Use .mcpignore patterns or analyze subdirectories for large codebases
 
 #### Caching
 
@@ -2336,7 +2332,7 @@ if (tokenCount > MAX_PROJECT_TOKENS) {
     {
       tokenCount,
       maxTokens: MAX_PROJECT_TOKENS,
-      suggestion: "Use project orchestrator or add .mcpignore patterns"
+      suggestion: "Use .mcpignore patterns or analyze subdirectories"
     }
   );
 }
@@ -2684,18 +2680,14 @@ Before starting development, understand which tools are active and which are ref
 | Tool | Status | Purpose | Location |
 |------|--------|---------|----------|
 | **Active Tools** | | | |
-| `gemini_codebase_analyzer` | ✅ Active | Main codebase analysis tool | `src/mcp-server/tools/geminiCodebaseAnalyzer/` |
-| `project_orchestrator_create` | ✅ Active | Large project grouping (step 1) | `src/mcp-server/tools/projectOrchestratorCreate/` |
-| `project_orchestrator_analyze` | ✅ Active | Large project analysis (step 2) | `src/mcp-server/tools/projectOrchestratorAnalyze/` |
-| `calculate_token_count` | ✅ Active | Token counting utility | `src/mcp-server/tools/calculateTokenCount/` |
+| `gemini_codebase_analyzer` | ✅ Active | Main codebase analysis tool with code review support | `src/mcp-server/tools/geminiCodebaseAnalyzer/` |
+| `calculate_token_count` | ✅ Active | Token counting utility with git diff support | `src/mcp-server/tools/calculateTokenCount/` |
+| `create_analysis_mode` | ✅ Active | Custom analysis mode management (create/list/delete) | `src/mcp-server/tools/createAnalysisMode/` |
 | `project_bootstrap` | ✅ Active | Project initialization with MCP guide | `src/mcp-server/tools/projectBootstrap/` |
-| `mcp_setup_guide` | ⚠️ Superseded | Legacy setup guide (use `project_bootstrap`) | `src/mcp-server/tools/mcpSetupGuide/` |
 | **Blueprint Examples** | | | |
 | `echoTool` | 📘 Blueprint | Minimal synchronous tool example | `src/mcp-server/tool-blueprints/echoTool/` |
 | `catFactFetcher` | 📘 Blueprint | Async/external API example | `src/mcp-server/tool-blueprints/catFactFetcher/` |
 | `imageTest` | 📘 Blueprint | Binary data handling example | `src/mcp-server/tool-blueprints/imageTest/` |
-
-**Note:** `mcp_setup_guide` is superseded by `project_bootstrap`, which provides the same functionality plus additional project-specific rules and context control. Use `project_bootstrap` for all new projects.
 
 ### Project Bootstrap (First Step)
 
@@ -3622,7 +3614,7 @@ node -e "require('./dist/config/index.js')"
 |-------|-------|----------|
 | Path traversal error | Using absolute or `..` paths | Use relative paths, validate with `validateSecurePath` |
 | Import errors | Missing `.js` extension | Add `.js` to all imports (ESM requirement) |
-| Token limit exceeded | Project too large | Use `project_orchestrator` or add `.mcpignore` patterns |
+| Token limit exceeded | Project too large | Use `.mcpignore` patterns or analyze subdirectories |
 | Rate limit errors | Too many requests | Implement backoff, check rate limit configuration |
 | Authentication errors | Missing API key | Set environment variables, check configuration |
 | Build errors | TypeScript issues | Run `npx tsc --noEmit`, fix type errors |

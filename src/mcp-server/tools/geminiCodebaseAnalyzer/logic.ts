@@ -20,7 +20,7 @@ import { validateSecurePath } from "../../utils/securePathValidator.js";
 import { extractGitDiff, type ExtractGitDiffParams } from "../../utils/gitDiffAnalyzer.js";
 import { validateMcpConfigExists } from "../../utils/mcpConfigValidator.js";
 
-// Önceden tanımlanmış analiz modları
+// Predefined analysis modes
 const standardAnalysisModes = [
   "general",
   "implementation",
@@ -55,7 +55,7 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
       "Examples: 'What does this project do?', 'Find potential bugs', 'Explain the architecture', 'How to add a new feature?', 'Review code quality', " +
       "or specialized questions for custom expert personas (e.g., 'As a security expert, analyze this codebase for vulnerabilities')",
     ),
-  // YENİ MANTIK: `analysisMode` artık standart enum veya "custom:..." string'i olabilir.
+  // NEW LOGIC: `analysisMode` can now be a standard enum or a "custom:..." string.
   analysisMode: z.union([
       z.enum(standardAnalysisModes),
       z.string().refine((val) => val.startsWith("custom:"), {
@@ -364,9 +364,8 @@ async function prepareFullContext(
  * @param context - Request context for logging and tracking
  * @returns Promise containing the analysis response
  *
- * @remarks This function deliberately integrates project orchestrator tools to provide a seamless
- *          fallback path for large projects (autoOrchestrate). This coupling is intentional to
- *          improve user experience and robustness under token/memory constraints.
+ * @remarks The autoOrchestrate parameter is deprecated and no longer functional.
+ *          For large projects, use .mcpignore patterns or analyze subdirectories separately.
  */
 export async function geminiCodebaseAnalyzerLogic(
   params: GeminiCodebaseAnalyzerInput,
@@ -539,7 +538,7 @@ These files were skipped to prevent memory issues during analysis. To include th
     let promptForModel: string;
 
     if (validatedParams.customExpertPrompt && validatedParams.customExpertPrompt.trim()) {
-      // Geriye dönük uyumluluk için customExpertPrompt'u önceliklendir
+      // Prioritize customExpertPrompt for backward compatibility
       promptForModel = `${validatedParams.customExpertPrompt.trim()}
 
 PROJECT CONTEXT:
@@ -558,9 +557,9 @@ CODING AI QUESTION:
 ${validatedParams.question}`;
       logger.info("Using provided 'customExpertPrompt'.", context);
     } else if (analysisMode.startsWith('custom:')) {
-      // Özel modu yükle
+      // Load custom mode
       const modeName = analysisMode.substring('custom:'.length);
-      // Güvenlik: Dosya adı olarak kullanmadan önce sanitize et
+      // Security: Sanitize before using as filename
       if (!/^[a-zA-Z0-9_-]+$/.test(modeName)) {
         throw new McpError(BaseErrorCode.VALIDATION_ERROR, `Invalid custom mode name format: ${modeName}`);
       }
@@ -571,7 +570,7 @@ ${validatedParams.question}`;
         context,
       );
     } else {
-      // Standart modu kullan
+      // Use standard mode
       promptForModel = await promptLoader.getPrompt(
         analysisMode,
         undefined,

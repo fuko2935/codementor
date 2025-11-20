@@ -817,7 +817,7 @@ export async function createAnalysisModeLogic(
         
         // Handle saveAs parameter
         if (params.saveAs) {
-          // Güvenlik için proje yolunu doğrula, yoksa BASE_DIR kullan
+          // Validate project path for security, otherwise use BASE_DIR
           const projectDir = params.projectPath 
             ? await validateSecurePath(params.projectPath, BASE_DIR, context)
             : BASE_DIR;
@@ -825,7 +825,7 @@ export async function createAnalysisModeLogic(
           const modesDir = path.join(projectDir, '.mcp', 'analysis_modes');
           await fs.mkdir(modesDir, { recursive: true });
 
-          // saveAs zaten Zod ile sanitize edildi, tekrar etmeye gerek yok.
+          // saveAs already sanitized by Zod, no need to repeat.
           const savePath = path.join(modesDir, `${params.saveAs}.md`);
           
           await fs.writeFile(savePath, createResponse.analysisModePrompt!, 'utf-8');

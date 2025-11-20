@@ -8,10 +8,10 @@ const __dirname = path.dirname(__filename);
 
 const rootDir = path.resolve(__dirname, "..");
 
-// Kaynak: src/mcp-server/tools altındaki tüm **/templates dizinleri
+// Source: all **/templates directories under src/mcp-server/tools
 const srcToolsDir = path.join(rootDir, "src", "mcp-server", "tools");
 
-// Hedefler:
+// Targets:
 // - dist/mcp-server/tools
 // - dist-test/src/mcp-server/tools
 const targetDirs = [

@@ -10,7 +10,7 @@ import { generateText } from "ai";
 import { createGeminiProvider } from "ai-sdk-provider-gemini-cli";
 import { logger } from "../../utils/index.js";
 import { requestContextService } from "../../utils/index.js";
-import { config } from "../../config/index.js";
+// import { config } from "../../config/index.js";
 import { AsyncLock } from "../../utils/index.js";
 
 // Global lock instance to serialize gemini CLI stdout operations

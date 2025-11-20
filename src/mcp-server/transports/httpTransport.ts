@@ -50,8 +50,8 @@ const transports: Record<string, StreamableHTTPServerTransport> = {};
 // Unique identifier for this server instance (used for session ownership)
 const INSTANCE_ID = generateInstanceId();
 
-// HTTP transport için pluggable rate limiter (memory/redis).
-// Seçim mantığı src/utils/security/rateLimiter.ts içindeki createRateLimiter tarafından yönetilir.
+// Pluggable rate limiter for HTTP transport (memory/redis).
+// Selection logic is managed by createRateLimiter in src/utils/security/rateLimiter.ts.
 const httpRateLimiter = createRateLimiter();
 
 async function isPortInUse(

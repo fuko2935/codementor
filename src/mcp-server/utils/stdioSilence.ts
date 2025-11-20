@@ -3,19 +3,19 @@
 import { config } from "../../config/index.js";
 
 /**
- * Belirtilen bir asenkron fonksiyonu, yalnızca MCP_TRANSPORT_TYPE='stdio' ise
- * tüm stdout ve stderr çıktılarını geçici olarak susturarak çalıştırır.
- * Hata oluşsa bile orijinal akışları geri yüklemeyi garanti eder.
+ * Executes a specified async function while temporarily silencing all stdout
+ * and stderr output, but only if MCP_TRANSPORT_TYPE='stdio'.
+ * Guarantees restoration of original streams even if an error occurs.
  *
- * @param operationToSilence Yürütülecek asenkron fonksiyon.
- * @returns Fonksiyonun dönüş değerini döndürür.
- * @template T Fonksiyonun dönüş tipi.
+ * @param operationToSilence The async function to execute.
+ * @returns Returns the function's return value.
+ * @template T The function's return type.
  */
 export async function executeUnderStdioSilence<T>(
   operationToSilence: () => Promise<T>
 ): Promise<T> {
   if (config.mcpTransportType !== "stdio") {
-    // stdio modunda değilsek hiçbir şey yapma, direkt çalıştır.
+    // If not in stdio mode, do nothing, just execute directly.
     return operationToSilence();
   }
 
@@ -23,14 +23,14 @@ export async function executeUnderStdioSilence<T>(
   const originalStderrWrite = process.stderr.write;
 
   try {
-    // Tüm çıktıları engelle
+    // Block all output
     process.stdout.write = () => true;
     process.stderr.write = () => true;
 
-    // Asıl işlemi çalıştır
+    // Execute the actual operation
     return await operationToSilence();
   } finally {
-    // Hata olsa bile orijinal fonksiyonları geri yükle
+    // Restore original functions even if error occurs
     process.stdout.write = originalStdoutWrite;
     process.stderr.write = originalStderrWrite;
   }

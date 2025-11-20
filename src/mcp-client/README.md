@@ -107,7 +107,7 @@ async function main() {
 main();
 ```
 
-For a more detailed example showing a multi-agent swarm, see `src/mcp-client/examples/agentSwarmExample.ts`.
+**Note:** For production use cases, consider implementing additional error handling, retry logic, and monitoring based on your specific requirements.
 
 ## Configuration (`mcp-config.json`)
 

@@ -1,12 +1,12 @@
 /**
  * @fileoverview Pluggable rate limiter abstraction (in-memory + extensible backends).
- * Sağlananlar:
- * - RequestContextLike + resolveRateLimitKey (kimlik bilgisi/IP tabanlı anahtarlar)
- * - RateLimiterStore / RateLimiter arayüzleri
- * - InMemoryRateLimiterStore implementasyonu
+ * Provides:
+ * - RequestContextLike + resolveRateLimitKey (identity/IP based keys)
+ * - RateLimiterStore / RateLimiter interfaces
+ * - InMemoryRateLimiterStore implementation
  * - createInMemoryRateLimiter factory
- * - Varsayılan singleton `rateLimiter` (in-memory, geriye dönük uyumlu)
- * - createRateLimiter factory (MCP_RATE_LIMIT_STORE ile backend seçimi)
+ * - Default singleton `rateLimiter` (in-memory, backward compatible)
+ * - createRateLimiter factory (backend selection via MCP_RATE_LIMIT_STORE)
  * @module src/utils/security/rateLimiter
  */
 
@@ -16,7 +16,7 @@ import { logger, RequestContext, requestContextService } from "../index.js";
 import { createRedisRateLimiter } from "./redisRateLimiter.js";
 
 /**
- * Minimal, HTTP/transport bağımsız kimlik bağlamı.
+ * Minimal, HTTP/transport independent identity context.
  */
 export interface RequestContextLike {
   authInfo?: {
@@ -29,7 +29,7 @@ export interface RequestContextLike {
 }
 
 /**
- * Kimlik/IP esaslı rate limit anahtarı üretimi.
+ * Identity/IP based rate limit key generation.
  */
 export function resolveRateLimitKey(ctx: RequestContextLike): string {
   const auth = ctx?.authInfo;
@@ -51,7 +51,7 @@ export function resolveRateLimitKey(ctx: RequestContextLike): string {
     return `ip:${ctx.ip}`;
   }
 
-  // Tamamen anonim istekler için paylaşılan kova.
+  // Shared bucket for completely anonymous requests.
   return "anon:global";
 }
 
@@ -273,7 +273,7 @@ function buildEffectiveKey(
 
 /**
  * In-memory RateLimiter factory.
- * Geriye dönük olarak `check(key, ctx)` kullanımını destekler, ancak async döner.
+ * Supports `check(key, ctx)` usage for backward compatibility, but returns async.
  */
 export function createInMemoryRateLimiter(
   config?: Partial<RateLimitConfig>,
@@ -387,7 +387,7 @@ export function createRateLimiter(options?: {
     const redisUrl = options?.redisUrl ?? process.env.REDIS_URL;
     if (!redisUrl) {
       throw new Error(
-        "MCP_RATE_LIMIT_STORE=redis ancak REDIS_URL tanımlı değil.",
+        "MCP_RATE_LIMIT_STORE=redis but REDIS_URL is not defined.",
       );
     }
 
@@ -405,13 +405,13 @@ export function createRateLimiter(options?: {
   }
 
   throw new Error(
-    "Geçersiz MCP_RATE_LIMIT_STORE değeri. Desteklenenler: memory, redis.",
+    "Invalid MCP_RATE_LIMIT_STORE value. Supported: memory, redis.",
   );
 }
 
 /**
- * Varsayılan singleton:
- * - InMemory backend (MCP_RATE_LIMIT_STORE yoksa varsayılan)
- * - Geriye dönük uyumluluk için export adı korunur.
+ * Default singleton:
+ * - InMemory backend (default if MCP_RATE_LIMIT_STORE is missing)
+ * - Export name is preserved for backward compatibility.
  */
 export const rateLimiter: RateLimiter = createRateLimiter();

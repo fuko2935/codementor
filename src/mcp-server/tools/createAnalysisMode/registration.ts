@@ -65,11 +65,12 @@ Examples:
     toolName,
     toolDescription,
     CreateAnalysisModeInputSchema.shape,
-    async (params: CreateAnalysisModeInput, mcpContext: any): Promise<CallToolResult> => {
+    async (params: CreateAnalysisModeInput, mcpContext: unknown): Promise<CallToolResult> => {
       // Create request context from mcpContext (Requirement 6.2)
+      const ctx = mcpContext as { userId?: string; clientId?: string } | undefined;
       const context = requestContextService.createRequestContext({
-        userId: mcpContext?.userId,
-        clientId: mcpContext?.clientId,
+        userId: ctx?.userId,
+        clientId: ctx?.clientId,
         operation: toolName
       });
 

@@ -101,17 +101,17 @@ export class Sanitization {
    * - built-in defaults (this.sensitiveFields)
    * - optional MCP_REDACT_KEYS env configuration (comma-separated)
    *
-   * Env davranışı:
-   * - Tanımlı değilse: sadece mevcut davranış (hardcoded liste) kullanılır.
-   * - Tanımlıysa:
-   *   - Değer virgülle bölünür.
-   *   - Her öğe trim + lowercase ile normalize edilir.
-   *   - Boş kayıtlar atılır.
-   *   - Hardcoded liste ile birlikte tekil bir birleşim oluşturulur.
+   * Env behavior:
+   * - If not defined: only existing behavior (hardcoded list) is used.
+   * - If defined:
+   *   - Value is split by comma.
+   *   - Each item is normalized with trim + lowercase.
+   *   - Empty entries are discarded.
+   *   - A unique union is created with the hardcoded list.
    *
-   * Redaksiyon mantığıyla uyumlu olması için tüm değerler lowercase saklanır
-   * ve redactSensitiveFields içinde olduğu gibi case-insensitive substring
-   * eşleşmesine uygun formatta döndürülür.
+   * All values are stored in lowercase to be compatible with redaction logic
+   * and returned in a format suitable for case-insensitive substring
+   * matching as in redactSensitiveFields.
    *
    * @private
    */

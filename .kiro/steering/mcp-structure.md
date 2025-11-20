@@ -46,11 +46,11 @@ mcp-server/
 │   ├── httpErrorHandler.ts     # HTTP error handling
 │   └── auth/                   # Authentication strategies (JWT, OAuth)
 ├── tools/                       # MCP tool implementations
-│   ├── geminiCodebaseAnalyzer/ # Main codebase analysis tool
-│   ├── projectOrchestratorCreate/  # Large project grouping (step 1)
-│   ├── projectOrchestratorAnalyze/ # Large project analysis (step 2)
-│   ├── calculateTokenCount/    # Token counting utility
-│   ├── mcpSetupGuide/          # MCP setup documentation
+│   ├── geminiCodebaseAnalyzer/ # Main codebase analysis tool with code review
+│   ├── calculateTokenCount/    # Token counting utility with git diff support
+│   ├── createAnalysisMode/     # Custom analysis mode management (v5.1.0+)
+│   └── projectBootstrap/       # Project initialization with MCP guide
+│   ├── createAnalysisMode/     # Custom analysis mode management
 │   └── projectBootstrap/       # Project initialization
 ├── tool-blueprints/            # Reference implementations (not active)
 │   ├── echoTool/              # Minimal synchronous tool example

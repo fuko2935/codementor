@@ -161,11 +161,11 @@ Notes:
 
 The server exposes a comprehensive analysis workflow including:
 
-- **Comprehensive project analysis** with expert persona selection and grouped summaries.
+- **Comprehensive project analysis** with expert persona selection and AI-powered insights.
 - **Targeted code search** utilities for locating files, functions, or patterns inside large repositories.
 - **Knowledge capture tools** for usage guides, FAQ synthesis, and report generation.
-- **Token accounting** (Gemini-compatible) to plan safe response sizes.
-- **Unified codebase analysis** with built-in orchestration for large projects - no separate tools needed.
+- **Token accounting** (Gemini-compatible) to plan safe response sizes with git diff support.
+- **Efficient codebase analysis** with smart context filtering via .mcpignore and subdirectory analysis.
 
 Each tool validates input with Zod schemas and automatically records structured logs that include the request context ID for easy tracing.
 
@@ -284,6 +284,33 @@ Use `create_analysis_mode` with the `saveAs` parameter to save your custom mode:
 
 This creates `.mcp/analysis_modes/react-perf-expert.md` in your project.
 
+### Listing Available Modes
+
+List all available analysis modes (standard + custom):
+
+```json
+{
+  "tool_name": "create_analysis_mode",
+  "params": {
+    "action": "list"
+  }
+}
+```
+
+### Deleting a Custom Mode
+
+Remove a custom analysis mode:
+
+```json
+{
+  "tool_name": "create_analysis_mode",
+  "params": {
+    "action": "delete",
+    "modeName": "react-perf-expert"
+  }
+}
+```
+
 ### Using a Custom Mode
 
 Reference your saved mode in `gemini_codebase_analyzer` with the `custom:` prefix:
@@ -305,6 +332,7 @@ Reference your saved mode in `gemini_codebase_analyzer` with the `custom:` prefi
 - ✅ **Shareable**: Commit to version control for team use
 - ✅ **Flexible**: Manual, AI-assisted, or project-specific modes
 - ✅ **Organized**: Stored in `.mcp/analysis_modes/` directory
+- ✅ **Manageable**: List and delete modes as needed (v5.1.0+)
 
 **📖 For complete documentation, see [CUSTOM_ANALYSIS_MODES.md](CUSTOM_ANALYSIS_MODES.md)**
 
@@ -400,11 +428,15 @@ Sensitive values are aggressively redacted from logs.
 
 ## Security
 
-Security Hardening Guide:
-See [docs/security-hardening.md](docs/security-hardening.md:1) for comprehensive production hardening recommendations.
-In particular:
-- Treat this MCP server as an internal component.
-- Terminate TLS, perform authentication/authorization, and enforce network boundaries at a dedicated gateway or reverse proxy.
+**Security Hardening Guide:**
+For comprehensive production hardening recommendations, see `docs/security-hardening.md` in the repository.
+
+**Key Security Principles:**
+- Treat this MCP server as an internal component
+- Terminate TLS at a reverse proxy or API gateway
+- Perform authentication/authorization at the gateway level
+- Enforce network boundaries and IP allowlists
+- Never hardcode API keys in configuration files
 
 ### Git Command Execution
 
@@ -532,26 +564,32 @@ If Tree-sitter parsing fails:
 
 ```
 src/
-├── config/            # Environment parsing & validation (now provider-key centric)
-├── mcp-server/        # Reusable MCP server scaffolding (stdio + HTTP transports)
+├── config/            # Environment parsing & validation with Zod schemas
+├── mcp-server/        # Reusable MCP server scaffolding (STDIO + HTTP transports)
+│   ├── tools/        # MCP tool implementations
+│   ├── transports/   # STDIO and HTTP transport layers
+│   └── utils/        # Server-specific utilities
 ├── services/
-│   └── llm-providers/ # OpenRouter helper (kept for reference)
-├── simple-server.ts   # Local CLI entry with tool definitions & provider key resolver
-├── utils/             # Logger, error handler, metrics, parsing, security helpers
-└── index.ts           # Programmatic entry point for embedding the server
+│   └── llm-providers/ # LLM provider integrations (Gemini CLI, OpenRouter, etc.)
+├── utils/             # Shared utilities (logging, error handling, security, parsing)
+├── types-global/      # Global type definitions
+└── index.ts           # Main entry point and CLI bootstrap
 ```
 
-Legacy agent, Supabase, DuckDB, and deployment artefacts have been removed. If you need them, check the Git history before the `2.0.0` release.
+**Note:** Legacy agent, Supabase, DuckDB, and deployment artifacts have been removed. If you need them, check the Git history before the `2.0.0` release.
 
 ## Architecture Overview
 
-For high-level component map, request flows, dependency layers, security and performance considerations, see the architecture document:
-- [docs/architecture.md](docs/architecture.md:1)
+The codebase follows a layered architecture with clear separation of concerns:
 
-- Component map and dependency layers
-- HTTP (streamable) and STDIO sequence diagrams
-- Security surfaces and controls
-- Performance considerations
+- **Entry Point** (`src/index.ts`): Programmatic bootstrap for embedding the MCP server
+- **Configuration** (`src/config/`): Environment parsing & validation with Zod
+- **MCP Server** (`src/mcp-server/`): Reusable server scaffolding with STDIO and HTTP transports
+- **Tools** (`src/mcp-server/tools/`): MCP tool implementations (analysis, token counting, etc.)
+- **Services** (`src/services/`): External service integrations (LLM providers)
+- **Utilities** (`src/utils/`): Shared utilities (logging, error handling, security, parsing)
+
+For detailed architecture documentation including component maps, request flows, and security considerations, see the `docs/` directory in the repository.
 
 ---
 
@@ -639,8 +677,9 @@ This limitation is documented in the codebase at `src/services/llm-providers/gem
 
 ## Next Steps
 
-- Drop additional tools into `simple-server.ts` or migrate them into the modular `src/mcp-server` scaffolding if you need stronger type boundaries.
-- Extend the provider key resolver to cover new vendors by adding aliases in one place.
-- Rebuild documentation with `npm run docs:generate` after making API changes.
+- Add new tools to `src/mcp-server/tools/` following the established pattern (see `.kiro/steering/mcp-workflows.md`)
+- Extend LLM provider support by adding new providers to `src/services/llm-providers/`
+- Rebuild API documentation with `npm run docs:generate` after making changes
+- Customize analysis modes with `create_analysis_mode` for your specific use cases
 
 Enjoy the leaner setup!

@@ -1,13 +1,13 @@
 /**
- * @fileoverview Redis-backed RateLimiterStore ve RateLimiter factory.
- * - RateLimiterStore kontratını Redis üzerinde uygular.
- * - MCP_RATE_LIMIT_STORE=redis seçildiğinde src/utils/security/rateLimiter.ts
- *   içindeki createRateLimiter tarafından kullanılır.
+ * @fileoverview Redis-backed RateLimiterStore and RateLimiter factory.
+ * - Implements RateLimiterStore contract over Redis.
+ * - Used by createRateLimiter in src/utils/security/rateLimiter.ts
+ *   when MCP_RATE_LIMIT_STORE=redis is selected.
  *
- * Bu modül, gerçek Redis istemcisine doğrudan bağımlılık eklemez:
- * - Minimal, mocklanabilir bir RedisClientAdapter arayüzü tanımlar.
- * - Varsayılan createRedisClientAdapter implementasyonu `redis` benzeri bir
- *   istemci bekler; host ortamı bu adaptörü sağlayabilir veya override edebilir.
+ * This module does not directly depend on a real Redis client:
+ * - Defines a minimal, mockable RedisClientAdapter interface.
+ * - Default createRedisClientAdapter implementation expects a `redis`-like
+ *   client; host environment can provide or override this adapter.
  */
 
 import { BaseErrorCode, McpError } from "../../types-global/errors.js";
@@ -22,8 +22,8 @@ import {
 import { logger, requestContextService } from "../index.js";
 
 /**
- * Minimal Redis komut adaptörü.
- * Gerçek implementasyon, proje/host tarafında sağlanabilir.
+ * Minimal Redis command adapter.
+ * Actual implementation can be provided by project/host.
  */
 export interface RedisClientAdapter {
   incr(key: string): Promise<number>;
@@ -35,15 +35,15 @@ export interface RedisClientAdapter {
 }
 
 /**
- * Redis bağlantısı oluşturmak için opsiyonel factory.
- * Bu repository, doğrudan bir redis paketine kilitlenmemek için burada sadece
- * imza tanımlar. Host ortam, bu fonksiyonu override edebilir.
+ * Optional factory for creating Redis connection.
+ * This repository only defines the signature here to avoid locking into
+ * a specific redis package. Host environment can override this function.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function createRedisClientAdapter(redisUrl: string): RedisClientAdapter {
   throw new Error(
-    "createRedisClientAdapter uygulanmadı. " +
-      "MCP_RATE_LIMIT_STORE=redis kullanırken host ortam bir RedisClientAdapter sağlamalıdır.",
+    "createRedisClientAdapter not implemented. " +
+      "When using MCP_RATE_LIMIT_STORE=redis, host environment must provide a RedisClientAdapter.",
   );
 }
 
@@ -54,12 +54,12 @@ export interface RedisRateLimiterStoreOptions {
 }
 
 /**
- * Redis tabanlı RateLimiterStore.
+ * Redis-based RateLimiterStore.
  *
- * Atomic pencere davranışı:
- * - INCR ile sayaç artırılır.
- * - Yeni sayaç 1 ise PEXPIRE ile pencere süresi atanır.
- * - PTTL ile kalan süre okunarak resetTime hesaplanır.
+ * Atomic window behavior:
+ * - Counter is incremented with INCR.
+ * - If new counter is 1, window duration is set with PEXPIRE.
+ * - Remaining time is read with PTTL to calculate resetTime.
  */
 export class RedisRateLimiterStore implements RateLimiterStore {
   private readonly client: RedisClientAdapter;
@@ -83,7 +83,7 @@ export class RedisRateLimiterStore implements RateLimiterStore {
     const now = Date.now();
     const redisKey = this.k(key);
 
-    // Atomic davranış: INCR + PEXPIRE (yalnızca ilk istekte)
+    // Atomic behavior: INCR + PEXPIRE (only on first request)
     const count = await this.client.incr(redisKey);
     if (count === 1) {
       await this.client.pExpire(redisKey, windowMs);
@@ -127,7 +127,7 @@ export class RedisRateLimiterStore implements RateLimiterStore {
 
     return {
       current,
-      limit: current, // Gerçek limit üst RateLimiter'dan gelir; burada minimal veri döndürülür.
+      limit: current, // Actual limit comes from upper RateLimiter; minimal data returned here.
       remaining: 0,
       resetTime,
     };
@@ -154,8 +154,8 @@ export interface CreateRedisRateLimiterOptions {
 }
 
 /**
- * Redis backend kullanan RateLimiter factory.
- * RateLimiter.check, kimlik/IP bağlamını kullanarak key üretir ve RedisRateLimiterStore'a delegasyon yapar.
+ * RateLimiter factory using Redis backend.
+ * RateLimiter.check generates key using identity/IP context and delegates to RedisRateLimiterStore.
  */
 export function createRedisRateLimiter(options: CreateRedisRateLimiterOptions): RateLimiter {
   const {
@@ -170,7 +170,7 @@ export function createRedisRateLimiter(options: CreateRedisRateLimiterOptions): 
 
   if (!redisUrl) {
     throw new Error(
-      "createRedisRateLimiter: redisUrl zorunludur.",
+      "createRedisRateLimiter: redisUrl is required.",
     );
   }
 
@@ -210,7 +210,7 @@ export function createRedisRateLimiter(options: CreateRedisRateLimiterOptions): 
           "Redis rate limiter increment failed",
           logContext,
         );
-        // Fail-fast: Redis seçili ise boot sırasında yakalanmalı; burada da konservatif davran.
+        // Fail-fast: If Redis is selected, should be caught during boot; be conservative here too.
         throw new McpError(
           BaseErrorCode.INTERNAL_ERROR,
           "Rate limiting backend error (redis).",
