@@ -14,7 +14,7 @@ import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { config } from "../../../config/index.js";
 import { BASE_DIR } from "../../../index.js";
 import { createModelByProvider } from "../../../services/llm-providers/modelFactory.js";
-import { getSystemPrompt } from "../../prompts.js";
+import { PromptLoader } from "../../utils/promptLoader.js";
 import { validateProjectSize } from "../../utils/projectSizeValidator.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
 import { extractGitDiff, type ExtractGitDiffParams } from "../../utils/gitDiffAnalyzer.js";
@@ -204,44 +204,6 @@ const MAX_TOTAL_SIZE = 100 * 1024 * 1024;
  * Maximum allowed number of files to process.
  */
 const MAX_FILE_COUNT = 1000;
-
-// YENİ YARDIMCI FONKSİYON
-/**
- * Loads a custom analysis mode prompt from the file system.
- * @param modeName - The sanitized name of the custom mode.
- * @param projectPath - The validated, absolute path to the project.
- * @param context - The request context.
- * @returns The content of the custom prompt file.
- * @throws {McpError} if the mode file is not found.
- */
-async function loadCustomModePrompt(
-  modeName: string,
-  projectPath: string,
-  context: RequestContext,
-): Promise<string> {
-  const modePath = path.join(projectPath, '.mcp', 'analysis_modes', `${modeName}.md`);
-  logger.debug(`Attempting to load custom analysis mode`, { ...context, path: modePath });
-
-  try {
-    const prompt = await fs.readFile(modePath, 'utf-8');
-    if (!prompt.trim()) {
-      throw new Error("Custom mode file is empty.");
-    }
-    logger.info(`Successfully loaded custom analysis mode: ${modeName}`, context);
-    return prompt;
-  } catch (error) {
-    logger.error(`Custom analysis mode '${modeName}' not found or is empty.`, {
-      ...context,
-      path: modePath,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw new McpError(
-      BaseErrorCode.NOT_FOUND,
-      `Custom analysis mode '${modeName}' not found. Please create it first using the 'create_analysis_mode' tool with the 'saveAs' parameter.`,
-      { modeName, expectedPath: modePath }
-    );
-  }
-}
 
 /**
  * Prepares the full context of a project by reading all files and combining them.
@@ -567,13 +529,33 @@ These files were skipped to prevent memory issues during analysis. To include th
       });
     }
 
-    // YENİ MANTIK: Sistem prompt'unu belirle
-    let systemPrompt: string;
+    const promptLoader = PromptLoader.getInstance();
     const analysisMode = validatedParams.analysisMode || "general";
+    const templateData = {
+      USER_QUESTION: validatedParams.question,
+      PROJECT_CONTEXT: fullContext,
+      CODE_CHANGES: changesData || "",
+    };
+    let promptForModel: string;
 
     if (validatedParams.customExpertPrompt && validatedParams.customExpertPrompt.trim()) {
       // Geriye dönük uyumluluk için customExpertPrompt'u önceliklendir
-      systemPrompt = validatedParams.customExpertPrompt.trim();
+      promptForModel = `${validatedParams.customExpertPrompt.trim()}
+
+PROJECT CONTEXT:
+${fullContext}`;
+
+      if (changesData) {
+        promptForModel += `
+
+CODE CHANGES TO REVIEW:
+${changesData}`;
+      }
+
+      promptForModel += `
+
+CODING AI QUESTION:
+${validatedParams.question}`;
       logger.info("Using provided 'customExpertPrompt'.", context);
     } else if (analysisMode.startsWith('custom:')) {
       // Özel modu yükle
@@ -582,38 +564,30 @@ These files were skipped to prevent memory issues during analysis. To include th
       if (!/^[a-zA-Z0-9_-]+$/.test(modeName)) {
         throw new McpError(BaseErrorCode.VALIDATION_ERROR, `Invalid custom mode name format: ${modeName}`);
       }
-      systemPrompt = await loadCustomModePrompt(modeName, normalizedPath, context);
+      promptForModel = await promptLoader.getPrompt(
+        analysisMode,
+        normalizedPath,
+        templateData,
+        context,
+      );
     } else {
       // Standart modu kullan
-      systemPrompt = getSystemPrompt(analysisMode);
+      promptForModel = await promptLoader.getPrompt(
+        analysisMode,
+        undefined,
+        templateData,
+        context,
+      );
     }
-
-    // Build prompt with optional changes section
-    let megaPrompt = `${systemPrompt}
-
-PROJECT CONTEXT:
-${fullContext}`;
-
-    if (changesData) {
-      megaPrompt += `
-
-CODE CHANGES TO REVIEW:
-${changesData}`;
-    }
-
-    megaPrompt += `
-
-CODING AI QUESTION:
-${validatedParams.question}`;
 
     logger.info("Sending request to Gemini AI", {
       ...context,
-      promptLength: megaPrompt.length,
+      promptLength: promptForModel.length,
       contextLength: fullContext.length,
     });
 
     // Send to Gemini AI
-    const result = await model.generateContent(megaPrompt);
+    const result = await model.generateContent(promptForModel);
     const response = await result.response;
     const analysis = response.text();
 

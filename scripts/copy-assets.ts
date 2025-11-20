@@ -89,6 +89,32 @@ async function main(): Promise<void> {
         }
       }
     }
+
+    // analysis_modes klasörünü dist ve dist-test altına kopyala
+    const analysisModesSrc = path.join(rootDir, "analysis_modes");
+    const analysisModesTargets = [
+      path.join(rootDir, "dist", "analysis_modes"),
+      path.join(rootDir, "dist-test", "analysis_modes"),
+    ];
+
+    for (const target of analysisModesTargets) {
+      try {
+        await copyDirectory(analysisModesSrc, target);
+        process.stdout.write(
+          `[copy-assets] Synced analysis_modes: ${analysisModesSrc} -> ${target}\n`,
+        );
+      } catch (error) {
+        process.stderr.write(
+          `[copy-assets] Failed to copy analysis_modes directory\n` +
+            `[copy-assets] Source: ${analysisModesSrc}\n` +
+            `[copy-assets] Target: ${target}\n` +
+            `[copy-assets] Error: ${
+              error instanceof Error ? error.message : String(error)
+            }\n`,
+        );
+        process.exit(1);
+      }
+    }
   } catch (error) {
     process.stderr.write(
       "[copy-assets] Unexpected error while copying templates directories.\n" +

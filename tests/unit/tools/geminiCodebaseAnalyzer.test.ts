@@ -26,6 +26,16 @@ import {
 } from "../../../src/mcp-server/utils/mcpConfigValidator.js";
 import { TestMcpServer } from "../testUtils/testMcpServer.js";
 
+const mockGetPrompt = jest.fn(async () => "mock-prompt");
+
+jest.mock("../../../src/mcp-server/utils/promptLoader.js", () => ({
+  PromptLoader: {
+    getInstance: () => ({
+      getPrompt: mockGetPrompt,
+    }),
+  },
+}));
+
 const TEST_ROOT = path.join(process.cwd(), ".test-temp");
 
 // Helper to invoke the tool handler with standard params

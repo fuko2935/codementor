@@ -136,6 +136,12 @@ const EnvSchema = z.object({
   OPENROUTER_API_KEY: z.string().optional(),
   /** Optional. API key for Google Gemini services. */
   GEMINI_API_KEY: z.string().optional(),
+  /** Optional. API key for Proxy provider. */
+  PROXY_API_KEY: z.string().optional(),
+  /** Optional. Base URL for Proxy provider. Default: "http://localhost:2048/v1". */
+  PROXY_BASE_URL: z.string().default("http://localhost:2048/v1"),
+  /** Optional. Model ID for Proxy provider. Default: "gemini-3-pro-preview". */
+  PROXY_MODEL_ID: z.string().default("gemini-3-pro-preview"),
   /** Default LLM provider. Default: "gemini-cli". */
   LLM_DEFAULT_PROVIDER: z
     .enum([
@@ -151,6 +157,7 @@ const EnvSchema = z.object({
       "xai",
       "azureOpenAI",
       "ollama",
+      "proxy",
     ])
     .default("gemini-cli"),
   /** Default LLM model. Default: "gemini-2.5-pro". */
@@ -226,6 +233,7 @@ const providerApiKeys = {
   xai: env.XAI_API_KEY,
   azureOpenAI: env.AZURE_OPENAI_API_KEY,
   ollama: env.OLLAMA_API_KEY,
+  proxy: env.PROXY_API_KEY,
 };
 
 const providerOptions = {
@@ -235,6 +243,10 @@ const providerOptions = {
   },
   ollama: {
     host: env.OLLAMA_HOST,
+  },
+  proxy: {
+    baseURL: env.PROXY_BASE_URL,
+    modelId: env.PROXY_MODEL_ID,
   },
 };
 
@@ -415,6 +427,12 @@ export const config = {
   ollamaApiKey: providerApiKeys.ollama,
   /** Ollama host override. From `OLLAMA_HOST`. */
   ollamaHost: providerOptions.ollama.host,
+  /** Proxy API Key. From `PROXY_API_KEY`. */
+  proxyApiKey: providerApiKeys.proxy,
+  /** Proxy Base URL. From `PROXY_BASE_URL`. */
+  proxyBaseUrl: providerOptions.proxy.baseURL,
+  /** Proxy Model ID. From `PROXY_MODEL_ID`. */
+  proxyModelId: providerOptions.proxy.modelId,
   /** Maximum project tokens limit. From `MAX_PROJECT_TOKENS`. Default: 20,000,000. */
   maxProjectTokens: env.MAX_PROJECT_TOKENS ?? 20_000_000,
   /** Maximum git blob size in bytes for diff operations. From `MAX_GIT_BLOB_SIZE_BYTES`. Default: 4MB. */
