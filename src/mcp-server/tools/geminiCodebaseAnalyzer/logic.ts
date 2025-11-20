@@ -387,10 +387,11 @@ export async function geminiCodebaseAnalyzerLogic(
     // Validate with refined schema (includes check that includeChanges requires review mode)
     const validatedParams = GeminiCodebaseAnalyzerInputSchema.parse(params);
 
-    // Validate and secure the project path against the central BASE_DIR
+    // Validate and secure the project path against the user's working directory
+    // Use process.cwd() instead of BASE_DIR to allow analyzing external projects
     const normalizedPath = await validateSecurePath(
       validatedParams.projectPath,
-      BASE_DIR,
+      process.cwd(),
       context,
     );
 

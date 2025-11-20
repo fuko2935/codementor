@@ -8,7 +8,7 @@ import path from "path";
 import { logger, type RequestContext } from "../../../utils/index.js";
 import { McpError, BaseErrorCode } from "../../../types-global/errors.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
-import { BASE_DIR } from "../../../index.js";
+// process.cwd() removed - use process.cwd() for user's working directory
 import { prepareFullContext } from "../../utils/contextBuilder.js";
 import { createModelByProvider } from "../../../services/llm-providers/modelFactory.js";
 import { config } from "../../../config/index.js";
@@ -182,8 +182,8 @@ async function listAnalysisModes(
   try {
     // Determine project directory
     const projectDir = params.projectPath 
-      ? await validateSecurePath(params.projectPath, BASE_DIR, context)
-      : BASE_DIR;
+      ? await validateSecurePath(params.projectPath, process.cwd(), context)
+      : process.cwd();
     
     // Check custom modes directory
     const customModesDir = path.join(projectDir, '.mcp', 'analysis_modes');
@@ -196,7 +196,7 @@ async function listAnalysisModes(
           const stats = await fs.stat(filePath);
           modes.push({
             name: file.replace('.md', ''),
-            path: path.relative(BASE_DIR, filePath),
+            path: path.relative(process.cwd(), filePath),
             type: "custom",
             size: stats.size
           });
@@ -269,8 +269,8 @@ async function deleteAnalysisMode(
   try {
     // Determine project directory
     const projectDir = params.projectPath 
-      ? await validateSecurePath(params.projectPath, BASE_DIR, context)
-      : BASE_DIR;
+      ? await validateSecurePath(params.projectPath, process.cwd(), context)
+      : process.cwd();
     
     // Construct path to custom mode file
     const customModesDir = path.join(projectDir, '.mcp', 'analysis_modes');
@@ -287,7 +287,7 @@ async function deleteAnalysisMode(
           `Analysis mode '${params.modeName}' not found`,
           {
             modeName: params.modeName,
-            searchPath: path.relative(BASE_DIR, customModesDir)
+            searchPath: path.relative(process.cwd(), customModesDir)
           }
         );
       }
@@ -295,7 +295,7 @@ async function deleteAnalysisMode(
       throw error;
     }
     
-    const relativePath = path.relative(BASE_DIR, modeFilePath);
+    const relativePath = path.relative(process.cwd(), modeFilePath);
     
     logger.info("Analysis mode deleted successfully", {
       ...context,
@@ -626,7 +626,7 @@ async function processProjectSpecificMode(
   
   // Validate path with validateSecurePath (Requirement 3.2)
   // Note: validateSecurePath is async and also checks if path exists and is a directory
-  const validatedPath = await validateSecurePath(params.projectPath, BASE_DIR, context);
+  const validatedPath = await validateSecurePath(params.projectPath, process.cwd(), context);
   
   logger.debug("Path validated successfully", {
     ...context,
@@ -817,10 +817,10 @@ export async function createAnalysisModeLogic(
         
         // Handle saveAs parameter
         if (params.saveAs) {
-          // Validate project path for security, otherwise use BASE_DIR
+          // Validate project path for security, otherwise use process.cwd()
           const projectDir = params.projectPath 
-            ? await validateSecurePath(params.projectPath, BASE_DIR, context)
-            : BASE_DIR;
+            ? await validateSecurePath(params.projectPath, process.cwd(), context)
+            : process.cwd();
 
           const modesDir = path.join(projectDir, '.mcp', 'analysis_modes');
           await fs.mkdir(modesDir, { recursive: true });
@@ -829,7 +829,7 @@ export async function createAnalysisModeLogic(
           const savePath = path.join(modesDir, `${params.saveAs}.md`);
           
           await fs.writeFile(savePath, createResponse.analysisModePrompt!, 'utf-8');
-          createResponse.savedPath = path.relative(BASE_DIR, savePath);
+          createResponse.savedPath = path.relative(process.cwd(), savePath);
           
           logger.info("Custom analysis mode saved to file", {
             ...context,
