@@ -7,6 +7,7 @@ import { logger, type RequestContext, createIgnoreInstance } from "../../../util
 import { countTokens } from "../../../utils/metrics/tokenCounter.js";
 import { countTokensLocally } from "../../utils/tokenizer.js";
 import { validateSecurePath } from "../../utils/securePathValidator.js";
+import { extractGitDiff } from "../../utils/gitDiffAnalyzer.js";
 
 export const CalculateTokenCountInputSchema = z.object({
   projectPath: z.string().min(1).optional(),
@@ -24,6 +25,13 @@ export const CalculateTokenCountInputSchema = z.object({
     .optional()
     .default("gemini-2.0-flash"),
   geminiApiKey: z.string().min(1).optional(),
+  includeChanges: z
+    .object({
+      revision: z.string().optional().describe("Git revision (commit hash, branch, range, or '.' for uncommitted)"),
+      count: z.number().int().positive().optional().describe("Number of recent commits to analyze")
+    })
+    .optional()
+    .describe("Include git diff tokens in calculation. Specify 'revision' or 'count'."),
 });
 
 export type CalculateTokenCountInput = z.infer<
@@ -42,8 +50,11 @@ export interface CalculateTokenCountResponse {
     analyzedFiles: number;
     skippedFiles: number;
     totalFiles: number;
+    gitDiffTokens?: number;
+    gitDiffCharacters?: number;
   };
   topFiles?: Array<{ file: string; tokens: number; characters: number }>;
+  gitDiffIncluded?: boolean;
 }
 
 export async function calculateTokenCountLogic(
@@ -150,6 +161,57 @@ export async function calculateTokenCountLogic(
 
   breakdown.sort((a, b) => b.tokens - a.tokens);
 
+  // Handle git diff if includeChanges is specified
+  let gitDiffTokens = 0;
+  let gitDiffCharacters = 0;
+  let gitDiffIncluded = false;
+
+  if (params.includeChanges) {
+    try {
+      logger.info("Extracting git diff for token calculation", {
+        ...context,
+        revision: params.includeChanges.revision,
+        count: params.includeChanges.count
+      });
+
+      const diffResult = await extractGitDiff(
+        normalizedPath,
+        {
+          revision: params.includeChanges.revision,
+          count: params.includeChanges.count
+        },
+        context
+      );
+
+      // Convert diff result to string for token counting
+      const diffText = JSON.stringify(diffResult, null, 2);
+      gitDiffCharacters = diffText.length;
+
+      // Count tokens based on selected tokenizer
+      if (useGeminiTokenizer) {
+        gitDiffTokens = countTokensLocally(diffText, "gemini-2.0-flash");
+      } else {
+        gitDiffTokens = await countTokens(diffText, context);
+      }
+
+      totalTokens += gitDiffTokens;
+      totalCharacters += gitDiffCharacters;
+      gitDiffIncluded = true;
+
+      logger.info("Git diff tokens calculated", {
+        ...context,
+        gitDiffTokens,
+        gitDiffCharacters
+      });
+    } catch (error) {
+      logger.warning("Failed to extract git diff, continuing without it", {
+        ...context,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      // Continue without git diff - don't fail the entire operation
+    }
+  }
+
   return {
     mode: "project_analysis",
     tokenCount: totalTokens,
@@ -163,7 +225,12 @@ export async function calculateTokenCountLogic(
       analyzedFiles: fileContents.length,
       skippedFiles,
       totalFiles: filteredFiles.length,
+      ...(gitDiffIncluded && {
+        gitDiffTokens,
+        gitDiffCharacters
+      })
     },
     topFiles: breakdown.slice(0, 10),
+    gitDiffIncluded
   };
 }

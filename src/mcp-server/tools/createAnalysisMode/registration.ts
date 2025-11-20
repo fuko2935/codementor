@@ -42,19 +42,23 @@ import {
  */
 export const registerCreateAnalysisMode = async (server: McpServer): Promise<void> => {
   const toolName = "create_analysis_mode";
-  const toolDescription = `Creates custom expert analysis modes for codebase analysis.
+  const toolDescription = `Manages custom expert analysis modes for codebase analysis.
 
-Supports three modes:
-1. Manual Mode (withAi=false): Use expertiseHint directly as the expert prompt
-2. AI-Assisted General (withAi=true, no projectPath): AI generates a general expert prompt based on your hint
-3. AI-Assisted Project-Specific (withAi=true, with projectPath): AI generates a project-specific expert prompt
+Actions:
+1. create (default): Creates a new analysis mode
+   - Manual Mode (withAi=false): Use expertiseHint directly as the expert prompt
+   - AI-Assisted General (withAi=true, no projectPath): AI generates a general expert prompt
+   - AI-Assisted Project-Specific (withAi=true, with projectPath): AI generates a project-specific expert prompt
+2. list: Lists all available analysis modes (standard and custom)
+3. delete: Deletes a custom analysis mode by name
 
 The generated analysisModePrompt can be used with gemini_codebase_analyzer's customExpertPrompt parameter.
 
 Examples:
-- Manual: {"expertiseHint": "You are a security expert...", "withAi": false}
-- AI General: {"expertiseHint": "Create a security-focused code reviewer", "withAi": true}
-- AI Project: {"expertiseHint": "Create a security expert for this project", "withAi": true, "projectPath": "."}`;
+- Create Manual: {"action": "create", "expertiseHint": "You are a security expert...", "withAi": false}
+- Create AI: {"action": "create", "expertiseHint": "Create a security expert", "withAi": true, "projectPath": "."}
+- List: {"action": "list"}
+- Delete: {"action": "delete", "modeName": "my-custom-mode"}`;
 
   // Register tool with MCP server (Requirement 5.1)
   server.tool(
@@ -82,13 +86,15 @@ Examples:
         // Log successful completion (Requirement 7.3)
         logger.info(`${toolName} completed successfully`, {
           ...context,
+          action: result.action,
           modeType: result.modeType,
-          promptLength: result.analysisModePrompt.length,
+          promptLength: result.analysisModePrompt?.length,
+          modesCount: result.modes?.length,
           returnFormat: params.returnFormat || "json"
         });
 
         // Format success response based on returnFormat (Requirement 6.3)
-        const responseText = params.returnFormat === "prompt_only"
+        const responseText = params.returnFormat === "prompt_only" && result.analysisModePrompt
           ? result.analysisModePrompt
           : JSON.stringify(result, null, 2);
 

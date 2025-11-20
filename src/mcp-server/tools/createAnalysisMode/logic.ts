@@ -22,26 +22,42 @@ import { config } from "../../../config/index.js";
  * Validates all input parameters with descriptions for AI assistants
  */
 export const CreateAnalysisModeInputSchema = z.object({
+  action: z.enum(["create", "list", "delete"])
+    .optional()
+    .default("create")
+    .describe("Action to perform: 'create' (default), 'list', or 'delete'"),
+  
   expertiseHint: z.string()
     .min(1, "Expertise hint cannot be empty")
+    .optional()
     .describe(
-      "Mode description. If withAi=false, used directly as prompt. " +
+      "Mode description. Required for 'create' action. " +
+      "If withAi=false, used directly as prompt. " +
       "If withAi=true, used as AI hint."
+    ),
+  
+  modeName: z.string()
+    .optional()
+    .describe("Mode name. Required for 'delete' action. Must be alphanumeric with underscores/hyphens.")
+    .refine(
+      (name) => !name || /^[a-zA-Z0-9_-]+$/.test(name),
+      { message: "modeName must only contain alphanumeric characters, underscores, and hyphens." }
     ),
   
   withAi: z.boolean()
     .optional()
     .default(false)
     .describe(
-      "Whether to use AI for mode generation. Default: false (manual mode)."
+      "Whether to use AI for mode generation. Default: false (manual mode). " +
+      "Only used for 'create' action."
     ),
   
   projectPath: z.string()
     .min(1)
     .optional()
     .describe(
-      "Project path for project-specific mode generation. " +
-      "Only used when withAi=true."
+      "Project path for project-specific mode generation or for locating custom modes. " +
+      "Only used when withAi=true for 'create' action."
     ),
   
   returnFormat: z.enum(["json", "prompt_only"])
@@ -49,22 +65,22 @@ export const CreateAnalysisModeInputSchema = z.object({
     .default("json")
     .describe(
       "Response format. 'json' returns full structured response, " +
-      "'prompt_only' returns only the prompt text for easier chaining."
+      "'prompt_only' returns only the prompt text for easier chaining. " +
+      "Only used for 'create' action."
     ),
   
   geminiApiKey: z.string()
     .min(1)
     .optional()
-    .describe("Optional Gemini API key override."),
+    .describe("Optional Gemini API key override. Only used for 'create' action with AI."),
   
   temporaryIgnore: z.array(z.string())
     .optional()
-    .describe("Additional ignore patterns for this run only."),
+    .describe("Additional ignore patterns for this run only. Only used for 'create' action."),
 
-  // YENİ ALAN: saveAs
   saveAs: z.string()
     .optional()
-    .describe("If provided, saves the generated prompt to '.mcp/analysis_modes/<saveAs>.md' for later use with 'gemini_codebase_analyzer'. Use a short, descriptive, file-safe name (e.g., 'my_security_reviewer').")
+    .describe("If provided, saves the generated prompt to '.mcp/analysis_modes/<saveAs>.md' for later use with 'gemini_codebase_analyzer'. Use a short, descriptive, file-safe name (e.g., 'my_security_reviewer'). Only used for 'create' action.")
     .refine(
       (name) => !name || /^[a-zA-Z0-9_-]+$/.test(name),
       { message: "saveAs must only contain alphanumeric characters, underscores, and hyphens." }
@@ -86,33 +102,236 @@ export type CreateAnalysisModeInput = z.infer<typeof CreateAnalysisModeInputSche
 
 /**
  * Response interface for createAnalysisMode tool
- * Contains the generated mode information
+ * Contains the generated mode information or list/delete results
  */
 export interface CreateAnalysisModeResponse {
   /**
-   * Type of mode created
+   * Action performed
+   */
+  action: "create" | "list" | "delete";
+  
+  /**
+   * Type of mode created (only for 'create' action)
    * - "manual": User-provided prompt used directly
    * - "ai_generated": AI-generated general prompt
    * - "ai_project_generated": AI-generated project-specific prompt
    */
-  modeType: "manual" | "ai_generated" | "ai_project_generated";
+  modeType?: "manual" | "ai_generated" | "ai_project_generated";
   
   /**
-   * The complete expert prompt text
+   * The complete expert prompt text (only for 'create' action)
    * Can be used directly with gemini_codebase_analyzer's customExpertPrompt parameter
    */
-  analysisModePrompt: string;
+  analysisModePrompt?: string;
   
   /**
-   * The original user-provided expertiseHint
+   * The original user-provided expertiseHint (only for 'create' action)
    * Preserved for reference and traceability
    */
-  sourceHint: string;
+  sourceHint?: string;
 
   /**
-   * YENİ ALAN: Path where the mode was saved, if `saveAs` was provided.
+   * Path where the mode was saved, if `saveAs` was provided (only for 'create' action)
    */
   savedPath?: string;
+  
+  /**
+   * List of available modes (only for 'list' action)
+   */
+  modes?: Array<{
+    name: string;
+    path: string;
+    type: "standard" | "custom";
+    size?: number;
+  }>;
+  
+  /**
+   * Deleted mode information (only for 'delete' action)
+   */
+  deletedMode?: {
+    name: string;
+    path: string;
+  };
+}
+
+// ============================================================================
+// Helper: List available analysis modes
+// ============================================================================
+
+/**
+ * Lists all available analysis modes (standard and custom)
+ * 
+ * @param params - Validated input parameters
+ * @param context - Request context for logging and tracing
+ * @returns List of available modes with metadata
+ * @throws {McpError} INTERNAL_ERROR - When file system operations fail
+ */
+async function listAnalysisModes(
+  params: CreateAnalysisModeInput,
+  context: RequestContext
+): Promise<CreateAnalysisModeResponse> {
+  logger.debug("Listing analysis modes", { ...context });
+  
+  const modes: Array<{
+    name: string;
+    path: string;
+    type: "standard" | "custom";
+    size?: number;
+  }> = [];
+  
+  try {
+    // Determine project directory
+    const projectDir = params.projectPath 
+      ? await validateSecurePath(params.projectPath, BASE_DIR, context)
+      : BASE_DIR;
+    
+    // Check custom modes directory
+    const customModesDir = path.join(projectDir, '.mcp', 'analysis_modes');
+    
+    try {
+      const customFiles = await fs.readdir(customModesDir);
+      for (const file of customFiles) {
+        if (file.endsWith('.md')) {
+          const filePath = path.join(customModesDir, file);
+          const stats = await fs.stat(filePath);
+          modes.push({
+            name: file.replace('.md', ''),
+            path: path.relative(BASE_DIR, filePath),
+            type: "custom",
+            size: stats.size
+          });
+        }
+      }
+    } catch (error) {
+      // Custom modes directory doesn't exist or is empty - that's okay
+      logger.debug("No custom modes directory found", { ...context });
+    }
+    
+    logger.info("Analysis modes listed successfully", {
+      ...context,
+      totalModes: modes.length,
+      customModes: modes.filter(m => m.type === "custom").length
+    });
+    
+    return {
+      action: "list",
+      modes
+    };
+    
+  } catch (error) {
+    logger.error("Failed to list analysis modes", {
+      ...context,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    
+    throw new McpError(
+      BaseErrorCode.INTERNAL_ERROR,
+      "Failed to list analysis modes",
+      {
+        originalError: error instanceof Error ? error.message : String(error)
+      }
+    );
+  }
+}
+
+// ============================================================================
+// Helper: Delete an analysis mode
+// ============================================================================
+
+/**
+ * Deletes a custom analysis mode
+ * 
+ * @param params - Validated input parameters
+ * @param context - Request context for logging and tracing
+ * @returns Information about the deleted mode
+ * @throws {McpError} VALIDATION_ERROR - When modeName is missing or invalid
+ * @throws {McpError} NOT_FOUND - When mode doesn't exist
+ * @throws {McpError} INTERNAL_ERROR - When deletion fails
+ */
+async function deleteAnalysisMode(
+  params: CreateAnalysisModeInput,
+  context: RequestContext
+): Promise<CreateAnalysisModeResponse> {
+  logger.debug("Deleting analysis mode", {
+    ...context,
+    modeName: params.modeName
+  });
+  
+  // Validate modeName is provided
+  if (!params.modeName) {
+    throw new McpError(
+      BaseErrorCode.VALIDATION_ERROR,
+      "modeName is required for delete action",
+      { field: "modeName" }
+    );
+  }
+  
+  try {
+    // Determine project directory
+    const projectDir = params.projectPath 
+      ? await validateSecurePath(params.projectPath, BASE_DIR, context)
+      : BASE_DIR;
+    
+    // Construct path to custom mode file
+    const customModesDir = path.join(projectDir, '.mcp', 'analysis_modes');
+    const modeFilePath = path.join(customModesDir, `${params.modeName}.md`);
+    
+    // Delete the file (atomic operation - no TOCTOU race condition)
+    try {
+      await fs.unlink(modeFilePath);
+    } catch (error: any) {
+      // File doesn't exist
+      if (error.code === 'ENOENT') {
+        throw new McpError(
+          BaseErrorCode.NOT_FOUND,
+          `Analysis mode '${params.modeName}' not found`,
+          {
+            modeName: params.modeName,
+            searchPath: path.relative(BASE_DIR, customModesDir)
+          }
+        );
+      }
+      // Other filesystem errors
+      throw error;
+    }
+    
+    const relativePath = path.relative(BASE_DIR, modeFilePath);
+    
+    logger.info("Analysis mode deleted successfully", {
+      ...context,
+      modeName: params.modeName,
+      path: relativePath
+    });
+    
+    return {
+      action: "delete",
+      deletedMode: {
+        name: params.modeName,
+        path: relativePath
+      }
+    };
+    
+  } catch (error) {
+    // Propagate McpError
+    if (error instanceof McpError) {
+      throw error;
+    }
+    
+    logger.error("Failed to delete analysis mode", {
+      ...context,
+      modeName: params.modeName,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    
+    throw new McpError(
+      BaseErrorCode.INTERNAL_ERROR,
+      "Failed to delete analysis mode",
+      {
+        modeName: params.modeName,
+        originalError: error instanceof Error ? error.message : String(error)
+      }
+    );
+  }
 }
 
 // ============================================================================
@@ -169,7 +388,7 @@ function processManualMode(
 ): CreateAnalysisModeResponse {
   logger.debug("Processing manual mode", {
     ...context,
-    hintLength: params.expertiseHint.length
+    hintLength: params.expertiseHint?.length || 0
   });
   
   // Validate expertiseHint is non-empty (should already be validated by Zod)
@@ -183,6 +402,7 @@ function processManualMode(
   
   // Return structured response with manual mode
   const response: CreateAnalysisModeResponse = {
+    action: "create",
     modeType: "manual",
     analysisModePrompt: params.expertiseHint,
     sourceHint: params.expertiseHint
@@ -191,7 +411,7 @@ function processManualMode(
   logger.info("Manual mode processed successfully", {
     ...context,
     modeType: response.modeType,
-    promptLength: response.analysisModePrompt.length
+    promptLength: response.analysisModePrompt?.length || 0
   });
   
   return response;
@@ -317,7 +537,7 @@ async function processAiGeneralMode(
 ): Promise<CreateAnalysisModeResponse> {
   logger.debug("Processing AI-assisted general mode", {
     ...context,
-    hintLength: params.expertiseHint.length
+    hintLength: params.expertiseHint?.length || 0
   });
   
   // Validate expertiseHint is non-empty (should already be validated by Zod)
@@ -342,6 +562,7 @@ async function processAiGeneralMode(
   
   // Return structured response
   const response: CreateAnalysisModeResponse = {
+    action: "create",
     modeType: "ai_generated",
     analysisModePrompt: generatedPrompt,
     sourceHint: params.expertiseHint
@@ -381,7 +602,7 @@ async function processProjectSpecificMode(
 ): Promise<CreateAnalysisModeResponse> {
   logger.debug("Processing project-specific mode", {
     ...context,
-    hintLength: params.expertiseHint.length,
+    hintLength: params.expertiseHint?.length || 0,
     projectPath: params.projectPath
   });
   
@@ -449,9 +670,10 @@ The prompt should reference project-specific patterns, architecture, and convent
     
     // Return structured response with ai_project_generated mode type (Requirement 3.4)
     const response: CreateAnalysisModeResponse = {
+      action: "create",
       modeType: "ai_project_generated",
       analysisModePrompt: generatedPrompt,
-      sourceHint: params.expertiseHint
+      sourceHint: params.expertiseHint!
     };
     
     return response;
@@ -513,11 +735,13 @@ export async function createAnalysisModeLogic(
   params: CreateAnalysisModeInput,
   context: RequestContext
 ): Promise<CreateAnalysisModeResponse> {
-  // Log operation start with sanitized params (Requirement 7.1)
+  // Log operation start with sanitized params
   logger.info("Starting createAnalysisMode operation", {
     ...context,
     params: {
-      expertiseHint: params.expertiseHint.substring(0, 100) + (params.expertiseHint.length > 100 ? "..." : ""),
+      action: params.action,
+      expertiseHint: params.expertiseHint ? params.expertiseHint.substring(0, 100) + (params.expertiseHint.length > 100 ? "..." : "") : undefined,
+      modeName: params.modeName,
       withAi: params.withAi,
       hasProjectPath: !!params.projectPath,
       hasGeminiApiKey: !!params.geminiApiKey,
@@ -526,74 +750,117 @@ export async function createAnalysisModeLogic(
   });
   
   try {
-    // Detect mode using detectMode (Requirement 7.2)
-    const mode = detectMode(params);
+    // Route based on action
+    const action = params.action || "create";
     
-    logger.debug("Mode detected", {
+    logger.debug("Action determined", {
       ...context,
-      mode
+      action
     });
     
-    // Route to appropriate processing function (Requirement 7.3)
     let response: CreateAnalysisModeResponse;
     
-    switch (mode) {
-      case "manual":
-        response = processManualMode(params, context);
+    switch (action) {
+      case "list":
+        response = await listAnalysisModes(params, context);
         break;
       
-      case "ai_generated":
-        response = await processAiGeneralMode(params, context);
+      case "delete":
+        response = await deleteAnalysisMode(params, context);
         break;
       
-      case "ai_project_generated":
-        response = await processProjectSpecificMode(params, context);
-        break;
-      
-      default:
-        // This should never happen due to TypeScript exhaustiveness checking
-        throw new McpError(
-          BaseErrorCode.INTERNAL_ERROR,
-          "Unhandled mode type",
-          { mode }
-        );
-    }
-    
-    // YENİ MANTIK: `saveAs` parametresi varsa dosyayı kaydet
-    if (params.saveAs) {
-        // Güvenlik için proje yolunu doğrula, yoksa BASE_DIR kullan
-        const projectDir = params.projectPath 
+      case "create":
+        // Validate expertiseHint for create action
+        if (!params.expertiseHint) {
+          throw new McpError(
+            BaseErrorCode.VALIDATION_ERROR,
+            "expertiseHint is required for create action",
+            { field: "expertiseHint" }
+          );
+        }
+        
+        // Detect mode using detectMode
+        const mode = detectMode(params);
+        
+        logger.debug("Mode detected", {
+          ...context,
+          mode
+        });
+        
+        // Route to appropriate processing function
+        let createResponse: CreateAnalysisModeResponse;
+        
+        switch (mode) {
+          case "manual":
+            createResponse = processManualMode(params, context);
+            break;
+          
+          case "ai_generated":
+            createResponse = await processAiGeneralMode(params, context);
+            break;
+          
+          case "ai_project_generated":
+            createResponse = await processProjectSpecificMode(params, context);
+            break;
+          
+          default:
+            // This should never happen due to TypeScript exhaustiveness checking
+            throw new McpError(
+              BaseErrorCode.INTERNAL_ERROR,
+              "Unhandled mode type",
+              { mode }
+            );
+        }
+        
+        // Add action field
+        createResponse.action = "create";
+        
+        // Handle saveAs parameter
+        if (params.saveAs) {
+          // Güvenlik için proje yolunu doğrula, yoksa BASE_DIR kullan
+          const projectDir = params.projectPath 
             ? await validateSecurePath(params.projectPath, BASE_DIR, context)
             : BASE_DIR;
 
-        const modesDir = path.join(projectDir, '.mcp', 'analysis_modes');
-        await fs.mkdir(modesDir, { recursive: true });
+          const modesDir = path.join(projectDir, '.mcp', 'analysis_modes');
+          await fs.mkdir(modesDir, { recursive: true });
 
-        // saveAs zaten Zod ile sanitize edildi, tekrar etmeye gerek yok.
-        const savePath = path.join(modesDir, `${params.saveAs}.md`);
-        
-        await fs.writeFile(savePath, response.analysisModePrompt, 'utf-8');
-        response.savedPath = path.relative(BASE_DIR, savePath); // Proje köküne göre rölatif yol
-        
-        logger.info("Custom analysis mode saved to file", {
+          // saveAs zaten Zod ile sanitize edildi, tekrar etmeye gerek yok.
+          const savePath = path.join(modesDir, `${params.saveAs}.md`);
+          
+          await fs.writeFile(savePath, createResponse.analysisModePrompt!, 'utf-8');
+          createResponse.savedPath = path.relative(BASE_DIR, savePath);
+          
+          logger.info("Custom analysis mode saved to file", {
             ...context,
-            path: response.savedPath
-        });
+            path: createResponse.savedPath
+          });
+        }
+        
+        response = createResponse;
+        break;
+      
+      default:
+        throw new McpError(
+          BaseErrorCode.VALIDATION_ERROR,
+          "Invalid action",
+          { action, allowed: ["create", "list", "delete"] }
+        );
     }
 
-    // Log operation completion (Requirement 7.4)
+    // Log operation completion
     logger.info("createAnalysisMode operation completed successfully", {
       ...context,
+      action: response.action,
       modeType: response.modeType,
-      promptLength: response.analysisModePrompt.length,
-      sourceHintLength: response.sourceHint.length,
-      savedPath: response.savedPath
+      modesCount: response.modes?.length,
+      deletedMode: response.deletedMode?.name
     });
     
     return response;
     
   } catch (error) {
-    // Propagate errors as McpError (Requirement 7.4)
+    // Propagate errors as McpError
     if (error instanceof McpError) {
       logger.error("createAnalysisMode operation failed with McpError", {
         ...context,
@@ -613,7 +880,7 @@ export async function createAnalysisModeLogic(
     
     throw new McpError(
       BaseErrorCode.INTERNAL_ERROR,
-      "Unexpected error during analysis mode creation",
+      "Unexpected error during analysis mode operation",
       {
         originalError: error instanceof Error ? error.message : String(error)
       }
