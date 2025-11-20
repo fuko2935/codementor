@@ -62,13 +62,19 @@ async function readCache(projectPath: string): Promise<Record<string, CacheEntry
 }
 
 /**
- * Writes the cache to filesystem
+ * Writes the cache to filesystem using atomic write pattern
+ * to prevent corruption from concurrent writes
  */
 async function writeCache(projectPath: string, cache: Record<string, CacheEntry>): Promise<void> {
   const cachePath = path.join(projectPath, CACHE_FILE_PATH);
   try {
     await fs.mkdir(path.dirname(cachePath), { recursive: true });
-    await fs.writeFile(cachePath, JSON.stringify(cache, null, 2));
+    
+    // Atomic write: write to temp file first, then rename
+    // This ensures the file is either fully written or not updated
+    const tempPath = `${cachePath}.${Date.now()}.${process.pid}.tmp`;
+    await fs.writeFile(tempPath, JSON.stringify(cache, null, 2));
+    await fs.rename(tempPath, cachePath);
   } catch (error) {
     // Note: This is a utility function without RequestContext, so we log without it
     logger.warning("Failed to write to MCP config validator cache", {
@@ -416,12 +422,18 @@ export async function refreshMcpConfigCache(
   const projectRoot = await findProjectRoot(normalizedPath);
   const cacheKey = projectRoot;
   
-  // Update both caches
-  memoryCache.set(cacheKey, cacheEntry);
-  
-  const filesystemCache = await readCache(projectRoot);
-  filesystemCache[cacheKey] = cacheEntry;
-  await writeCache(projectRoot, filesystemCache);
+  // Acquire lock to prevent race conditions with concurrent scans
+  await cacheLock.acquire();
+  try {
+    // Update both caches
+    memoryCache.set(cacheKey, cacheEntry);
+    
+    const filesystemCache = await readCache(projectRoot);
+    filesystemCache[cacheKey] = cacheEntry;
+    await writeCache(projectRoot, filesystemCache);
+  } finally {
+    cacheLock.release();
+  }
 }
 
 /**
