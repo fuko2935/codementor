@@ -1,5 +1,56 @@
 # Changelog
 
+## [5.1.0] - 2025-11-20
+
+### ✨ New Features
+
+#### `calculate_token_count` Tool
+- **Added**: `includeChanges` parameter for git diff token counting
+  - Support uncommitted changes with `revision: "."`
+  - Support specific commits, branches, or commit ranges
+  - Support last N commits with `count` parameter
+  - Returns `gitDiffTokens` and `gitDiffCharacters` in response
+  - Graceful degradation: continues without git diff if extraction fails
+
+#### `create_analysis_mode` Tool
+- **Added**: `list` action to list all available analysis modes
+  - Lists both standard and custom modes
+  - Returns mode metadata (name, path, type, size)
+- **Added**: `delete` action to remove custom analysis modes
+  - Validates mode name to prevent path traversal
+  - Returns deleted mode information
+- **Enhanced**: `create` action remains default for backward compatibility
+
+### 🔒 Security
+- **Fixed**: TOCTOU race condition in `delete` action (atomic `fs.unlink`)
+- **Enhanced**: Strict regex validation for `modeName` (alphanumeric + dash/underscore only)
+- **Verified**: All paths validated with `validateSecurePath`
+
+### 📚 API Changes
+- `calculate_token_count`: New optional `includeChanges` parameter
+- `create_analysis_mode`: New optional `action` parameter (default: "create")
+- All changes are backward compatible
+
+### 🎯 Use Cases
+```json
+// Count tokens including uncommitted changes
+{
+  "projectPath": ".",
+  "includeChanges": { "revision": "." }
+}
+
+// List all analysis modes
+{
+  "action": "list"
+}
+
+// Delete a custom mode
+{
+  "action": "delete",
+  "modeName": "my-custom-mode"
+}
+```
+
 ## [5.0.1] - 2025-01-18
 
 ### 🔧 Bug Fixes
