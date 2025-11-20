@@ -41,14 +41,24 @@ const HTTP_HOST = config.mcpHttpHost;
 const MCP_ENDPOINT_PATH = "/mcp";
 const MAX_PORT_RETRIES = 15;
 
+// Session wrapper interface to track activity
+interface SessionWrapper {
+  transport: StreamableHTTPServerTransport;
+  lastActivity: number;
+}
+
 // The transports map will store active sessions, keyed by session ID.
 // NOTE: This is an in-memory session store, which is a known limitation for scalability.
 // It will not work in a multi-process (clustered) or serverless environment.
 // For a scalable deployment, this would need to be replaced with a distributed
 // store like Redis or Memcached.
-const transports: Record<string, StreamableHTTPServerTransport> = {};
+const transports: Record<string, SessionWrapper> = {};
 // Unique identifier for this server instance (used for session ownership)
 const INSTANCE_ID = generateInstanceId();
+
+// Session idle timeout configuration
+const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
+const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
 
 // Pluggable rate limiter for HTTP transport (memory/redis).
 // Selection logic is managed by createRateLimiter in src/utils/security/rateLimiter.ts.
@@ -160,6 +170,54 @@ export async function startHttpTransport(
     redisPrefix: config.redisPrefix || "mcp:sessions:",
   });
 
+  // Start session cleanup interval to prevent memory leaks
+  const cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    const sessionIds = Object.keys(transports);
+    let cleanedCount = 0;
+
+    for (const sessionId of sessionIds) {
+      const session = transports[sessionId];
+      if (now - session.lastActivity > SESSION_IDLE_TIMEOUT_MS) {
+        logger.info("Cleaning up idle session", {
+          ...transportContext,
+          sessionId,
+          idleTime: now - session.lastActivity,
+        });
+        
+        session.transport.close();
+        delete transports[sessionId];
+        
+        // Cleanup ownership record
+        coordinator.deleteOwner(sessionId).catch((err) => {
+          logger.warning("Failed to cleanup session ownership during idle cleanup", {
+            ...transportContext,
+            sessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+        
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      logger.info("Session cleanup completed", {
+        ...transportContext,
+        cleanedCount,
+        remainingSessions: Object.keys(transports).length,
+      });
+    }
+  }, SESSION_CLEANUP_INTERVAL_MS);
+
+  // Ensure cleanup interval is cleared on process exit
+  process.on("SIGTERM", () => {
+    clearInterval(cleanupInterval);
+  });
+  process.on("SIGINT", () => {
+    clearInterval(cleanupInterval);
+  });
+
   app.use(
     "*",
     cors({
@@ -264,9 +322,15 @@ export async function startHttpTransport(
     });
     const body = await c.req.json();
     const sessionId = c.req.header("mcp-session-id");
-    let transport: StreamableHTTPServerTransport | undefined = sessionId
+    let sessionWrapper: SessionWrapper | undefined = sessionId
       ? transports[sessionId]
       : undefined;
+    let transport: StreamableHTTPServerTransport | undefined = sessionWrapper?.transport;
+
+    // Update last activity timestamp if session exists
+    if (sessionWrapper) {
+      sessionWrapper.lastActivity = Date.now();
+    }
 
     if (isInitializeRequest(body)) {
       // If a transport already exists for a session, it's a re-initialization.
@@ -282,7 +346,10 @@ export async function startHttpTransport(
       const newTransport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (newId) => {
-          transports[newId] = newTransport;
+          transports[newId] = {
+            transport: newTransport,
+            lastActivity: Date.now(),
+          };
           // record ownership for sticky-session in multi-instance deployments
           Promise.resolve(coordinator.setOwner(newId, INSTANCE_ID, 3600)).catch((err) => {
             logger.warning("Failed to record session ownership in coordinator", {
@@ -339,7 +406,13 @@ export async function startHttpTransport(
     c: Context<{ Bindings: HttpBindings }>,
   ) => {
     const sessionId = c.req.header("mcp-session-id");
-    const transport = sessionId ? transports[sessionId] : undefined;
+    const sessionWrapper = sessionId ? transports[sessionId] : undefined;
+    const transport = sessionWrapper?.transport;
+
+    // Update last activity timestamp if session exists
+    if (sessionWrapper) {
+      sessionWrapper.lastActivity = Date.now();
+    }
 
     if (!transport) {
       // Hint for multi-instance: session may belong to another instance

@@ -903,12 +903,26 @@ export async function extractMetadata(
             requestId: "code-parser",
             timestamp: new Date().toISOString(),
           };
-      logger.debug("Tree-sitter parsing failed, using regex fallback", {
-        ...logContext,
-        filePath,
-        language,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      
+      // Log as warning on first failure to make it more visible
+      // Use a static flag to avoid spamming logs
+      if (!(global as any).__treeSitterWarningShown) {
+        logger.warning("Tree-sitter parsing failed, falling back to regex parsing. This may reduce parsing accuracy.", {
+          ...logContext,
+          filePath,
+          language,
+          error: error instanceof Error ? error.message : String(error),
+          hint: "Check if tree-sitter WASM files are properly installed"
+        });
+        (global as any).__treeSitterWarningShown = true;
+      } else {
+        logger.debug("Tree-sitter parsing failed, using regex fallback", {
+          ...logContext,
+          filePath,
+          language,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 

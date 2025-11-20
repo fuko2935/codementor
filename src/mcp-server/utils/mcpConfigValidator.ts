@@ -97,6 +97,42 @@ export const MCP_CODEMENTOR_END_MARKER = "<!-- MCP:CODEMENTOR:END -->";
  * Checks if MCP configuration exists in the given project path.
  * Uses in-memory cache and validates both START and END markers.
  */
+/**
+ * Finds the project root directory by looking for common markers
+ * (.git, package.json, etc.) starting from the given path and walking up
+ */
+async function findProjectRoot(startPath: string): Promise<string> {
+  let currentPath = startPath;
+  const root = path.parse(currentPath).root;
+
+  while (currentPath !== root) {
+    // Check for common project root markers
+    const markers = ['.git', 'package.json', '.mcpignore', '.gitignore'];
+    
+    for (const marker of markers) {
+      try {
+        const markerPath = path.join(currentPath, marker);
+        await fs.access(markerPath);
+        // Found a marker, this is likely the project root
+        return currentPath;
+      } catch {
+        // Marker not found, continue
+      }
+    }
+    
+    // Move up one directory
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {
+      // Reached the root without finding markers
+      break;
+    }
+    currentPath = parentPath;
+  }
+  
+  // If no markers found, return the original path
+  return startPath;
+}
+
 export async function mcpConfigExists(
   projectPath: string,
   context: RequestContext,
@@ -108,15 +144,23 @@ export async function mcpConfigExists(
     process.cwd(),
     context,
   );
+  
+  // Find the project root (where config files should be)
+  const projectRoot = await findProjectRoot(normalizedPath);
+  
   const now = Date.now();
+
+  // Use project root for caching (so subdirectories share the same cache)
+  const cacheKey = projectRoot;
 
   // Layer 1: Check in-memory cache first (fastest)
   if (!forceRefresh) {
-    const memoryCached = memoryCache.get(normalizedPath);
+    const memoryCached = memoryCache.get(cacheKey);
     if (memoryCached && now - memoryCached.timestamp < CACHE_TTL_MS) {
       logger.debug("MCP config check: using in-memory cache", {
         ...context,
         projectPath: normalizedPath,
+        projectRoot,
         cachedResult: memoryCached.exists,
       });
       return {
@@ -129,15 +173,16 @@ export async function mcpConfigExists(
 
   // Layer 2: Check filesystem cache (persistent across sessions)
   if (!forceRefresh) {
-    const filesystemCache = await readCache(normalizedPath);
-    const fsCached = filesystemCache[normalizedPath];
+    const filesystemCache = await readCache(projectRoot);
+    const fsCached = filesystemCache[cacheKey];
     if (fsCached && now - fsCached.timestamp < CACHE_TTL_MS) {
       // Populate in-memory cache for next time
-      memoryCache.set(normalizedPath, fsCached);
+      memoryCache.set(cacheKey, fsCached);
       
       logger.debug("MCP config check: using filesystem cache", {
         ...context,
         projectPath: normalizedPath,
+        projectRoot,
         cachedResult: fsCached.exists,
       });
       return {
@@ -152,11 +197,12 @@ export async function mcpConfigExists(
   await cacheLock.acquire();
   try {
     // Double-check cache inside lock (another process might have populated it while waiting)
-    const memoryCachedAfterLock = memoryCache.get(normalizedPath);
+    const memoryCachedAfterLock = memoryCache.get(cacheKey);
     if (!forceRefresh && memoryCachedAfterLock && now - memoryCachedAfterLock.timestamp < CACHE_TTL_MS) {
       logger.debug("MCP config check: found in cache after lock acquisition", {
         ...context,
         projectPath: normalizedPath,
+        projectRoot,
       });
       return {
         exists: memoryCachedAfterLock.exists,
@@ -165,14 +211,21 @@ export async function mcpConfigExists(
       };
     }
 
-    // Perform the expensive file scan
-    const scanResult = await performConfigFileScan(normalizedPath, context, now);
+    // Perform the expensive file scan in the project root
+    const scanResult = await performConfigFileScan(projectRoot, context, now);
     
-    // Write to both caches
-    memoryCache.set(normalizedPath, scanResult);
-    const filesystemCache = await readCache(normalizedPath);
-    filesystemCache[normalizedPath] = scanResult;
-    await writeCache(normalizedPath, filesystemCache);
+    // Write to both caches using the cache key
+    memoryCache.set(cacheKey, scanResult);
+    const filesystemCache = await readCache(projectRoot);
+    filesystemCache[cacheKey] = scanResult;
+    await writeCache(projectRoot, filesystemCache);
+    
+    logger.debug("MCP config check: scan complete", {
+      ...context,
+      projectPath: normalizedPath,
+      projectRoot,
+      found: scanResult.exists,
+    });
     
     return {
       exists: scanResult.exists,
@@ -359,12 +412,16 @@ export async function refreshMcpConfigCache(
 ): Promise<void> {
   const cacheEntry: CacheEntry = { ...entry, timestamp: Date.now() };
   
-  // Update both caches
-  memoryCache.set(normalizedPath, cacheEntry);
+  // Find project root for consistent caching
+  const projectRoot = await findProjectRoot(normalizedPath);
+  const cacheKey = projectRoot;
   
-  const filesystemCache = await readCache(normalizedPath);
-  filesystemCache[normalizedPath] = cacheEntry;
-  await writeCache(normalizedPath, filesystemCache);
+  // Update both caches
+  memoryCache.set(cacheKey, cacheEntry);
+  
+  const filesystemCache = await readCache(projectRoot);
+  filesystemCache[cacheKey] = cacheEntry;
+  await writeCache(projectRoot, filesystemCache);
 }
 
 /**

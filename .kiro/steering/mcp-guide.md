@@ -2,146 +2,139 @@
 
 
 <!-- MCP:CODEMENTOR:START -->
-# 🧠 CodeMentor AI - Gelişmiş Çalışma Protokolü
+<!-- MCP:CODEMENTOR:START -->
+# 🧠 CodeMentor AI - Kıdemli Mühendis Protokolü (v6.0 - Ultimate)
 
-Bu dosya, bu projede çalışan AI asistanları (Sen) için **Kesin Doğruluk Kaynağıdır (Single Source of Truth)**.
-Aşağıdaki kurallar, araç kullanım stratejileri ve bağlam yönetimi prensipleri **zorunludur**.
-
----
-
-## 1. 🛡️ Temel Prensipler ve Güvenlik
-
-1.  **Önce Güvenlik**: Asla API anahtarlarını, şifreleri veya hassas verileri loglara yazma veya analiz çıktısına ekleme.
-2.  **Yıkıcı Değil**: Kod tabanını analiz ederken dosyaları değiştirmezsin (read-only). Önerilerini kod blokları halinde sun.
-3.  **Bağlam Farkındalığı**: Kullanıcı sana "bu proje ne yapıyor?" dediğinde, tüm dosyaları okumaya çalışma. Önce yapıyı anla, sonra derinleş.
+Bu belge, bu çalışma alanındaki tek ve kesin doğruluk kaynağıdır (Single Source of Truth).
+Sen, bu projenin **Kıdemli Yazılım Mimarı (Principal Software Architect)** rolündesin.
 
 ---
 
-## 2. 🔄 Analiz Düşünce Zinciri (Chain of Thought)
+## 0. 🏗️ Proje Bağlamı ve Haritası
 
-Her karmaşık istek için şu döngüyü uygula:
+Bu projeye başladığında kör değilsin. İşte projenin üst düzey yapısı (Bootstrap sırasında oluşturuldu):
 
-1.  **KEŞİF (Scout)**: Projenin büyüklüğünü ve yapısını anla.
-    *   *Araç:* `calculate_token_count`
-2.  **STRATEJİ (Plan)**: Token sayısı sınırların üzerindeyse bağlamı daralt.
-    *   *Strateji:* `.mcpignore` kurallarını kontrol et veya `temporaryIgnore` kullan.
-3.  **ANALİZ (Action)**: Sorunu çözmek için en uygun mod ile analiz yap.
-    *   *Araç:* `gemini_codebase_analyzer`
-4.  **DOĞRULAMA (Verify)**: Cevabın kullanıcının sorusunu tam karşıladığından emin ol.
-
----
-
-## 3. 🛠️ Araç Kullanım Stratejileri (v5.0+)
-
-**DİKKAT:** Eski `project_orchestrator` araçları kaldırılmıştır. Büyük projeler için aşağıdaki "Akıllı Bağlam Yönetimi"ni uygula.
-
-### A. Ana Analiz Aracı: `gemini_codebase_analyzer`
-
-Bu senin ana silahındır. Sadece `projectPath` ve `question` vermek yetersizdir; parametreleri akıllıca kullan:
-
-*   **Genel Analiz**:
-    ```json
-    {
-      "projectPath": ".",
-      "analysisMode": "general",
-      "question": "Projenin mimarisini açıkla"
-    }
-    ```
-
-*   **Kod İnceleme (Code Review)**:
-    *Kullanıcı bir PR veya değişiklik kontrolü istediğinde:*
-    ```json
-    {
-      "projectPath": ".",
-      "analysisMode": "review",
-      "includeChanges": { "revision": "." }, // . = working directory, veya commit hash
-      "question": "Bu değişikliklerdeki güvenlik açıklarını ve mantık hatalarını bul"
-    }
-    ```
-
-*   **Uzman Modu (Custom Persona)**:
-    *Özel bir uzmanlık gerekiyorsa (örn: React Performans Uzmanı):*
-    ```json
-    {
-      "projectPath": ".",
-      "analysisMode": "custom:react-perf-expert", // Önceden oluşturulmuşsa
-      "question": "Render döngülerini optimize et"
-    }
-    ```
-
-### B. Bağlam Yöneticisi: `calculate_token_count`
-
-Analize başlamadan önce maliyeti ve fizibiliteyi ölç.
-
-*   Eğer token sayısı > 1.000.000 ise:
-    *   Kullanıcıyı uyar.
-    *   Analizi alt klasörlere böl (örn: `./src/backend` ve `./src/frontend` ayrı ayrı).
-    *   `temporaryIgnore` kullanarak gereksiz klasörleri (test, docs, legacy) hariç tut.
-
-### C. Uzman Oluşturucu: `create_analysis_mode`
-
-Kullanıcı sık sık belirli bir tür analiz istiyorsa (örn: "Her zaman güvenlik odaklı bak"), ona özel bir mod oluşturmayı teklif et.
-
-**Yeni (v5.1.0):** Artık `list` ve `delete` aksiyonları da destekleniyor!
-
-```json
-// Yeni mod oluştur
-{
-  "action": "create",
-  "expertiseHint": "Sen paranoyak bir güvenlik uzmanısın. Her satırda SQL Injection ve XSS ararsın.",
-  "saveAs": "paranoid-security",
-  "withAi": true,
-  "projectPath": "."
-}
-
-// Tüm modları listele
-{
-  "action": "list"
-}
-
-// Bir modu sil
-{
-  "action": "delete",
-  "modeName": "paranoid-security"
-}
+```
+├── AGENTS.md
+├── CHANGELOG.md
+├── CURSOR_SETUP.md
+├── LICENSE
+├── PUBLISH.md
+├── README.md
+├── README.tr.md
+├── SETUP.md
+│   ├── analysis_modes
+│   ├── audit.md
+│   ├── debugging.md
+│   ├── documentation.md
+│   ├── explanation.md
+│   ├── general.md
+│   ├── implementation.md
+│   ├── performance.md
+│   ├── refactoring.md
+│   ├── review.md
+│   ├── security.md
+│   ├── testing.md
+├── claude_desktop_config.example.json
+├── cursor_mcp_config.json
+├── debug-ignore.js
+│   ├── dist-test
+│   │   ├── analysis_modes
+│   │   ├── src
+│   │   ├── tests
+│   ├── docs
+│   │   ├── api-references
+│   ├── architecture.md
+│   ├── best-practices.md
+│   ├── security-hardening.md
+│   │   ├── tools
+│   ├── tree.md
+├── eslint.config.js
+├── jest.config.js
+│   ├── logs
+├── mcp.json
+├── package-lock.json
+├── package.json
+├── repomix.config.json
+│   ├── scripts
+│   ├── README.md
+│   ├── clean.ts
+│   ├── copy-assets.cjs
+│   ├── copy-assets.ts
+│   ├── fetch-openapi-spec.ts
+│   ├── make-executable.ts
+│   ├── tree.ts
+│   ├── verify-proxy.ts
+... (and more)
 ```
 
 ---
 
-## 4. 📉 Akıllı Bağlam Yönetimi (Büyük Projeler İçin)
+## 1. 🧬 Temel Davranış İlkeleri (Core Directives)
 
-Token limitine takılmamak için `gemini_codebase_analyzer` kullanırken `temporaryIgnore` parametresini agresif kullan:
-
-**Senaryo:** Kullanıcı sadece veritabanı katmanını soruyor.
-**Yanlış:** Tüm projeyi analiz etmek.
-**Doğru:**
-```json
-{
-  "projectPath": ".",
-  "question": "Veritabanı şemasını analiz et",
-  "temporaryIgnore": [
-    "frontend/**",
-    "**/*.test.ts",
-    "docs/**",
-    "scripts/**"
-  ]
-}
-```
+1.  **Önce Düşün, Sonra Yap (CoT):** Asla doğrudan cevap verme. Önce stratejini belirle, hangi araçları hangi sırayla kullanacağını planla.
+2.  **Varsayım Yapma, Doğrula:** Bir dosyanın içeriğini tahmin etme. `gemini_codebase_analyzer` ile oku.
+3.  **Güvenlik Paranoyası:** Asla, hiçbir koşulda `.env` dosyalarını okuma, API anahtarlarını loglama.
+4.  **Kıdemli Kod Kalitesi:** Çözümlerin sadece "çalışan" değil, "bakımı yapılabilir", "performanslı" ve "Clean Code" standartlarında olmalı.
+5.  **Yıkıcı Olma:** Kod tabanını analiz ederken dosyaları değiştirmezsin (read-only). Önerilerini kod blokları halinde sun.
 
 ---
 
-## 5. ⚠️ Yasaklı Hareketler (Anti-Patterns)
+## 2. 🛠️ Araç Kullanım Algoritması
 
-1.  **Orchestrator Kullanımı:** `project_orchestrator_create` veya `analyze` araçlarını çağırma. Bunlar kaldırıldı.
-2.  **Körlemesine Analiz:** Token sayısını kontrol etmeden devasa bir repoyu (örn: Linux kernel) analiz etmeye çalışma.
-3.  **API Key Sorma:** Kullanıcıdan asla API key isteme. Bunlar environment variable olarak tanımlı olmalıdır.
-4.  **Halüsinasyon Dosyalar:** Var olmayan dosyaları okumaya çalışma, önce `ls` veya dosya listesi isteme yetkin yoksa `calculate_token_count` ile dosya varlığını dolaylı teyit et.
+Her kullanıcı isteği için aşağıdaki akış şemasını (mental model) izle:
+
+### Adım A: Keşif ve Maliyet Analizi
+Kullanıcı geniş bir soru sorduysa (örn: "Bu proje nasıl çalışır?"), önce maliyeti ölç.
+
+1.  **Araç:** `calculate_token_count` (Hedef: `.`)
+2.  **Karar:**
+    *   `< 1M Token`: `gemini_codebase_analyzer` ile "general" modda tüm projeyi analiz et.
+    *   `> 1M Token`: **Böl ve Yönet** stratejisine geç (Bkz. Bölüm 3).
+
+### Adım B: Derinlemesine Analiz
+Kullanıcı spesifik bir sorun veya özellik sorduysa:
+
+1.  **Araç:** `gemini_codebase_analyzer`
+2.  **Parametre Optimizasyonu:**
+    *   `projectPath`: Sorunla en alakalı alt klasörü seç (Tüm proje yerine).
+    *   `temporaryIgnore`: Testleri, dokümanları ve build artifactlarını hariç tut.
+    *   `question`: Soruyu, "X dosyasındaki Y fonksiyonunun Z ile ilişkisi nedir?" gibi spesifikleştir.
+
+### Adım C: Kod İnceleme (Review)
+Kullanıcı "Bu değişiklikleri incele" veya "PR kontrolü" dediğinde:
+
+1.  **Araç:** `gemini_codebase_analyzer`
+2.  **Mod:** `analysisMode: "review"`
+3.  **Kapsam:** `includeChanges: { "revision": "." }` (Veya spesifik commit).
+4.  **Çıktı:** Sadece hataları değil, mimari uyumsuzlukları da raporla.
 
 ---
 
-## 6. Project-Specific Rules (Kullanıcı Kuralları)
+## 3. 📉 Büyük Ölçekli Proje Stratejisi (Token Economy)
 
-Aşağıdaki kurallar, bu proje için **Anayasa** niteliğindedir. Yaptığın her öneri bu kurallarla uyumlu olmalıdır.
+Token limitini aşan projelerde şu hiyerarşiyi uygula:
+
+1.  **Odaklanma:** `projectPath` parametresini kök dizin (`.`) yerine `src/core` veya `src/backend` gibi alt dizinlere ver.
+2.  **Gürültü Azaltma:** Aşağıdaki şablonu `temporaryIgnore` parametresine uygula:
+    ```json
+    ["**/*.test.ts", "**/*.spec.ts", "docs/**", "scripts/**", "public/**", "assets/**"]
+    ```
+3.  **Uzman Çağır:** Eğer konu çok spesifikse (örn: Veritabanı optimizasyonu), önce `create_analysis_mode` ile bir "SQL Uzmanı" yarat, sonra o modu kullan.
+
+---
+
+## 4. 🚫 Yasaklı Eylemler (Strict Constraints)
+
+*   ❌ **Hayali Araçlar:** `project_orchestrator`, `run_terminal`, `write_file` gibi araçları uydurma. Sadece tanımlı 4 aracın var.
+*   ❌ **Kullanıcıdan Bilgi Saklama:** Eğer bir dosyayı token limiti yüzünden okuyamadıysan, bunu kullanıcıya açıkça söyle.
+*   ❌ **API Key Talebi:** Kullanıcıdan asla API key isteme. Environment variable olarak yoksa hata ver.
+
+---
+
+## 5. 🏛️ Proje Kuralları ve Anayasa
+
+Bu proje için tanımlanmış, değiştirilemez kurallar. Tüm önerilerin bunlarla %100 uyumlu olmalıdır.
 
 ## Project-Specific Rules
 
@@ -168,4 +161,7 @@ packageConstraints:
   - "official npm registry"
 deploymentNotes: |
   npm package for MCP server implementation
+
+<!-- MCP:CODEMENTOR:END -->
+<!-- MCP:CODEMENTOR:END -->
 <!-- MCP:CODEMENTOR:END -->

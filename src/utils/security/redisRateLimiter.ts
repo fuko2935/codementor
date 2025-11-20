@@ -32,6 +32,7 @@ export interface RedisClientAdapter {
   get(key: string): Promise<string | null>;
   del(key: string): Promise<void>;
   quit(): Promise<void>;
+  eval(script: string, numKeys: number, ...args: (string | number)[]): Promise<unknown>;
 }
 
 /**
@@ -83,10 +84,33 @@ export class RedisRateLimiterStore implements RateLimiterStore {
     const now = Date.now();
     const redisKey = this.k(key);
 
-    // Atomic behavior: INCR + PEXPIRE (only on first request)
-    const count = await this.client.incr(redisKey);
-    if (count === 1) {
-      await this.client.pExpire(redisKey, windowMs);
+    // Atomic behavior using Lua script to prevent race condition
+    // This ensures INCR and PEXPIRE happen atomically
+    const luaScript = `
+      local current = redis.call('INCR', KEYS[1])
+      if current == 1 then
+        redis.call('PEXPIRE', KEYS[1], ARGV[1])
+      end
+      return current
+    `;
+
+    let count: number;
+    try {
+      const result = await this.client.eval(luaScript, 1, redisKey, windowMs);
+      count = Number(result);
+    } catch (err) {
+      // Fallback to non-atomic approach if eval is not supported
+      const fallbackContext = requestContextService.createRequestContext({
+        operation: "RedisRateLimiterStore.increment.evalFallback",
+      });
+      logger.warning("Redis EVAL not supported, falling back to non-atomic increment", {
+        ...fallbackContext,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      count = await this.client.incr(redisKey);
+      if (count === 1) {
+        await this.client.pExpire(redisKey, windowMs);
+      }
     }
 
     const ttl = await this.client.pTtl(redisKey);

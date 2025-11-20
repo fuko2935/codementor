@@ -261,9 +261,30 @@ async function _getFilteredDiff(
   // Get diff text only for safe files (within size limit)
   if (safeFilesToDiff.length > 0) {
     logger.info(`⚡ Running filtered diff (${safeFilesToDiff.length} files, ${skippedFilesForSize.length} skipped due to size)`, context);
-    const diffTextArgs = [...diffArgs, '--', ...safeFilesToDiff];
-    const diffTextResult = await git.diff(diffTextArgs);
-    diffText = diffTextResult;
+    
+    // Batch processing to avoid E2BIG (argument list too long) error
+    const BATCH_SIZE = 100;
+    const diffTextBatches: string[] = [];
+    
+    if (safeFilesToDiff.length > BATCH_SIZE) {
+      logger.info(`📦 Processing ${safeFilesToDiff.length} files in batches of ${BATCH_SIZE}`, context);
+    }
+    
+    for (let i = 0; i < safeFilesToDiff.length; i += BATCH_SIZE) {
+      const batch = safeFilesToDiff.slice(i, i + BATCH_SIZE);
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(safeFilesToDiff.length / BATCH_SIZE);
+      
+      if (totalBatches > 1) {
+        logger.debug(`Processing batch ${batchNum}/${totalBatches} (${batch.length} files)`, context);
+      }
+      
+      const diffTextArgs = [...diffArgs, '--', ...batch];
+      const batchDiff = await git.diff(diffTextArgs);
+      diffTextBatches.push(batchDiff);
+    }
+    
+    diffText = diffTextBatches.join('\n');
     logger.info(`✅ Filtered diff size: ${(diffText.length / 1024).toFixed(2)} KB`, context);
     
     // Get actual insertion/deletion counts for filtered files

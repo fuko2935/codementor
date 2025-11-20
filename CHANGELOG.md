@@ -1,5 +1,68 @@
 # Changelog
 
+## [5.1.2] - 2025-01-21
+
+### 🐛 Bug Fixes
+
+#### Critical Stability Improvements
+- **Fixed**: Memory leak in HTTP transport session management
+  - Added session idle timeout (1 hour default)
+  - Implemented automatic cleanup interval (5 minutes)
+  - Added `lastActivity` tracking for all sessions
+  - Process exit handlers for cleanup interval
+- **Fixed**: Race condition in Redis rate limiter
+  - Implemented atomic INCR+PEXPIRE using Lua script
+  - Added fallback for environments without EVAL support
+  - Prevents zombie keys without TTL
+- **Fixed**: Command line argument limit (E2BIG) in git diff
+  - Implemented batch processing (100 files per batch)
+  - Added progress logging for large file sets
+  - Prevents crashes on large changesets
+
+#### High Priority Fixes
+- **Fixed**: Deadlock risk in AsyncLock
+  - Added timeout mechanism (60s default)
+  - Implemented `LockTimeoutError` exception
+  - Added queue monitoring methods (`getWaitQueueLength`, `isLocked`)
+  - Automatic timer cleanup on lock release
+- **Fixed**: Circular reference handling in log sanitization
+  - Replaced `structuredClone` with WeakSet-based approach
+  - Preserves context instead of losing all data
+  - Handles Date, Error, Array objects gracefully
+
+#### Medium Priority Fixes
+- **Fixed**: Brittle marker detection in project bootstrap
+  - Changed from strict equality to `includes()` for tolerance
+  - More robust against whitespace variations
+- **Fixed**: Silent Tree-sitter degradation
+  - First failure now logs as warning instead of debug
+  - Added hint about WASM file installation
+  - Prevents spam with global flag
+- **Fixed**: Gemini CLI authentication error messages
+  - Detects 401/unauthenticated errors specifically
+  - Provides actionable error message with login command
+  - Uses structured `McpError` with hints
+
+### 🔒 Security
+- **Enhanced**: Session lifecycle management prevents resource exhaustion
+- **Enhanced**: Atomic Redis operations prevent race conditions
+- **Enhanced**: Better error messages don't leak sensitive information
+
+### ⚡ Performance
+- **Improved**: Git diff operations handle large changesets efficiently
+- **Improved**: Lock timeout prevents indefinite blocking
+- **Improved**: Reduced log noise from Tree-sitter failures
+
+### 📚 Breaking Changes
+- None - All changes are backward compatible
+
+### 🎯 Migration Notes
+- No action required - all improvements are automatic
+- Optional: Configure session timeout via environment variables (future)
+- Optional: Configure batch size for git operations (future)
+
+---
+
 ## [5.1.0] - 2025-01-20
 
 ### ✨ New Features

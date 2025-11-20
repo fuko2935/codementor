@@ -158,19 +158,19 @@ async function generateProjectTree(projectPath: string, context: RequestContext)
 export function extractManagedBlock(content: string): { block: string; startLine: number; endLine: number } | null {
   const lines = content.split(/\r?\n/);
 
-  // Try new markers first
-  let startIdx = lines.findIndex((line) => line.trim() === MCP_BLOCK_START_MARKER);
+  // Try new markers first - use includes() for more tolerant matching
+  let startIdx = lines.findIndex((line) => line.includes(MCP_BLOCK_START_MARKER));
   let endMarker = MCP_BLOCK_END_MARKER;
 
   // If not found, try legacy markers
   if (startIdx === -1) {
-    startIdx = lines.findIndex((line) => line.trim() === LEGACY_BLOCK_START_MARKER);
+    startIdx = lines.findIndex((line) => line.includes(LEGACY_BLOCK_START_MARKER));
     endMarker = LEGACY_BLOCK_END_MARKER;
   }
 
   if (startIdx === -1) return null;
 
-  const endIdx = lines.slice(startIdx + 1).findIndex((line) => line.trim() === endMarker);
+  const endIdx = lines.slice(startIdx + 1).findIndex((line) => line.includes(endMarker));
   if (endIdx === -1) return null;
 
   const fullEndIdx = startIdx + 1 + endIdx;

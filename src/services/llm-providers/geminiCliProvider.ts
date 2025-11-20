@@ -12,6 +12,7 @@ import { logger } from "../../utils/index.js";
 import { requestContextService } from "../../utils/index.js";
 // import { config } from "../../config/index.js";
 import { AsyncLock } from "../../utils/index.js";
+import { McpError, BaseErrorCode } from "../../types-global/errors.js";
 
 // Global lock instance to serialize gemini CLI stdout operations
 const stdoutLock = new AsyncLock();
@@ -171,8 +172,33 @@ export async function generateTextWithGeminiCli(
     const context = requestContextService.createRequestContext({
       operation: "GeminiCliProvider.generateText",
     });
+    
+    // Check for authentication-related errors
+    const isAuthError = 
+      errorMessage.toLowerCase().includes('401') ||
+      errorMessage.toLowerCase().includes('unauthenticated') ||
+      errorMessage.toLowerCase().includes('unauthorized') ||
+      errorMessage.toLowerCase().includes('authentication') ||
+      errorMessage.toLowerCase().includes('not authenticated');
+    
+    if (isAuthError) {
+      logger.error("Gemini CLI authentication required", error as Error, context);
+      throw new McpError(
+        BaseErrorCode.UNAUTHORIZED,
+        "Gemini CLI authentication required. Please run: npx google-ai-studio-cli login",
+        { 
+          originalError: errorMessage,
+          hint: "Run 'npx google-ai-studio-cli login' to authenticate"
+        }
+      );
+    }
+    
     logger.error("Gemini CLI text generation failed", error as Error, context);
-    throw new Error(`Gemini CLI text generation failed: ${errorMessage}`);
+    throw new McpError(
+      BaseErrorCode.SERVICE_UNAVAILABLE,
+      `Gemini CLI text generation failed: ${errorMessage}`,
+      { originalError: errorMessage }
+    );
   }
 }
 
