@@ -172,7 +172,7 @@ For large projects, use these alternatives:
 **New Parameters**
 - `autoOrchestrate`: When `true`, automatically uses orchestration for projects exceeding token limits
 - `orchestratorThreshold`: Controls when to trigger orchestration (0-0.95, default 0.75)
-- `maxTokensPerGroup`: Optional token limit per orchestration group (default ~900k)
+- `maxTokensPerGroup`: Optional token limit per orchestration group (default ~1M)
 
 **Deprecations**
 - ⚠️ **`project_orchestrator_create`** tool marked as deprecated - use `gemini_codebase_analyzer` with `autoOrchestrate=true`

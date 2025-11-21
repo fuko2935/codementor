@@ -383,7 +383,7 @@ if (fileSize > MAX_GIT_BLOB_SIZE_BYTES) {
 **Enforce token limits for LLM operations:**
 
 ```typescript
-const MAX_PROJECT_TOKENS = 1000000;  // 1M tokens
+const MAX_PROJECT_TOKENS = 20_000_000;  // 20M tokens
 
 if (tokenCount > MAX_PROJECT_TOKENS) {
   throw new McpError(

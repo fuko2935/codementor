@@ -136,7 +136,7 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
   maxTokensPerGroup: z
     .number()
     .min(100000)
-    .max(950000)
+    .max(1000000)
     .optional()
     .describe(
       "DEPRECATED: This parameter is no longer functional. The orchestrator has been removed.",
