@@ -394,10 +394,12 @@ export class Sanitization {
 
       if (effectiveOptions.rootDir) {
         const fullPath = path.resolve(effectiveOptions.rootDir, normalized);
-        if (
-          !fullPath.startsWith(effectiveOptions.rootDir + path.sep) &&
-          fullPath !== effectiveOptions.rootDir
-        ) {
+        // Check if the resolved path is within the root directory
+        // Allow exact match (same directory) or subdirectories
+        const isWithinRoot = fullPath === effectiveOptions.rootDir ||
+                            fullPath.startsWith(effectiveOptions.rootDir + path.sep);
+        
+        if (!isWithinRoot) {
           throw new Error(
             "Path traversal detected: attempts to escape the defined root directory.",
           );
@@ -426,10 +428,12 @@ export class Sanitization {
         } else {
           const resolvedAgainstCwd = path.resolve(normalized);
           const currentWorkingDir = path.resolve(".");
-          if (
-            !resolvedAgainstCwd.startsWith(currentWorkingDir + path.sep) &&
-            resolvedAgainstCwd !== currentWorkingDir
-          ) {
+          // Check if the resolved path is within the current working directory
+          // Allow exact match (same directory) or subdirectories
+          const isWithinCwd = resolvedAgainstCwd === currentWorkingDir ||
+                             resolvedAgainstCwd.startsWith(currentWorkingDir + path.sep);
+          
+          if (!isWithinCwd) {
             throw new Error(
               "Relative path traversal detected (escapes current working directory context).",
             );
