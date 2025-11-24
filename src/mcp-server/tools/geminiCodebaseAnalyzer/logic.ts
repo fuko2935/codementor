@@ -388,7 +388,7 @@ export async function geminiCodebaseAnalyzerLogic(
     const validatedParams = GeminiCodebaseAnalyzerInputSchema.parse(params);
 
     // Validate and secure the project path against the user's working directory
-    // Use process.cwd() instead of BASE_DIR to allow analyzing external projects
+    // Use process.cwd() to allow analyzing external projects (user's workspace)
     const normalizedPath = await validateSecurePath(
       validatedParams.projectPath,
       process.cwd(),

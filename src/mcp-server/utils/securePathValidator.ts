@@ -44,8 +44,13 @@ export async function validateSecurePath(
     // CRITICAL: Verify the final path is still within the base directory
     // This prevents path traversal attacks even if normalization changes the path
     const baseDirNormalized = path.normalize(path.resolve(baseDir));
-    if (!normalizedPath.startsWith(baseDirNormalized + path.sep) && 
-        normalizedPath !== baseDirNormalized) {
+    
+    // Check if the normalized path is within the base directory
+    // Allow exact match (same directory) or subdirectories
+    const isWithinBase = normalizedPath === baseDirNormalized || 
+                         normalizedPath.startsWith(baseDirNormalized + path.sep);
+    
+    if (!isWithinBase) {
       logger.warning("Path traversal attempt detected", {
         ...requestContext,
         originalPath: projectPath,
@@ -53,8 +58,13 @@ export async function validateSecurePath(
         baseDir: baseDirNormalized,
       });
       throw new McpError(
-        BaseErrorCode.FORBIDDEN,
-        `Path traversal detected. Project path must be within the working directory. Path: '${projectPath}'`,
+        BaseErrorCode.VALIDATION_ERROR,
+        `Path traversal detected: attempts to escape the defined root directory.`,
+        {
+          providedPath: projectPath,
+          baseDirectory: baseDirNormalized,
+          hint: "Use relative paths like '.' for current directory or './subdir' for subdirectories"
+        }
       );
     }
 
@@ -66,14 +76,14 @@ export async function validateSecurePath(
         error: e instanceof Error ? e.message : String(e),
       });
       throw new McpError(
-        BaseErrorCode.INVALID_INPUT,
+        BaseErrorCode.NOT_FOUND,
         `Project path does not exist or is inaccessible: ${projectPath}`,
       );
     });
 
     if (!stats.isDirectory()) {
       throw new McpError(
-        BaseErrorCode.INVALID_INPUT,
+        BaseErrorCode.VALIDATION_ERROR,
         `Project path is not a directory: ${projectPath}`,
       );
     }

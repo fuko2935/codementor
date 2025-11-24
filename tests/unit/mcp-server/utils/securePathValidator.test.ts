@@ -88,10 +88,10 @@ describe("validateSecurePath", () => {
     const winLike = "C:\\windows\\system32";
     await expect(() => validateSecurePath(winLike, baseDir))
       .rejects.toThrow(McpError);
-    // INVALID_INPUT (sanitization) veya FORBIDDEN (final check) olabilir
+    // Can be VALIDATION_ERROR (sanitization), FORBIDDEN (final check), or NOT_FOUND (path doesn't exist)
     await expect(() => validateSecurePath(winLike, baseDir))
       .rejects.toMatchObject({
-        code: expect.stringMatching(/INVALID_INPUT|FORBIDDEN|VALIDATION_ERROR/)
+        code: expect.stringMatching(/INVALID_INPUT|FORBIDDEN|VALIDATION_ERROR|NOT_FOUND/)
       });
   });
 
@@ -145,22 +145,22 @@ describe("validateSecurePath", () => {
     expect(error.message).toMatch(/traversal|escape/i);
   });
 
-  it("rejects non-existent path with INVALID_INPUT", async () => {
+  it("rejects non-existent path with NOT_FOUND", async () => {
     await expect(() => validateSecurePath("missing-folder", baseDir))
       .rejects.toThrow(McpError);
     await expect(() => validateSecurePath("missing-folder", baseDir))
       .rejects.toMatchObject({
-        code: BaseErrorCode.INVALID_INPUT,
+        code: BaseErrorCode.NOT_FOUND,
         message: expect.stringMatching(/does not exist|inaccessible/i)
       });
   });
 
-  it("rejects file path (not a directory) with INVALID_INPUT", async () => {
+  it("rejects file path (not a directory) with VALIDATION_ERROR", async () => {
     await expect(() => validateSecurePath(path.relative(baseDir, fileInside), baseDir))
       .rejects.toThrow(McpError);
     await expect(() => validateSecurePath(path.relative(baseDir, fileInside), baseDir))
       .rejects.toMatchObject({
-        code: BaseErrorCode.INVALID_INPUT,
+        code: BaseErrorCode.VALIDATION_ERROR,
         message: expect.stringMatching(/not a directory/i)
       });
   });
