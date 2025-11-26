@@ -34,9 +34,10 @@ describe("Custom Analysis Modes", () => {
     }
   });
 
-  describe("create_analysis_mode with saveAs", () => {
+  describe("forge with saveAs", () => {
     it("should save mode to file when saveAs is provided", async () => {
       const params = {
+        action: "create" as const,
         expertiseHint: "You are a test expert",
         withAi: false,
         returnFormat: "json" as const,
@@ -63,6 +64,7 @@ describe("Custom Analysis Modes", () => {
 
     it("should reject invalid saveAs names", async () => {
       const params = {
+        action: "create" as const,
         expertiseHint: "You are a test expert",
         withAi: false,
         returnFormat: "json" as const,
@@ -74,6 +76,7 @@ describe("Custom Analysis Modes", () => {
 
     it("should work without saveAs parameter", async () => {
       const params = {
+        action: "create" as const,
         expertiseHint: "You are a test expert",
         withAi: false,
         returnFormat: "json" as const,

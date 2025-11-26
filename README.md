@@ -171,18 +171,32 @@ Each tool validates input with Zod schemas and automatically records structured 
 
 ---
 
+## Tool Highlights
+
+The server exposes a comprehensive analysis workflow via the **CodeMentor Elemental Suite**:
+
+- **🔥 ignite**: Initializes your project, sets up optimization rules, and prepares the environment.
+- **👁️ insight**: The core analysis engine. Reviews code, explains architecture, and finds bugs using Gemini.
+- **🔨 forge**: Creates specialized expert personas (e.g., "Database Optimizer", "Security Auditor") tailored to your project.
+- **⚖️ weigh**: Calculates token usage to help you plan analysis strategies and avoid limits.
+
+---
+
 ## Code Review with Git Diff Analysis
 
-The `gemini_codebase_analyzer` tool now supports code review mode with git diff integration:
+The `insight` tool supports code review mode with git diff integration:
 
 ### Review Uncommitted Changes
 
 ```json
 {
-  "projectPath": "./",
-  "question": "Review my changes for security issues and code quality",
-  "analysisMode": "review",
-  "includeChanges": { "revision": "." }
+  "tool_name": "insight",
+  "params": {
+    "projectPath": "./",
+    "question": "Review my changes for security issues and code quality",
+    "analysisMode": "review",
+    "includeChanges": { "revision": "." }
+  }
 }
 ```
 
@@ -269,11 +283,11 @@ CodeMentor now supports **custom analysis modes** that allow you to create, save
 
 ### Creating a Custom Mode
 
-Use `create_analysis_mode` with the `saveAs` parameter to save your custom mode:
+Use `forge` with the `saveAs` parameter to save your custom mode:
 
 ```json
 {
-  "tool_name": "create_analysis_mode",
+  "tool_name": "forge",
   "params": {
     "expertiseHint": "Create a React performance optimization expert",
     "withAi": true,
@@ -290,7 +304,7 @@ List all available analysis modes (standard + custom):
 
 ```json
 {
-  "tool_name": "create_analysis_mode",
+  "tool_name": "forge",
   "params": {
     "action": "list"
   }
@@ -303,7 +317,7 @@ Remove a custom analysis mode:
 
 ```json
 {
-  "tool_name": "create_analysis_mode",
+  "tool_name": "forge",
   "params": {
     "action": "delete",
     "modeName": "react-perf-expert"
@@ -313,11 +327,11 @@ Remove a custom analysis mode:
 
 ### Using a Custom Mode
 
-Reference your saved mode in `gemini_codebase_analyzer` with the `custom:` prefix:
+Reference your saved mode in `insight` with the `custom:` prefix:
 
 ```json
 {
-  "tool_name": "gemini_codebase_analyzer",
+  "tool_name": "insight",
   "params": {
     "projectPath": ".",
     "analysisMode": "custom:react-perf-expert",
@@ -336,7 +350,7 @@ Reference your saved mode in `gemini_codebase_analyzer` with the `custom:` prefi
 
 **📖 For complete documentation, see [CUSTOM_ANALYSIS_MODES.md](CUSTOM_ANALYSIS_MODES.md)**
 
-**📖 For create_analysis_mode tool details, see [docs/tools/create_analysis_mode.md](docs/tools/create_analysis_mode.md)**
+**📖 For forge tool details, see [docs/tools/forge.md](docs/tools/forge.md)**
 
 ---
 
@@ -680,6 +694,6 @@ This limitation is documented in the codebase at `src/services/llm-providers/gem
 - Add new tools to `src/mcp-server/tools/` following the established pattern (see `.kiro/steering/mcp-workflows.md`)
 - Extend LLM provider support by adding new providers to `src/services/llm-providers/`
 - Rebuild API documentation with `npm run docs:generate` after making changes
-- Customize analysis modes with `create_analysis_mode` for your specific use cases
+- Customize analysis modes with `forge` for your specific use cases
 
 Enjoy the leaner setup!

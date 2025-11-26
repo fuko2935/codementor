@@ -1,5 +1,5 @@
 /**
- * @fileoverview Handles the registration of the `gemini_codebase_analyzer` tool with an MCP server instance.
+ * @fileoverview Handles the registration of the `insight` tool with an MCP server instance.
  * This module defines the tool's metadata, its input schema shape,
  * and the asynchronous handler function that processes codebase analysis requests.
  * @module src/mcp-server/tools/geminiCodebaseAnalyzer/registration
@@ -23,7 +23,7 @@ import {
 } from "./logic.js";
 
 /**
- * Registers the 'gemini_codebase_analyzer' tool and its handler with the provided MCP server instance.
+ * Registers the 'insight' tool and its handler with the provided MCP server instance.
  *
  * @param server - The MCP server instance to register the tool with.
  * @returns A promise that resolves when the tool registration is complete.
@@ -31,16 +31,12 @@ import {
 export const registerGeminiCodebaseAnalyzer = async (
   server: McpServer,
 ): Promise<void> => {
-  const toolName = "gemini_codebase_analyzer";
+  const toolName = "insight";
   const toolDescription =
-    "Analyzes an entire project codebase with advanced AI-powered insights. Supports two workflow modes: " +
-    "1) Traditional analysis using analysisMode parameter (general, security, performance, review, etc.) " +
-    "2) Custom expert persona-based analysis using customExpertPrompt parameter for specialized analysis modes. " +
-    "The customExpertPrompt enables creating specialized expert personas that can provide deeper, domain-specific analysis " +
-    "by using the 'create_analysis_mode' tool first, then analyzing with this custom prompt. " +
-    "For code review with git diffs, use analysisMode='review' with includeChanges parameter. " +
-    "For large projects, use the '.mcpignore' file or 'temporaryIgnore' parameter to exclude irrelevant files and directories. " +
-    "You can also analyze subdirectories individually by adjusting the 'projectPath' parameter.";
+    "👁️ INSIGHT - Deeply analyzes the codebase using AI. Use this for code reviews, architecture questions, bug hunting, and implementation guidance. " +
+    "Supports specialized modes via 'analysisMode' (e.g., 'security', 'review', or custom modes created with 'forge'). " +
+    "For Code Reviews: Use analysisMode='review' with the 'includeChanges' parameter to analyze git diffs. " +
+    "For Large Projects: Use '.mcpignore' or 'temporaryIgnore' to filter context.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({

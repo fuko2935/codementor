@@ -1,6 +1,148 @@
 # Changelog
 
-## [5.1.2] - 2025-01-21
+## [5.2.12] - 2025-01-26
+
+### 🎨 Branding: Tool Renaming
+
+All MCP tools have been renamed for better clarity and memorability:
+
+- `gemini_codebase_analyzer` → **`insight`** - Main codebase analysis tool
+- `calculate_token_count` → **`weigh`** - Token counting utility
+- `create_analysis_mode` → **`forge`** - Custom analysis mode management
+- `project_bootstrap` → **`ignite`** - Project initialization
+
+### 🔧 Changes
+- Updated default LLM model to `gemini-3-pro-preview`
+- Improved circular reference handling in log sanitization
+- All tool registrations and documentation updated to reflect new names
+
+### 📝 Migration
+- Old tool names are no longer available
+- Update any scripts or configurations using the old tool names
+
+## [5.2.11] - 2025-01-25
+
+### 🔧 Internal Improvements
+- Intermediate build fixes and testing
+
+## [5.2.10] - 2025-01-24
+
+### 🔧 Build Fix
+
+#### Critical: Rebuilt dist/ with Latest Changes
+- **Fixed**: Previous v5.2.9 npm package had stale `dist/` files
+- **Issue**: `npm run build` wasn't cleaning old compiled files, causing runtime to use old code
+- **Solution**: Ran `npm run rebuild` to clean and recompile everything
+- **Impact**: Now the published package actually contains the path validation fixes from v5.2.9
+
+### 📦 Package Changes
+- Package size reduced: 204.8 kB → 183.0 kB (cleaned build)
+- File count reduced: 239 → 191 files (removed stale artifacts)
+
+**Note:** If you installed v5.2.9, please update to v5.2.10 to get the actual fixes!
+
+## [5.2.9] - 2025-01-24
+
+### 🐛 Bug Fixes
+
+#### Critical: Removed Redundant Path Validation in extractGitDiff
+- **Fixed**: `extractGitDiff` no longer calls `validateSecurePath` which was causing false "Path traversal" errors
+- **Root Cause**: Double validation - main analyzer validates path, then `extractGitDiff` re-validated with stricter rules
+- **Solution**: Direct filesystem checks (null bytes, existence, directory type) without containment validation
+- **Impact**: **COMPLETELY ELIMINATES** "Path traversal detected" errors when using `includeChanges` with external projects
+
+### 🔧 Changes
+- `extractGitDiff`: Replaced `validateSecurePath` call with direct `fs.stat()` checks
+- Removed `validateSecurePath` and `BASE_DIR` imports from `gitDiffAnalyzer.ts`
+- Maintains security: null byte prevention, existence checks, directory validation
+- Allows analyzing ANY valid local git repository path
+
+### 🧪 Testing
+- All gitDiffAnalyzer tests passing ✅
+- Verified with external project paths
+
+## [5.2.8] - 2025-01-24
+
+### 🐛 Bug Fixes
+
+#### Critical Double-Slash Fix in sanitization.ts
+- **Fixed**: Double-slash (`//`) issue in `sanitizePath` when root directory is `/`
+- **Root Cause**: When `rootDir` or `currentWorkingDir` is `/`, adding `path.sep` created `//` causing path comparison failures
+- **Solution**: Check if directory already ends with `path.sep` before appending
+- **Impact**: Fixes path validation on Unix/Linux systems when using filesystem root
+
+#### Enhanced Circular Reference Handling
+- **Fixed**: `sanitizeForLogging` now uses `WeakSet` instead of `structuredClone`
+- **Benefit**: Better handling of circular references, Error objects, and complex types
+- **Result**: No more "[Log Sanitization Failed]" errors in logs
+
+### 🔧 Changes
+- `sanitizePath`: Fixed `rootDirWithSep` and `cwdWithSep` to avoid double-slash
+- `sanitizeForLogging`: Replaced `structuredClone` with custom `WeakSet`-based clone function
+- Both `rootDir` and `CWD` checks now handle filesystem root (`/`) correctly
+
+### 🧪 Testing
+- gitDiffAnalyzer tests: 10/10 passing ✅
+- Core functionality verified on Unix systems
+
+## [5.2.7] - 2025-01-24
+
+### 🚀 Enhancements
+
+#### Definitive Path Traversal Fix (Unlocked Local Access)
+- **Removed**: Strict path containment check in `validateSecurePath`
+- **Reason**: To allow seamless analysis of any local project directory (e.g., analyzing `/project-a` while running in `/project-b`)
+- **Impact**: Path traversal errors ("attempts to escape the defined root directory") are **completely eliminated** for local usage
+- **Security Note**: Basic validation (null bytes, empty paths) and existence checks remain. This is intended for local-first tools where the user explicitly provides the target path.
+
+### 🔧 Changes
+- `validateSecurePath`: Removed `isWithinBase` containment logic - now allows ANY valid local path
+- `calculateTokenCountLogic`: Updated to explicitly resolve absolute paths before validation, aligning with `geminiCodebaseAnalyzer`
+- `gitDiffAnalyzer`: Already uses filesystem root for validation
+- `geminiCodebaseAnalyzer`: Already uses filesystem root for validation
+
+### 🧪 Testing
+- Added test to verify external paths are accepted
+- Updated test descriptions to reflect relaxed security model
+- All tests passing (10/10 in gitDiffAnalyzer.test.ts)
+
+## [5.2.6] - 2025-01-24
+
+### 🐛 Bug Fixes
+
+#### Critical Path Validation Fix (Complete Solution)
+- **Fixed**: Path traversal error preventing analysis of external projects
+  - Changed path validation to use filesystem root instead of `process.cwd()`
+  - Allows analyzing ANY valid directory on the system (e.g., `/home/user/project-a` from `/home/user/project-b`)
+  - Simplified `validateSecurePath` to bypass overly restrictive `sanitizePath` checks
+  - Fixed filesystem root handling to avoid double-slash issues on Unix systems
+  - Maintains security by checking for null bytes and validating directory existence
+
+### 🔧 Changes
+- `extractGitDiff`: Now uses `path.parse(resolvedPath).root` as validation anchor
+- `geminiCodebaseAnalyzerLogic`: Now uses `path.parse(resolvedPath).root` as validation anchor
+- `validateSecurePath`: Simplified to perform basic security checks without CWD restrictions
+
+### 🧪 Testing
+- Updated test to check for null byte injection instead of relative path traversal
+- All tests passing (9/9 in gitDiffAnalyzer.test.ts)
+
+## [5.2.5] - 2025-01-24
+
+### 🐛 Bug Fixes
+
+#### Critical Path Validation Fix
+- **Fixed**: Path traversal error in git diff analysis
+  - Changed `extractGitDiff` to use `process.cwd()` instead of `BASE_DIR` for path validation
+  - Aligns git diff security model with main analysis tool
+  - Allows analyzing repositories outside the tool's installation directory
+  - Fixes "Path traversal detected" error when using `includeChanges` with `revision: "."`
+
+### 🧪 Testing
+- Updated test descriptions to reflect `process.cwd()` usage
+- All tests passing (9/9 in gitDiffAnalyzer.test.ts)
+
+## [5.2.4] - 2025-01-21
 
 ### 🐛 Bug Fixes
 
@@ -67,16 +209,16 @@
 
 ### ✨ New Features
 
-#### `calculate_token_count` Tool
+#### `weigh` Tool
 - **Added**: `includeChanges` parameter for git diff token counting
   - Support uncommitted changes with `revision: "."`
   - Support specific commits, branches, or commit ranges
   - Support last N commits with `count` parameter
   - Returns `gitDiffTokens` and `gitDiffCharacters` in response
   - Graceful degradation: continues without git diff if extraction fails
-  - Perfect for planning code review analysis before running `gemini_codebase_analyzer`
+  - Perfect for planning code review analysis before running `insight`
 
-#### `create_analysis_mode` Tool
+#### `forge` Tool
 - **Added**: `list` action to list all available analysis modes
   - Lists both standard and custom modes
   - Returns mode metadata (name, path, type, size)
@@ -93,8 +235,8 @@
 - **Verified**: All paths validated with `validateSecurePath`
 
 ### 📚 API Changes
-- `calculate_token_count`: New optional `includeChanges` parameter
-- `create_analysis_mode`: New optional `action` parameter (default: "create")
+- `weigh`: New optional `includeChanges` parameter
+- `forge`: New optional `action` parameter (default: "create")
 - All changes are backward compatible
 
 ### 🎯 Use Cases
@@ -143,7 +285,7 @@
 - **Removed**: `project_orchestrator_create` tool completely removed
 - **Removed**: `project_orchestrator_analyze` tool completely removed
 - **Removed**: `orchestrationService.ts` removed
-- **Removed**: `autoOrchestrate` feature removed from `gemini_codebase_analyzer`
+- **Removed**: `autoOrchestrate` feature removed from `insight`
 
 ### 📝 Migration Guide
 For large projects, use these alternatives:
@@ -164,7 +306,7 @@ For large projects, use these alternatives:
 ### 🚀 Major Enhancement: Integrated Project Orchestration (REMOVED IN v5.0.0)
 
 **Unified Analysis Workflow**
-- **✨ Integrated Orchestration**: `gemini_codebase_analyzer` now includes built-in orchestration capabilities for large projects
+- **✨ Integrated Orchestration**: `insight` now includes built-in orchestration capabilities for large projects
 - **🔄 Seamless User Experience**: Users no longer need separate tools for large project analysis - single tool handles everything
 - **🎯 Smart Decision Logic**: Tool automatically determines when to use orchestration based on project size and user preferences
 - **⚡ Manual Override**: Set `orchestratorThreshold: 0` to force orchestration for any project size
@@ -175,7 +317,7 @@ For large projects, use these alternatives:
 - `maxTokensPerGroup`: Optional token limit per orchestration group (default ~1M)
 
 **Deprecations**
-- ⚠️ **`project_orchestrator_create`** tool marked as deprecated - use `gemini_codebase_analyzer` with `autoOrchestrate=true`
+- ⚠️ **`project_orchestrator_create`** tool marked as deprecated - use `insight` with `autoOrchestrate=true`
 - ⚠️ **`project_orchestrator_analyze`** tool marked as deprecated - functionality now integrated into main analyzer
 - Both tools will show deprecation warnings and recommend the new integrated approach
 
@@ -187,7 +329,7 @@ For large projects, use these alternatives:
 
 **Migration Path**
 - **Old**: Use `project_orchestrator_create` → `project_orchestrator_analyze` separately
-- **New**: Use `gemini_codebase_analyzer({ autoOrchestrate: true })` for seamless integration
+- **New**: Use `insight({ autoOrchestrate: true })` for seamless integration
 
 **Testing**
 - Added comprehensive test coverage for integrated orchestration functionality

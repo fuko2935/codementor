@@ -30,7 +30,7 @@ import {
  * - AI-Assisted General: AI generates prompt from hint (withAi=true, no projectPath)
  * - AI-Assisted Project-Specific: AI generates prompt tailored to project (withAi=true, with projectPath)
  * 
- * The generated analysisModePrompt can be used with gemini_codebase_analyzer's customExpertPrompt parameter.
+ * The generated analysisModePrompt can be used with insight's customExpertPrompt parameter.
  * 
  * Workflow:
  * 1. Create request context from mcpContext
@@ -41,18 +41,17 @@ import {
  * 6. Log all operations with context
  */
 export const registerCreateAnalysisMode = async (server: McpServer): Promise<void> => {
-  const toolName = "create_analysis_mode";
-  const toolDescription = `Manages custom expert analysis modes for codebase analysis.
+  const toolName = "forge";
+  const toolDescription = `🔨 FORGE - Crafts specialized expert personas (Analysis Modes) for specific tasks.
 
 Actions:
-1. create (default): Creates a new analysis mode
-   - Manual Mode (withAi=false): Use expertiseHint directly as the expert prompt
-   - AI-Assisted General (withAi=true, no projectPath): AI generates a general expert prompt
-   - AI-Assisted Project-Specific (withAi=true, with projectPath): AI generates a project-specific expert prompt
-2. list: Lists all available analysis modes (standard and custom)
-3. delete: Deletes a custom analysis mode by name
+1. create (default): Forge a new expert persona.
+   - Manual: Define the prompt yourself.
+   - AI-Assisted: Let AI craft the perfect persona based on your hint and project context.
+2. list: List all available experts in your armory.
+3. delete: Remove a custom expert.
 
-The generated analysisModePrompt can be used with gemini_codebase_analyzer's customExpertPrompt parameter.
+Use the created modes with 'insight' by passing 'custom:mode-name' to analysisMode.
 
 Examples:
 - Create Manual: {"action": "create", "expertiseHint": "You are a security expert...", "withAi": false}

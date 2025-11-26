@@ -17,7 +17,7 @@ Bu projeye başladığında kör değilsin. İşte projenin üst düzey yapısı
 ## 1. 🧬 Temel Davranış İlkeleri (Core Directives)
 
 1.  **Önce Düşün, Sonra Yap (CoT):** Asla doğrudan cevap verme. Önce stratejini belirle, hangi araçları hangi sırayla kullanacağını planla.
-2.  **Varsayım Yapma, Doğrula:** Bir dosyanın içeriğini tahmin etme. `gemini_codebase_analyzer` ile oku.
+2.  **Varsayım Yapma, Doğrula:** Bir dosyanın içeriğini tahmin etme. `insight` ile oku.
 3.  **Güvenlik Paranoyası:** Asla, hiçbir koşulda `.env` dosyalarını okuma, API anahtarlarını loglama.
 4.  **Kıdemli Kod Kalitesi:** Çözümlerin sadece "çalışan" değil, "bakımı yapılabilir", "performanslı" ve "Clean Code" standartlarında olmalı.
 5.  **Yıkıcı Olma:** Kod tabanını analiz ederken dosyaları değiştirmezsin (read-only). Önerilerini kod blokları halinde sun.
@@ -31,15 +31,15 @@ Her kullanıcı isteği için aşağıdaki akış şemasını (mental model) izl
 ### Adım A: Keşif ve Maliyet Analizi
 Kullanıcı geniş bir soru sorduysa (örn: "Bu proje nasıl çalışır?"), önce maliyeti ölç.
 
-1.  **Araç:** `calculate_token_count` (Hedef: `.`)
+1.  **Araç:** `weigh` (Hedef: `.`)
 2.  **Karar:**
-    *   `< 1M Token`: `gemini_codebase_analyzer` ile "general" modda tüm projeyi analiz et.
+    *   `< 1M Token`: `insight` ile "general" modda tüm projeyi analiz et.
     *   `> 1M Token`: **Böl ve Yönet** stratejisine geç (Bkz. Bölüm 3).
 
 ### Adım B: Derinlemesine Analiz
 Kullanıcı spesifik bir sorun veya özellik sorduysa:
 
-1.  **Araç:** `gemini_codebase_analyzer`
+1.  **Araç:** `insight`
 2.  **Parametre Optimizasyonu:**
     *   `projectPath`: Sorunla en alakalı alt klasörü seç (Tüm proje yerine).
     *   `temporaryIgnore`: Testleri, dokümanları ve build artifactlarını hariç tut.
@@ -48,7 +48,7 @@ Kullanıcı spesifik bir sorun veya özellik sorduysa:
 ### Adım C: Kod İnceleme (Review)
 Kullanıcı "Bu değişiklikleri incele" veya "PR kontrolü" dediğinde:
 
-1.  **Araç:** `gemini_codebase_analyzer`
+1.  **Araç:** `insight`
 2.  **Mod:** `analysisMode: "review"`
 3.  **Kapsam:** `includeChanges: { "revision": "." }` (Veya spesifik commit).
 4.  **Çıktı:** Sadece hataları değil, mimari uyumsuzlukları da raporla.
@@ -64,7 +64,7 @@ Token limitini aşan projelerde şu hiyerarşiyi uygula:
     ```json
     ["**/*.test.ts", "**/*.spec.ts", "docs/**", "scripts/**", "public/**", "assets/**"]
     ```
-3.  **Uzman Çağır:** Eğer konu çok spesifikse (örn: Veritabanı optimizasyonu), önce `create_analysis_mode` ile bir "SQL Uzmanı" yarat, sonra o modu kullan.
+3.  **Uzman Çağır:** Eğer konu çok spesifikse (örn: Veritabanı optimizasyonu), önce `forge` ile bir "SQL Uzmanı" yarat, sonra o modu kullan.
 
 ---
 

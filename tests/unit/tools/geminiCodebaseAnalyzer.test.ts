@@ -1,6 +1,6 @@
 /**
  * @fileoverview Registration and basic behavior tests for
- * gemini_codebase_analyzer tool.
+ * insight tool.
  *
  * Note:
  * - Built-in auth/scope enforcement has been removed.
@@ -54,14 +54,14 @@ async function seedMcpGuide(directory: string): Promise<void> {
   await fs.writeFile(filePath, content, "utf-8");
 }
 
-describe("gemini_codebase_analyzer registration (no built-in auth)", () => {
+describe("insight registration (no built-in auth)", () => {
   // Skip this test as it makes real API calls and times out
   it.skip("registers the tool with a callable handler", async () => {
     const testServer = new TestMcpServer();
     await registerGeminiCodebaseAnalyzer(testServer as any);
 
     const tools = testServer.getTools();
-    const tool = tools.get("gemini_codebase_analyzer");
+    const tool = tools.get("insight");
     expect(tool).toBeDefined();
     
     if (tool) {

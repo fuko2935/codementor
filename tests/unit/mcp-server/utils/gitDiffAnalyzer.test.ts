@@ -68,7 +68,7 @@ describe("validateRevision", () => {
 });
 
 describe("extractGitDiff", () => {
-  it("uses validated projectPath anchored to BASE_DIR and supports idempotent validation", async () => {
+  it("uses validated projectPath and supports idempotent validation", async () => {
     const context = requestContextService.createRequestContext({
       operation: "gitDiffSecurePathIdempotent",
     });
@@ -82,14 +82,25 @@ describe("extractGitDiff", () => {
     expect(secondResult.summary.filesModified).toBeGreaterThanOrEqual(0);
   });
 
-  it("rejects insecure project paths escaping BASE_DIR", async () => {
+  it("rejects paths with null bytes", async () => {
     const context = requestContextService.createRequestContext({
       operation: "gitDiffSecurePathInvalid",
     });
 
-    const unsafePath = path.join(repoDir, "..", "outside-repo");
+    // Test null byte injection
+    const nullBytePath = repoDir + "\x00malicious";
 
-    await expect(extractGitDiff(unsafePath, { revision: "." }, context)).rejects.toThrow();
+    await expect(extractGitDiff(nullBytePath, { revision: "." }, context)).rejects.toThrow();
+  });
+
+  it("accepts paths outside current working directory", async () => {
+    const context = requestContextService.createRequestContext({
+      operation: "gitDiffExternalPath",
+    });
+
+    // This should now work - analyzing a directory outside CWD
+    const result = await extractGitDiff(repoDir, { revision: "." }, context);
+    expect(result.summary.filesModified).toBeGreaterThanOrEqual(0);
   });
 
   it("returns uncommitted changes for revision '.'", async () => {

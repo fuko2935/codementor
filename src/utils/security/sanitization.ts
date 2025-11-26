@@ -396,8 +396,12 @@ export class Sanitization {
         const fullPath = path.resolve(effectiveOptions.rootDir, normalized);
         // Check if the resolved path is within the root directory
         // Allow exact match (same directory) or subdirectories
+        // FIX: Use path.sep check that doesn't double-slash if root is '/'
+        const rootDirWithSep = effectiveOptions.rootDir.endsWith(path.sep) 
+          ? effectiveOptions.rootDir 
+          : effectiveOptions.rootDir + path.sep;
         const isWithinRoot = fullPath === effectiveOptions.rootDir ||
-                            fullPath.startsWith(effectiveOptions.rootDir + path.sep);
+                            fullPath.startsWith(rootDirWithSep);
         
         if (!isWithinRoot) {
           throw new Error(
@@ -429,9 +433,12 @@ export class Sanitization {
           const resolvedAgainstCwd = path.resolve(normalized);
           const currentWorkingDir = path.resolve(".");
           // Check if the resolved path is within the current working directory
-          // Allow exact match (same directory) or subdirectories
+          // FIX: Use path.sep check that doesn't double-slash if CWD is '/'
+          const cwdWithSep = currentWorkingDir.endsWith(path.sep)
+            ? currentWorkingDir
+            : currentWorkingDir + path.sep;
           const isWithinCwd = resolvedAgainstCwd === currentWorkingDir ||
-                             resolvedAgainstCwd.startsWith(currentWorkingDir + path.sep);
+                             resolvedAgainstCwd.startsWith(cwdWithSep);
           
           if (!isWithinCwd) {
             throw new Error(
@@ -580,15 +587,8 @@ export class Sanitization {
    * Creates a deep clone and replaces values of fields matching `this.sensitiveFields`
    * (case-insensitive substring match) with "[REDACTED]".
    *
-   * It uses `structuredClone` if available for a high-fidelity deep clone.
-   * If `structuredClone` is not available (e.g., in older Node.js environments),
-   * it falls back to `JSON.parse(JSON.stringify(input))`. This fallback has limitations:
-   * - `Date` objects are converted to ISO date strings.
-   * - `undefined` values within objects are removed.
-   * - `Map`, `Set`, `RegExp` objects are converted to empty objects (`{}`).
-   * - Functions are removed.
-   * - `BigInt` values will throw an error during `JSON.stringify` unless a `toJSON` method is provided.
-   * - Circular references will cause `JSON.stringify` to throw an error.
+   * Uses WeakSet to handle circular references and prevent infinite recursion.
+   * Handles Error objects and other special types properly.
    *
    * @param input - The input data to sanitize for logging.
    * @returns A sanitized (deep cloned) version of the input, safe for logging.
@@ -598,10 +598,48 @@ export class Sanitization {
     try {
       if (!input || typeof input !== "object") return input;
 
-      const clonedInput =
-        typeof globalThis.structuredClone === "function"
-          ? globalThis.structuredClone(input)
-          : JSON.parse(JSON.stringify(input));
+      // Use WeakSet to handle circular references and prevent infinite recursion
+      const seen = new WeakSet();
+      
+      const clone = (obj: any): any => {
+        if (obj === null || typeof obj !== 'object') {
+          return obj;
+        }
+        
+        if (obj instanceof Date) {
+          return new Date(obj);
+        }
+        
+        if (obj instanceof Error) {
+          return {
+            name: obj.name,
+            message: obj.message,
+            stack: obj.stack,
+            // Include other properties
+            ...Object.fromEntries(Object.entries(obj))
+          };
+        }
+        
+        if (seen.has(obj)) {
+          return '[Circular]';
+        }
+        
+        seen.add(obj);
+        
+        if (Array.isArray(obj)) {
+          return obj.map(item => clone(item));
+        }
+        
+        const result: any = {};
+        for (const key in obj) {
+          if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            result[key] = clone(obj[key]);
+          }
+        }
+        return result;
+      };
+
+      const clonedInput = clone(input);
       this.redactSensitiveFields(clonedInput);
       return clonedInput;
     } catch (error) {

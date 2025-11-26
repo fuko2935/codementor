@@ -1,6 +1,6 @@
 # MCP Server Module Guide
 
-> Not: Bu dosya geliştirici içindir; AI asistan kullanım rehberi değildir ve MCP `project_bootstrap` tarafından enjekte edilmez.
+> Not: Bu dosya geliştirici içindir; AI asistan kullanım rehberi değildir ve MCP `ignite` tarafından enjekte edilmez.
 
 ## Package Identity
 

@@ -2680,10 +2680,10 @@ Before starting development, understand which tools are active and which are ref
 | Tool | Status | Purpose | Location |
 |------|--------|---------|----------|
 | **Active Tools** | | | |
-| `gemini_codebase_analyzer` | ✅ Active | Main codebase analysis tool with code review support | `src/mcp-server/tools/geminiCodebaseAnalyzer/` |
-| `calculate_token_count` | ✅ Active | Token counting utility with git diff support | `src/mcp-server/tools/calculateTokenCount/` |
-| `create_analysis_mode` | ✅ Active | Custom analysis mode management (create/list/delete) | `src/mcp-server/tools/createAnalysisMode/` |
-| `project_bootstrap` | ✅ Active | Project initialization with MCP guide | `src/mcp-server/tools/projectBootstrap/` |
+| `insight` | ✅ Active | Main codebase analysis tool with code review support | `src/mcp-server/tools/geminiCodebaseAnalyzer/` |
+| `weigh` | ✅ Active | Token counting utility with git diff support | `src/mcp-server/tools/calculateTokenCount/` |
+| `forge` | ✅ Active | Custom analysis mode management (create/list/delete) | `src/mcp-server/tools/createAnalysisMode/` |
+| `ignite` | ✅ Active | Project initialization with MCP guide | `src/mcp-server/tools/projectBootstrap/` |
 | **Blueprint Examples** | | | |
 | `echoTool` | 📘 Blueprint | Minimal synchronous tool example | `src/mcp-server/tool-blueprints/echoTool/` |
 | `catFactFetcher` | 📘 Blueprint | Async/external API example | `src/mcp-server/tool-blueprints/catFactFetcher/` |
@@ -2693,7 +2693,7 @@ Before starting development, understand which tools are active and which are ref
 
 **Before starting any development work, bootstrap your project:**
 
-The `project_bootstrap` tool creates or updates AI client configuration with:
+The `ignite` tool creates or updates AI client configuration with:
 - MCP usage guide tailored to your AI client
 - Project-specific rules and constraints
 - Context control settings
@@ -2701,7 +2701,7 @@ The `project_bootstrap` tool creates or updates AI client configuration with:
 **Usage:**
 ```json
 {
-  "tool_name": "project_bootstrap",
+  "tool_name": "ignite",
   "params": {
     "client": "kiro",
     "projectPath": ".",
@@ -2729,7 +2729,7 @@ See [`src/mcp-server/tools/projectBootstrap/`](../../src/mcp-server/tools/projec
 ### Adding a New MCP Tool
 
 #### Prerequisites
-- Run `project_bootstrap` for your AI client (see above)
+- Run `ignite` for your AI client (see above)
 - Understand the tool's purpose and requirements
 - Review existing tools for similar patterns (see [Tool Status Reference](#tool-status-reference))
 - Identify required dependencies and services

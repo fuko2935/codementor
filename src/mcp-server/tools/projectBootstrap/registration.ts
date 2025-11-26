@@ -14,7 +14,7 @@ import {
 } from "./logic.js";
 
 /**
- * Registers the `project_bootstrap` tool.
+ * Registers the `ignite` tool.
  *
  * This is the REQUIRED FIRST STEP for all MCP workflows. It prepares the project for
  * analysis by creating essential configuration files:
@@ -26,9 +26,9 @@ import {
 export const registerProjectBootstrap = async (
   server: McpServer,
 ): Promise<void> => {
-  const toolName = "project_bootstrap";
+  const toolName = "ignite";
   const toolDescription =
-    "🔧 PROJECT BOOTSTRAP - **REQUIRED FIRST STEP**: Initializes the project for AI analysis. Creates essential configuration files and an optimized MCP guide tailored for the current toolset (v5+). Run this once per project.";
+    "🔥 IGNITE - **REQUIRED FIRST STEP**: Initializes the project for AI analysis. Sets up configuration, creates optimization rules (.mcpignore), and prepares the environment. Run this once per project.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({
@@ -93,7 +93,7 @@ export const registerProjectBootstrap = async (
                 ? handledError
                 : new McpError(
                   BaseErrorCode.INTERNAL_ERROR,
-                  "An unexpected error occurred during project_bootstrap",
+                  "An unexpected error occurred during ignite",
                   { originalError: String(error) },
                 );
 

@@ -160,8 +160,8 @@ const EnvSchema = z.object({
       "proxy",
     ])
     .default("gemini-cli"),
-  /** Default LLM model. Default: "gemini-2.5-pro". */
-  LLM_DEFAULT_MODEL: z.string().default("gemini-2.5-pro"),
+  /** Default LLM model. Default: "gemini-3-pro-preview". */
+  LLM_DEFAULT_MODEL: z.string().default("gemini-3-pro-preview"),
   /** Optional. Default LLM temperature (0.0-2.0). */
   LLM_DEFAULT_TEMPERATURE: z.coerce.number().min(0).max(2).optional(),
   /** Optional. Default LLM top_p (0.0-1.0). */

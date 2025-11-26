@@ -362,27 +362,27 @@ export async function validateMcpConfigExists(
       `\n` +
       `██████████████████████████████████████████████████████████████████\n` +
       `█                                                                █\n` +
-      `█  🚨 STOP - YOU MUST RUN 'project_bootstrap' TOOL FIRST 🚨     █\n` +
+      `█  🚨 STOP - YOU MUST RUN 'ignite' TOOL FIRST 🚨                █\n` +
       `█                                                                █\n` +
       `██████████████████████████████████████████████████████████████████\n\n` +
       `⛔ THIS TOOL CANNOT RUN WITHOUT SETUP ⛔\n\n` +
       `REQUIRED FIRST STEP (takes 2 seconds):\n` +
-      `Call the project_bootstrap tool NOW:\n\n` +
-      `  project_bootstrap({ \n` +
+      `Call the ignite tool NOW:\n\n` +
+      `  ignite({ \n` +
       `    client: "kiro",      // or: cursor, gemini-cli, claude-code, warp, cline, etc.\n` +
       `    projectPath: "."\n` +
       `  })\n\n` +
       `After setup completes, you can use all other MCP analysis tools.\n\n` +
       `WHY THIS IS REQUIRED:\n` +
-      `The bootstrap tool creates essential configuration files (e.g., AGENTS.md, .mcpignore)\n` +
+      `The ignite tool creates essential configuration files (e.g., AGENTS.md, .mcpignore)\n` +
       `and injects a guide on how to use all MCP tools correctly. This ensures\n` +
       `efficient analysis and avoids token limits or incorrect operations.\n\n` +
-      `NOTE: Bootstrap only needs to run ONCE per project. If you're seeing this\n` +
+      `NOTE: Ignite only needs to run ONCE per project. If you're seeing this\n` +
       `repeatedly, the config file may be missing markers or in an unexpected location.\n` +
       `Check the relevant client configuration file (e.g., AGENTS.md, .kiro/steering/mcp-guide.md)\n` +
       `exists and contains MCP markers (<!-- MCP:CODEMENTOR:START --> and <!-- MCP:CODEMENTOR:END -->).\n\n` +
       `❌ DO NOT try to analyze files manually\n` +
-      `✅ DO call project_bootstrap first (only once per project)`;
+      `✅ DO call ignite first (only once per project)`;
 
     logger.warning("MCP config validation failed - setup required", {
       ...context,
@@ -394,7 +394,7 @@ export async function validateMcpConfigExists(
       errorMessage,
       {
         projectPath,
-        requiredAction: "call_project_bootstrap",
+        requiredAction: "call_ignite",
         availableClients: Object.keys(CLIENT_PROFILES),
       },
     );
@@ -455,7 +455,7 @@ export async function warnIfMcpConfigMissing(
       {
         ...context,
         projectPath,
-        recommendation: "call_project_bootstrap",
+        recommendation: "call_ignite",
       },
     );
   }

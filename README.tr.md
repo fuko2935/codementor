@@ -127,7 +127,7 @@ Neden Redis?
 
 ## Git Diff ile Kod İncelemesi (Review Modu)
 
-`gemini_codebase_analyzer` aracı `review` modunda git diff entegrasyonunu destekler.
+`insight` aracı `review` modunda git diff entegrasyonunu destekler.
 
 Değişmemiş commitler için:
 

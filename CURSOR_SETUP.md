@@ -106,13 +106,13 @@ Cursor'da MCP araçlarına şu şekilde erişebilirsiniz:
 1. **Chat Panelinde:** Cursor'un chat panelinde `@codementor` yazarak araçları kullanabilirsiniz
 
 2. **Doğrudan Araç Adları:**
-   - `gemini_codebase_analyzer` - Proje analizi için kapsamlı analiz
-   - `project_orchestrator` - Büyük projeler için orkestrasyon
+   - `insight` - Proje analizi için kapsamlı analiz
+   - `ignite` - Proje kurulumu ve optimizasyon
 
 ### Örnek Kullanım
 
 ```
-@codementor gemini_codebase_analyzer ile proje yolunu analiz et
+@codementor insight ile proje yolunu analiz et
 ```
 
 veya

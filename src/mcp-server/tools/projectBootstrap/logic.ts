@@ -373,7 +373,7 @@ async function generateProjectRulesBlock(
     // Conservative defaults when no explicit rules are provided
     yamlLines.push("# No explicit projectRules provided.");
     yamlLines.push(
-      "# Default assumptions (edit via project_bootstrap.projectRules to override):",
+      "# Default assumptions (edit via ignite.projectRules to override):",
     );
     yamlLines.push('openSourceStatus: proprietary');
     yamlLines.push('distributionModel: saas');
@@ -441,7 +441,7 @@ async function updateConfigCache(
     await refreshMcpConfigCache(normalizedPath, entry);
   } catch (error) {
     logger.warning("Failed to refresh global MCP config validator cache", {
-      tool: "project_bootstrap",
+      tool: "ignite",
       action: "refresh_config_cache",
       normalizedPath,
       filePath,
@@ -496,7 +496,7 @@ async function ensureGitignoreHasMcpCache(
 }
 
 /**
- * Core logic for the project_bootstrap tool.
+ * Core logic for the ignite tool.
  */
 export async function projectBootstrapLogic(
   params: ProjectBootstrapInput,
@@ -575,7 +575,7 @@ build/
 
   await fs.mkdir(validatedTargetDir, { recursive: true });
 
-  logger.info("Running project_bootstrap", {
+  logger.info("Running ignite", {
     ...context,
     client: validated.client,
     projectPath: normalizedPath,

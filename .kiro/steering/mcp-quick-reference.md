@@ -346,7 +346,7 @@ throw new McpError(
 
 ### Prerequisites
 
-1. Run `project_bootstrap` for your AI client
+1. Run `ignite` for your AI client
 2. Review existing tools for patterns
 3. Identify required dependencies
 

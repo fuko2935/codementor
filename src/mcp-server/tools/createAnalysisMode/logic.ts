@@ -80,7 +80,7 @@ export const CreateAnalysisModeInputSchema = z.object({
 
   saveAs: z.string()
     .optional()
-    .describe("If provided, saves the generated prompt to '.mcp/analysis_modes/<saveAs>.md' for later use with 'gemini_codebase_analyzer'. Use a short, descriptive, file-safe name (e.g., 'my_security_reviewer'). Only used for 'create' action.")
+    .describe("If provided, saves the generated prompt to '.mcp/analysis_modes/<saveAs>.md' for later use with 'insight'. Use a short, descriptive, file-safe name (e.g., 'my_security_reviewer'). Only used for 'create' action.")
     .refine(
       (name) => !name || /^[a-zA-Z0-9_-]+$/.test(name),
       { message: "saveAs must only contain alphanumeric characters, underscores, and hyphens." }
@@ -120,7 +120,7 @@ export interface CreateAnalysisModeResponse {
   
   /**
    * The complete expert prompt text (only for 'create' action)
-   * Can be used directly with gemini_codebase_analyzer's customExpertPrompt parameter
+   * Can be used directly with insight's customExpertPrompt parameter
    */
   analysisModePrompt?: string;
   

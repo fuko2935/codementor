@@ -7,7 +7,7 @@ import { requestContextService } from "../../../src/utils/index.js";
 
 const TEST_ROOT = path.join(process.cwd(), ".test-temp-bootstrap");
 
-describe("project_bootstrap tool", () => {
+describe("ignite tool", () => {
     let context: ReturnType<typeof requestContextService.createRequestContext>;
 
     beforeEach(async () => {

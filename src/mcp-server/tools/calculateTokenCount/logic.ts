@@ -84,8 +84,10 @@ export async function calculateTokenCountLogic(
     };
   }
 
-  // Project analysis mode
-  const normalizedPath = await validateSecurePath(params.projectPath!, process.cwd(), context);
+  // Project analysis mode - Use absolute path resolution like geminiCodebaseAnalyzer
+  const resolvedPath = path.resolve(process.cwd(), params.projectPath!);
+  const root = path.parse(resolvedPath).root;
+  const normalizedPath = await validateSecurePath(resolvedPath, root, context);
   logger.info("Starting project token analysis", {
     ...context,
     projectPath: normalizedPath,

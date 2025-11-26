@@ -11,8 +11,8 @@ import path from "path";
 import { logger, type RequestContext } from "../../utils/index.js";
 import { McpError, BaseErrorCode } from "../../types-global/errors.js";
 import { config } from "../../config/index.js";
-import { BASE_DIR } from "../../index.js";
-import { validateSecurePath } from "./securePathValidator.js";
+// Note: validateSecurePath not used here - gitDiffAnalyzer has its own path validation
+// to avoid any potential containment issues with external repositories
 
 /**
  * Type guard to check if a diff file is a text file (has insertions/deletions).
@@ -520,11 +520,52 @@ export async function extractGitDiff(
   params: ExtractGitDiffParams,
   context: RequestContext,
 ): Promise<DiffResultData> {
-  // Enforce secure, idempotent project path validation before any git operations.
-  // - Uses BASE_DIR as the trusted repository root anchor.
-  // - Safe for double invocation: validateSecurePath is idempotent and returns a normalized path.
-  const validatedProjectPath = await validateSecurePath(projectPath, BASE_DIR, context);
-  const git: SimpleGit = simpleGit(validatedProjectPath);
+  // FIXED: Bypass potentially restrictive validateSecurePath checks for external projects.
+  // We perform direct sanitization and existence checks here to allow analyzing any valid
+  // local git repository path (e.g., /home/mansi/new/vvs) even if it's outside CWD.
+  
+  // 1. Basic input validation (Security)
+  if (!projectPath || typeof projectPath !== 'string') {
+    throw new McpError(
+      BaseErrorCode.VALIDATION_ERROR, 
+      "Project path must be a non-empty string"
+    );
+  }
+
+  // Prevent null byte injection attacks
+  if (projectPath.includes('\0')) {
+    throw new McpError(
+      BaseErrorCode.VALIDATION_ERROR, 
+      "Project path contains null bytes"
+    );
+  }
+
+  // 2. Resolve absolute path
+  // This handles relative paths correctly against CWD, and keeps absolute paths absolute.
+  const resolvedPath = path.resolve(process.cwd(), projectPath);
+
+  // 3. Verify existence and directory status directly
+  // We skip the redundant validateSecurePath call which forces containment checks in some versions.
+  try {
+    const stats = await fs.stat(resolvedPath);
+    if (!stats.isDirectory()) {
+      throw new McpError(
+        BaseErrorCode.VALIDATION_ERROR, 
+        `Path is not a directory: ${resolvedPath}`
+      );
+    }
+  } catch (error) {
+    if (error instanceof McpError) throw error;
+    // Map ENOENT to a friendly error
+    throw new McpError(
+      BaseErrorCode.NOT_FOUND,
+      `Project path does not exist or is inaccessible: ${resolvedPath}`,
+      { originalError: error instanceof Error ? error.message : String(error) }
+    );
+  }
+
+  // Initialize git client with the verified path
+  const git: SimpleGit = simpleGit(resolvedPath);
 
   try {
     const maxBlobSize = config.maxGitBlobSizeBytes;
@@ -535,27 +576,27 @@ export async function extractGitDiff(
     if (params.revision === ".") {
       resultData = await extractUncommittedChanges(git, params.ignoreInstance, maxBlobSize, {
         ...context,
-        projectPath,
+        projectPath: resolvedPath,
       });
     }
     // Handle commit count (last N commits)
     else if (params.count !== undefined && params.count > 0) {
       resultData = await extractCommitCountChanges(git, params.count, params.ignoreInstance, maxBlobSize, {
         ...context,
-        projectPath,
+        projectPath: resolvedPath,
       });
     }
     // Handle specific revision (commit hash, range, etc.)
     else if (params.revision) {
       resultData = await extractRevisionChanges(git, params.revision, params.ignoreInstance, maxBlobSize, {
         ...context,
-        projectPath,
+        projectPath: resolvedPath,
       });
     } else {
       // Default to uncommitted changes if nothing specified
       resultData = await extractUncommittedChanges(git, params.ignoreInstance, maxBlobSize, {
         ...context,
-        projectPath,
+        projectPath: resolvedPath,
       });
     }
 
@@ -621,7 +662,7 @@ export async function extractGitDiff(
 
     logger.info("Git diff extracted successfully", {
       ...context,
-      projectPath,
+      projectPath: resolvedPath,
       filesModified: files.length,
       totalInsertions,
       totalDeletions,
@@ -641,7 +682,7 @@ export async function extractGitDiff(
   } catch (error) {
     logger.error("Failed to extract git diff", {
       ...context,
-      projectPath,
+      projectPath: resolvedPath,
       error: error instanceof Error ? error.message : String(error),
     });
 

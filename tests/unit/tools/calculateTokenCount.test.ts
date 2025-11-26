@@ -9,7 +9,7 @@ describe("calculateTokenCount", () => {
     await registerCalculateTokenCount(testServer as any);
 
     const tools = testServer.getTools();
-    const tool = tools.get("calculate_token_count");
+    const tool = tools.get("weigh");
     
     if (!tool) {
       throw new Error("Tool not registered");
@@ -34,7 +34,7 @@ describe("calculateTokenCount", () => {
     await registerCalculateTokenCount(testServer as any);
 
     const tools = testServer.getTools();
-    const tool = tools.get("calculate_token_count");
+    const tool = tools.get("weigh");
     
     if (!tool) {
       throw new Error("Tool not registered");

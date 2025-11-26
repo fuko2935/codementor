@@ -17,9 +17,9 @@ import {
 export const registerCalculateTokenCount = async (
   server: McpServer,
 ): Promise<void> => {
-  const toolName = "calculate_token_count";
+  const toolName = "weigh";
   const toolDescription =
-    "Counts tokens for text or across a project using a local Gemini tokenizer by default.";
+    "⚖️ WEIGH - Measures the token cost and size of your project or text. Essential for planning analysis strategies on large codebases. Can also weigh git diffs for review planning.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({

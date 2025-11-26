@@ -1,7 +1,7 @@
 ## Project-Specific Rules
 
 Bu bölüm, proje için AI asistanlarının uyması gereken bağlam ve kısıtları içerir.
-`project_bootstrap` aracı tarafından otomatik yönetilir ve aşağıdaki YAML bloğu
+`ignite` aracı tarafından otomatik yönetilir ve aşağıdaki YAML bloğu
 üzerinden yapılandırılır.
 
 AI için kurallar:

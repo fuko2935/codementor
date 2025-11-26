@@ -1,25 +1,24 @@
 /**
- * @fileoverview Provides secure path validation utilities to prevent path traversal attacks.
- * This module ensures that all project paths are validated against a secure base directory
- * before any file system operations are performed.
+ * @fileoverview Provides secure path validation utilities.
+ * Modified to allow access to any valid local path as per user requirement,
+ * while still preventing malicious patterns like null bytes.
  * @module src/mcp-server/utils/securePathValidator
  */
 
 import path from "path";
 import { promises as fs } from "fs";
 import { logger, type RequestContext, requestContextService } from "../../utils/index.js";
-import { sanitization } from "../../utils/security/sanitization.js";
 import { McpError, BaseErrorCode } from "../../types-global/errors.js";
 
 /**
- * Validates and resolves a project path securely.
- * Ensures the path is within the allowed base directory (process.cwd() by default).
+ * Validates and resolves a project path.
+ * Allows access to any valid directory on the local filesystem.
  *
  * @param projectPath - The project path to validate (can be relative or absolute)
- * @param baseDir - Base directory to restrict paths to (defaults to process.cwd())
+ * @param baseDir - Base directory for resolving relative paths (defaults to process.cwd())
  * @param context - Request context for logging
  * @returns The normalized, validated absolute path
- * @throws {McpError} If path traversal is detected or path is invalid
+ * @throws {McpError} If path is invalid or does not exist
  */
 export async function validateSecurePath(
   projectPath: string,
@@ -31,42 +30,39 @@ export async function validateSecurePath(
   });
 
   try {
-    // Sanitize the path - allow absolute paths but validate they're within baseDir
-    const sanitized = sanitization.sanitizePath(projectPath, {
-      rootDir: baseDir,
-      allowAbsolute: true, // Allow absolute paths - we'll validate they're within baseDir below
-    });
-
-    // Resolve against the base directory
-    const resolvedPath = path.resolve(baseDir, sanitized.sanitizedPath);
-    const normalizedPath = path.normalize(resolvedPath);
-
-    // CRITICAL: Verify the final path is still within the base directory
-    // This prevents path traversal attacks even if normalization changes the path
-    const baseDirNormalized = path.normalize(path.resolve(baseDir));
-    
-    // Check if the normalized path is within the base directory
-    // Allow exact match (same directory) or subdirectories
-    const isWithinBase = normalizedPath === baseDirNormalized || 
-                         normalizedPath.startsWith(baseDirNormalized + path.sep);
-    
-    if (!isWithinBase) {
-      logger.warning("Path traversal attempt detected", {
-        ...requestContext,
-        originalPath: projectPath,
-        resolvedPath: normalizedPath,
-        baseDir: baseDirNormalized,
-      });
+    // 1. Null bytes check (Security: malicious input)
+    if (projectPath.includes("\x00")) {
       throw new McpError(
         BaseErrorCode.VALIDATION_ERROR,
-        `Path traversal detected: attempts to escape the defined root directory.`,
-        {
-          providedPath: projectPath,
-          baseDirectory: baseDirNormalized,
-          hint: "Use relative paths like '.' for current directory or './subdir' for subdirectories"
-        }
+        "Path contains null bytes",
+        { providedPath: projectPath }
       );
     }
+
+    // 2. Empty check
+    if (!projectPath || projectPath.trim() === "") {
+      throw new McpError(
+        BaseErrorCode.VALIDATION_ERROR,
+        "Path cannot be empty",
+        { providedPath: projectPath }
+      );
+    }
+
+    // Resolve the path - if it's relative, resolve against baseDir
+    // If it's absolute, use it as-is
+    const resolvedPath = path.isAbsolute(projectPath) 
+      ? path.resolve(projectPath)
+      : path.resolve(baseDir, projectPath);
+    
+    const normalizedPath = path.normalize(resolvedPath);
+
+    // NOTE: Containment check removed to allow analyzing external projects.
+    // The user explicitly requested to allow access to any local path.
+    logger.debug("Path resolved", {
+      ...requestContext,
+      originalPath: projectPath,
+      resolvedPath: normalizedPath,
+    });
 
     // Verify the path exists and is a directory
     const stats = await fs.stat(normalizedPath).catch((e) => {

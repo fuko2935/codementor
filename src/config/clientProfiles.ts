@@ -1,5 +1,5 @@
 /**
- * @fileoverview Client profile definitions for project_bootstrap tool
+ * @fileoverview Client profile definitions for ignite tool
  * Maps AI client names to their configuration file paths and directories
  * @module src/config/clientProfiles
  */

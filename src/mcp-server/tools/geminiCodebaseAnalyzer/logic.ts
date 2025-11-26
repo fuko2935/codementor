@@ -1,5 +1,5 @@
 /**
- * @fileoverview Defines the core logic, schemas, and types for the `gemini_codebase_analyzer` tool.
+ * @fileoverview Defines the core logic, schemas, and types for the `insight` tool.
  * This module analyzes complete codebases using Gemini AI, providing comprehensive code analysis,
  * architecture insights, and answers to specific questions about the codebase.
  * @module src/mcp-server/tools/geminiCodebaseAnalyzer/logic
@@ -36,7 +36,7 @@ const standardAnalysisModes = [
 ] as const;
 
 /**
- * Base Zod schema for the `gemini_codebase_analyzer` tool (before refinements).
+ * Base Zod schema for the `insight` tool (before refinements).
  * This is used for MCP tool registration which requires `.shape` property.
  */
 export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
@@ -146,13 +146,13 @@ export const GeminiCodebaseAnalyzerInputSchemaBase = z.object({
     .optional()
     .describe(
       "DEPRECATED: Use custom analysis modes instead. Custom expert persona/system prompt. If provided, this prompt is used instead of the standard analysisMode, " +
-      "enabling specialized domain-specific analysis. Combine with 'create_analysis_mode' tool for creating " +
+      "enabling specialized domain-specific analysis. Combine with 'forge' tool for creating " +
       "dedicated expert personas before analysis.",
     ),
 });
 
 /**
- * Zod schema defining the input parameters for the `gemini_codebase_analyzer` tool.
+ * Zod schema defining the input parameters for the `insight` tool.
  * Includes validation refinements.
  */
 export const GeminiCodebaseAnalyzerInputSchema = GeminiCodebaseAnalyzerInputSchemaBase.refine(
@@ -387,11 +387,15 @@ export async function geminiCodebaseAnalyzerLogic(
     // Validate with refined schema (includes check that includeChanges requires review mode)
     const validatedParams = GeminiCodebaseAnalyzerInputSchema.parse(params);
 
-    // Validate and secure the project path against the user's working directory
-    // Use process.cwd() to allow analyzing external projects (user's workspace)
+    // Validate and secure the project path.
+    // Resolve the path against CWD to handle relative paths, but use the filesystem root
+    // as the validation anchor to allow analyzing projects anywhere on the system.
+    const resolvedPath = path.resolve(process.cwd(), validatedParams.projectPath);
+    const root = path.parse(resolvedPath).root;
+    
     const normalizedPath = await validateSecurePath(
-      validatedParams.projectPath,
-      process.cwd(),
+      resolvedPath,
+      root,
       context,
     );
 

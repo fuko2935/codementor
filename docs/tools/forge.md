@@ -1,16 +1,16 @@
-# create_analysis_mode Tool
+# forge Tool
 
-The `create_analysis_mode` tool enables you to create custom expert system prompts for specialized code analysis. It supports three modes: manual definition, AI-assisted generation, and project-specific AI generation.
+The `forge` tool enables you to create custom expert system prompts for specialized code analysis. It supports three modes: manual definition, AI-assisted generation, and project-specific AI generation.
 
 ## Two-Step Workflow
 
 **Step 1: Create the Analysis Mode**
 
-Use `create_analysis_mode` to generate a custom expert prompt:
+Use `forge` to generate a custom expert prompt:
 
 ```json
 {
-  "tool_name": "create_analysis_mode",
+  "tool_name": "forge",
   "params": {
     "expertiseHint": "Create a security-focused code reviewer",
     "withAi": true,
@@ -30,11 +30,11 @@ Use `create_analysis_mode` to generate a custom expert prompt:
 
 **Step 2: Use in Codebase Analyzer**
 
-Pass the generated prompt to `gemini_codebase_analyzer`:
+Pass the generated prompt to `insight`:
 
 ```json
 {
-  "tool_name": "gemini_codebase_analyzer",
+  "tool_name": "insight",
   "params": {
     "projectPath": ".",
     "question": "Find security vulnerabilities",
@@ -51,7 +51,7 @@ Provide your own expert prompt without AI assistance:
 
 ```json
 {
-  "tool_name": "create_analysis_mode",
+  "tool_name": "forge",
   "params": {
     "expertiseHint": "You are a React performance expert. Focus on identifying unnecessary re-renders, inefficient hooks usage, and bundle size issues.",
     "withAi": false
@@ -67,7 +67,7 @@ Let AI generate a general expert prompt based on your hint:
 
 ```json
 {
-  "tool_name": "create_analysis_mode",
+  "tool_name": "forge",
   "params": {
     "expertiseHint": "Create an accessibility expert focused on WCAG compliance",
     "withAi": true
@@ -83,7 +83,7 @@ AI analyzes your project and creates a tailored expert prompt:
 
 ```json
 {
-  "tool_name": "create_analysis_mode",
+  "tool_name": "forge",
   "params": {
     "expertiseHint": "Create a database optimization expert",
     "withAi": true,
@@ -124,7 +124,7 @@ When `returnFormat: "prompt_only"` is specified, the tool returns only the promp
 
 ```json
 {
-  "tool_name": "create_analysis_mode",
+  "tool_name": "forge",
   "params": {
     "expertiseHint": "Create a security expert",
     "withAi": true,
@@ -143,17 +143,17 @@ This format is useful for:
 - Simplified tool chaining
 - Reduced parsing overhead
 
-## Integration with gemini_codebase_analyzer
+## Integration with insight
 
 The generated `analysisModePrompt` can be used with the `customExpertPrompt` parameter:
 
 ```json
 {
-  "tool_name": "gemini_codebase_analyzer",
+  "tool_name": "insight",
   "params": {
     "projectPath": ".",
     "question": "Your analysis question",
-    "customExpertPrompt": "<generated-prompt-from-create_analysis_mode>"
+    "customExpertPrompt": "<generated-prompt-from-forge>"
   }
 }
 ```
@@ -176,8 +176,8 @@ This allows you to:
 The tool throws structured errors for common issues:
 
 - `VALIDATION_ERROR`: Invalid input parameters
+- `UNAUTHORIZED`: Missing API key (AI modes)
 - `NOT_FOUND`: Project directory doesn't exist (project-specific mode)
 - `SERVICE_UNAVAILABLE`: Gemini API call failed (AI modes)
-- `CONFIGURATION_ERROR`: Missing API key (AI modes)
 
 All errors include detailed context for troubleshooting.
