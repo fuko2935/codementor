@@ -1,5 +1,28 @@
 # Changelog
 
+## [5.2.13] - 2025-01-26
+
+### 🚀 Enhanced: Autonomous Engineer Protocol v7.0
+
+The `ignite` tool's MCP guide template has been upgraded to transform AI assistants from passive advisors to autonomous, quality-obsessed senior engineers.
+
+#### New Features
+- **Autonomous Work Loop (The Loop)**: AI now follows a continuous improvement cycle:
+  - Phase 1: Strategic Analysis with automatic mode selection
+  - Phase 2: Code implementation and user confirmation
+  - Phase 3: Mandatory code review before completion
+- **Intent Mapping**: Automatic analysis mode selection based on user intent
+- **Recursive Perfection**: AI won't mark tasks complete until code passes review
+- **Proactive Behavior**: Automatic git diff analysis after code changes
+
+#### Key Behavioral Changes
+- AI must run `insight` with `analysisMode: "review"` after user applies code
+- No more "Great, anything else?" - AI validates changes first
+- Loop continues until 100% error-free and compliant with project rules
+
+### 📝 Migration
+- Run `ignite` with `force: true` to update existing projects with the new protocol
+
 ## [5.2.12] - 2025-01-26
 
 ### 🎨 Branding: Tool Renaming

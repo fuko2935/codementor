@@ -136,13 +136,13 @@ const EnvSchema = z.object({
   OPENROUTER_API_KEY: z.string().optional(),
   /** Optional. API key for Google Gemini services. */
   GEMINI_API_KEY: z.string().optional(),
-  /** Optional. API key for Proxy provider. */
-  PROXY_API_KEY: z.string().optional(),
-  /** Optional. Base URL for Proxy provider. Default: "http://localhost:2048/v1". */
-  PROXY_BASE_URL: z.string().default("http://localhost:2048/v1"),
+  /** Optional. API key for Proxy provider. Default: "123". */
+  PROXY_API_KEY: z.string().default("123"),
+  /** Optional. Base URL for Proxy provider. Default: "http://localhost:8317/v1". */
+  PROXY_BASE_URL: z.string().default("http://localhost:8317/v1"),
   /** Optional. Model ID for Proxy provider. Default: "gemini-3-pro-preview". */
   PROXY_MODEL_ID: z.string().default("gemini-3-pro-preview"),
-  /** Default LLM provider. Default: "gemini-cli". */
+  /** Default LLM provider. Default: "proxy". */
   LLM_DEFAULT_PROVIDER: z
     .enum([
       "gemini",
@@ -159,7 +159,7 @@ const EnvSchema = z.object({
       "ollama",
       "proxy",
     ])
-    .default("gemini-cli"),
+    .default("proxy"),
   /** Default LLM model. Default: "gemini-3-pro-preview". */
   LLM_DEFAULT_MODEL: z.string().default("gemini-3-pro-preview"),
   /** Optional. Default LLM temperature (0.0-2.0). */
