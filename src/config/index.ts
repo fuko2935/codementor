@@ -201,6 +201,10 @@ const EnvSchema = z.object({
   MAX_PROJECT_TOKENS: z.coerce.number().int().positive().optional(),
   /** Maximum allowed git blob size in bytes for diff operations. Default: 4MB. Files exceeding this limit will be skipped. */
   MAX_GIT_BLOB_SIZE_BYTES: z.coerce.number().int().positive().optional(),
+  /** Context window size for the default LLM model. Default: 1,000,000 (1M for Gemini). */
+  LLM_CONTEXT_WINDOW: z.coerce.number().int().positive().default(1_000_000),
+  /** Threshold ratio for sketch tool auto-strategy. Default: 0.9 (90% of context window). */
+  SKETCH_CONTEXT_THRESHOLD_RATIO: z.coerce.number().min(0.1).max(1.0).default(0.9),
 });
 
 const parsedEnv = EnvSchema.safeParse(process.env);
@@ -451,6 +455,10 @@ export const config = {
   llmDefaultTopK: env.LLM_DEFAULT_TOP_K,
   /** Default LLM min_p. From `LLM_DEFAULT_MIN_P`. */
   llmDefaultMinP: env.LLM_DEFAULT_MIN_P,
+  /** LLM Context Window size. From `LLM_CONTEXT_WINDOW`. Default: 1,000,000. */
+  llmContextWindow: env.LLM_CONTEXT_WINDOW,
+  /** Sketch tool threshold ratio. From `SKETCH_CONTEXT_THRESHOLD_RATIO`. Default: 0.9. */
+  sketchContextThresholdRatio: env.SKETCH_CONTEXT_THRESHOLD_RATIO,
 };
 
 /**

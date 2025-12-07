@@ -23,6 +23,7 @@ import { registerProjectBootstrap } from "./tools/projectBootstrap/index.js";
 import { registerGeminiCodebaseAnalyzer } from "./tools/geminiCodebaseAnalyzer/index.js";
 import { registerCreateAnalysisMode } from "./tools/createAnalysisMode/index.js";
 import { registerCalculateTokenCount } from "./tools/calculateTokenCount/index.js";
+import { registerSketch } from "./tools/sketch/index.js";
 import { startHttpTransport } from "./transports/httpTransport.js";
 import { connectStdioTransport } from "./transports/stdioTransport.js";
 import { warmupTreeSitter } from "./utils/codeParser.js";
@@ -95,6 +96,7 @@ async function createMcpServerInstance(): Promise<McpServer> {
         await registerGeminiCodebaseAnalyzer(server);
         await registerCreateAnalysisMode(server);
         await registerCalculateTokenCount(server);
+        await registerSketch(server);
 
         logger.info("Resources and tools registered successfully", context);
       });

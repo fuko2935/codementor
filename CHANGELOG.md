@@ -1,5 +1,31 @@
 # Changelog
 
+## [5.2.16] - 2025-12-03
+
+### 🛡️ New: Skeptical Agent Protocol (v7.2)
+
+Implemented a new security layer to prevent AI Agent hallucinations and incorrect code generation by treating MCP analysis output as "intelligence to be verified" rather than "absolute truth".
+
+#### New Features
+- **Phase 3: Skeptical Verification**: New mandatory verification phase in the autonomous work loop
+  - Agents must verify MCP findings using their own `read_file` capabilities
+  - Cross-check code locations and context before presenting solutions
+  - Synthesize findings with corrections if MCP analysis was inaccurate
+- **Safety Instructions**: Inner model (Gemini) now generates suggestive rather than authoritative analysis
+  - Uses phrases like "Potential issue at...", "Agent should verify..."
+  - Explicitly directs consuming agents to verify specific files
+- **Output Guardrail**: Every analysis response includes a system instruction footer
+  - Reminds AI agents that analysis is "unverified intelligence"
+  - Provides clear action items for verification
+
+#### Technical Changes
+- `mcp-guide.md`: Added "Faz 3: Şüpheci Doğrulama" section, renumbered existing phases
+- `logic.ts`: Added `safetyInstruction` prepended to all prompts
+- `registration.ts`: Added `agentInstruction` footer to all analysis outputs
+
+### 📝 Migration
+- Run `ignite` with `force: true` to update existing projects with the new protocol
+
 ## [5.2.13] - 2025-01-26
 
 ### 🚀 Enhanced: Autonomous Engineer Protocol v7.0

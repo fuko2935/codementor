@@ -1,8 +1,8 @@
 /**
- * @fileoverview Handles the registration of the `insight` tool with an MCP server instance.
+ * @fileoverview Handles the registration of the `sketch` tool with an MCP server instance.
  * This module defines the tool's metadata, its input schema shape,
- * and the asynchronous handler function that processes codebase analysis requests.
- * @module src/mcp-server/tools/geminiCodebaseAnalyzer/registration
+ * and the asynchronous handler function that processes file selection requests.
+ * @module src/mcp-server/tools/sketch/registration
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -13,30 +13,30 @@ import {
   logger,
   RequestContext,
   requestContextService,
-  sanitization,
 } from "../../../utils/index.js";
 import { config } from "../../../config/index.js";
 import {
-  GeminiCodebaseAnalyzerInput,
-  GeminiCodebaseAnalyzerInputSchemaBase,
-  geminiCodebaseAnalyzerLogic,
+  SketchInput,
+  SketchInputSchemaBase,
+  sketchLogic,
 } from "./logic.js";
 
 /**
- * Registers the 'insight' tool and its handler with the provided MCP server instance.
+ * Registers the 'sketch' tool and its handler with the provided MCP server instance.
  *
  * @param server - The MCP server instance to register the tool with.
  * @returns A promise that resolves when the tool registration is complete.
  */
-export const registerGeminiCodebaseAnalyzer = async (
+export const registerSketch = async (
   server: McpServer,
 ): Promise<void> => {
-  const toolName = "insight";
+  const toolName = "sketch";
   const toolDescription =
-    "👁️ INSIGHT - Deeply analyzes the codebase using AI. Use this for code reviews, architecture questions, bug hunting, and implementation guidance. " +
-    "Supports specialized modes via 'analysisMode' (e.g., 'security', 'review', or custom modes created with 'forge'). " +
-    "For Code Reviews: Use analysisMode='review' with the 'includeChanges' parameter to analyze git diffs. " +
-    "For Large Projects: Use '.mcpignore' or 'temporaryIgnore' to filter context.";
+    "📐 SKETCH - Intelligently selects relevant files for your task using AI analysis. " +
+    "Use this FIRST when starting a new task to identify which files you need to work with. " +
+    "Supports hybrid strategies: 'auto' (recommended) chooses between full file reading and metadata mapping based on project size, " +
+    "'full' reads complete file contents (for smaller projects), 'map' uses Tree-sitter metadata (for larger projects). " +
+    "Returns a ranked list of files with relevance scores and reasons.";
 
   const registrationContext: RequestContext =
     requestContextService.createRequestContext({
@@ -51,75 +51,87 @@ export const registerGeminiCodebaseAnalyzer = async (
       server.tool(
         toolName,
         toolDescription,
-        GeminiCodebaseAnalyzerInputSchemaBase.shape,
+        SketchInputSchemaBase.shape,
         async (
-          params: GeminiCodebaseAnalyzerInput,
+          params: SketchInput,
         ): Promise<CallToolResult> => {
-          // Enforce required authorization scopes before processing the request.
           const toolContext: RequestContext =
             requestContextService.createRequestContext({
-              operation: "GeminiCodebaseAnalysis",
+              operation: "SketchFileSelection",
               projectPath: params.projectPath,
               questionLength: params.question.length,
             });
 
-          logger.info("Processing Gemini codebase analysis request", {
+          logger.info("Processing sketch file selection request", {
             ...toolContext,
             projectPath: params.projectPath,
             question:
               params.question.substring(0, 100) +
               (params.question.length > 100 ? "..." : ""),
-            // Sanitize params to prevent API key leakage
-            sanitizedParams: sanitization.sanitizeForLogging(params),
+            strategy: params.strategy,
           });
 
           try {
-            const result = await geminiCodebaseAnalyzerLogic(
+            const result = await sketchLogic(
               params,
               toolContext,
             );
 
-            logger.info("Gemini codebase analysis completed successfully", {
+            logger.info("Sketch file selection completed successfully", {
               ...toolContext,
-              filesProcessed: result.filesProcessed,
-              totalCharacters: result.totalCharacters,
-              analysisLength: result.analysis.length,
+              strategyUsed: result.strategyUsed,
+              selectedFilesCount: result.selectedFiles.length,
+              totalFilesScanned: result.totalFilesScanned,
             });
 
+            // Format the selected files as a readable list
+            const filesList = result.selectedFiles
+              .map((file, index) =>
+                `${index + 1}. **${file.path}** (score: ${file.relevanceScore.toFixed(2)})\n   └─ ${file.reason}`
+              )
+              .join("\n\n");
+
             // Skeptical Agent Protocol: Output Guardrail
-            // This footer reminds the consuming AI Agent to verify before acting
             const agentInstruction = `
 
 ---
 
 🛡️ **SYSTEM INSTRUCTION TO AI AGENT:**
 
-The analysis above is a **GENERATED DRAFT** based on the provided context.
+The file selection above is a **GENERATED RECOMMENDATION** based on structural analysis.
 
-1. **STATUS:** This information is unverified intelligence, not absolute truth.
-2. **ACTION REQUIRED:** You must now verify the specific files and line numbers mentioned above using your own file reading capabilities (e.g., \`read_file\`, \`readFile\`).
-3. **VALIDATION:** Check if the suggested code locations and context match the actual files on disk.
-4. **EXECUTION:** Only after your own verification should you present the solution to the user.
-5. **CORRECTION:** If you find discrepancies, inform the user: "The analysis suggested X, but upon verification I found Y."`;
+1. **STATUS:** This is an AI-suggested file list, not a definitive answer.
+2. **ACTION REQUIRED:** Before making changes, READ the selected files using your file reading capabilities (e.g., \`read_file\`, \`readFile\`).
+3. **VALIDATION:** Verify that the selected files are actually relevant to your task by examining their contents.
+4. **CRITICAL:** Do NOT assume file contents based on names alone. Always read and verify.
+5. **SCOPE:** If important files are missing from this list, use your judgment to search for additional relevant files.`;
 
             return {
               content: [
                 {
                   type: "text",
-                  text: `# Gemini Codebase Analysis Results
+                  text: `# Sketch File Selection Results
 
 ## Project: ${result.projectPath}
 
-**Question:** ${result.question}
+**Task:** ${result.question}
 
-**Files Processed:** ${result.filesProcessed}  
-**Total Characters:** ${result.totalCharacters.toLocaleString()}
+**Strategy Used:** ${result.strategyUsed}${result.fallbackOccurred ? " (fallback occurred)" : ""}
+**Files Scanned:** ${result.totalFilesScanned}
+**Files Selected:** ${result.selectedFiles.length}
+**Tokens Used:** ~${result.tokensUsedEstimate.toLocaleString()}
 
 ---
 
-## Analysis
+## AI Reasoning
 
-${result.analysis}
+${result.reasoning}
+
+---
+
+## Selected Files
+
+${filesList}
 ${agentInstruction}
 
 ---
@@ -135,33 +147,31 @@ ${agentInstruction}
                 ? error
                 : new McpError(
                     BaseErrorCode.INTERNAL_ERROR,
-                    `Codebase analysis failed: ${error instanceof Error ? error.message : String(error)}`,
+                    `File selection failed: ${error instanceof Error ? error.message : String(error)}`,
                     { originalError: error },
                   );
 
             const handledError = ErrorHandler.handleError(mcpError, {
-              operation: "GeminiCodebaseAnalysis",
+              operation: "SketchFileSelection",
               context: toolContext,
               errorCode: BaseErrorCode.INTERNAL_ERROR,
               critical: false,
             });
 
-            logger.error("Gemini codebase analysis failed", {
+            logger.error("Sketch file selection failed", {
               ...toolContext,
               error: handledError.message,
               projectPath: params.projectPath,
-              // Sanitize params in error logs
-              sanitizedParams: sanitization.sanitizeForLogging(params),
             });
 
             return {
               content: [
                 {
                   type: "text",
-                  text: `# Gemini Codebase Analysis - Error
+                  text: `# Sketch File Selection - Error
 
-**Project:** ${params.projectPath}  
-**Question:** ${params.question}
+**Project:** ${params.projectPath}
+**Task:** ${params.question}
 
 ## Error Details
 
@@ -169,9 +179,11 @@ ${handledError.message}
 
 ### Troubleshooting Tips:
 - Verify the project path exists and is accessible
-- Ensure your Gemini API key is valid
+- Ensure your Gemini API key is valid (if using API mode)
 - Check that the project directory contains readable files
 - Try with a smaller project or more specific question
+- Use .mcpignore to exclude large directories (node_modules, dist, etc.)
+- Try with strategy: "map" for very large projects
 
 *For support, check your API key at: https://makersuite.google.com/app/apikey*`,
                 },
@@ -183,7 +195,7 @@ ${handledError.message}
       );
     },
     {
-      operation: "RegisterGeminiCodebaseAnalyzer",
+      operation: "RegisterSketch",
       context: registrationContext,
       errorCode: BaseErrorCode.INTERNAL_ERROR,
       critical: true,

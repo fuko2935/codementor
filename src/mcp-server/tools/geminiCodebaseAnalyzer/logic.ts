@@ -535,6 +535,20 @@ These files were skipped to prevent memory issues during analysis. To include th
 
     const promptLoader = PromptLoader.getInstance();
     const analysisMode = validatedParams.analysisMode || "general";
+
+    // Skeptical Agent Protocol: Safety instruction for inner model
+    // This ensures the analysis output guides the Agent to verify, not blindly trust
+    const safetyInstruction = `CRITICAL INSTRUCTION FOR ANALYSIS:
+You are generating a technical report for another AI Agent (like Claude, Cursor, or Kiro), NOT for the final human user.
+Your goal is to point the Agent in the right direction so IT can verify and implement the fix.
+
+1. **Tone:** Be objective but suggestive. Use phrases like "Potential issue at...", "Likely caused by...", "Agent should verify...".
+2. **Precision:** When citing code, verify against the provided context explicitly. If unsure about a file path or line number, state it clearly.
+3. **Directive:** Explicitly tell the reading Agent what to check next (e.g., "Verify by reading src/auth.ts lines 45-60", "Check if 'user' object is null here").
+4. **Humility:** Acknowledge uncertainty. Say "This appears to be..." rather than "This is definitely...".
+
+`;
+
     const templateData = {
       USER_QUESTION: validatedParams.question,
       PROJECT_CONTEXT: fullContext,
@@ -544,7 +558,8 @@ These files were skipped to prevent memory issues during analysis. To include th
 
     if (validatedParams.customExpertPrompt && validatedParams.customExpertPrompt.trim()) {
       // Prioritize customExpertPrompt for backward compatibility
-      promptForModel = `${validatedParams.customExpertPrompt.trim()}
+      // Prepend safetyInstruction for Skeptical Agent Protocol
+      promptForModel = `${safetyInstruction}${validatedParams.customExpertPrompt.trim()}
 
 PROJECT CONTEXT:
 ${fullContext}`;
@@ -568,20 +583,24 @@ ${validatedParams.question}`;
       if (!/^[a-zA-Z0-9_-]+$/.test(modeName)) {
         throw new McpError(BaseErrorCode.VALIDATION_ERROR, `Invalid custom mode name format: ${modeName}`);
       }
-      promptForModel = await promptLoader.getPrompt(
+      const rawPrompt = await promptLoader.getPrompt(
         analysisMode,
         normalizedPath,
         templateData,
         context,
       );
+      // Prepend safetyInstruction for Skeptical Agent Protocol
+      promptForModel = `${safetyInstruction}${rawPrompt}`;
     } else {
       // Use standard mode
-      promptForModel = await promptLoader.getPrompt(
+      const rawPrompt = await promptLoader.getPrompt(
         analysisMode,
         undefined,
         templateData,
         context,
       );
+      // Prepend safetyInstruction for Skeptical Agent Protocol
+      promptForModel = `${safetyInstruction}${rawPrompt}`;
     }
 
     logger.info("Sending request to Gemini AI", {

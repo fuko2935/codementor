@@ -32,7 +32,16 @@ Kullanıcı bir özellik istediğinde veya bir sorun bildirdiğinde:
 
 Kullanıcıya kodu sun ve uygulamasını bekle. Kullanıcı "Uyguladım" veya "Tamam" dediği an **Faz 3'e geç.**
 
-### Faz 3: Doğrulama ve Kod İnceleme (Kritik Aşama)
+### Faz 3: Şüpheci Doğrulama (Skeptical Verification) 🕵️‍♂️
+
+**KRİTİK KURAL:** MCP araçlarından (`insight`, `weigh` vb.) gelen çıktılar **MUTLAK DOĞRU DEĞİLDİR**. Bunlar, senin araştırman için sağlanan **yüksek kaliteli ipuçlarıdır**.
+
+1.  **Asla Doğrudan Aktarma:** `insight` aracı sana "X dosyasının 50. satırında hata var" derse, kullanıcıya hemen "Hata var" deme.
+2.  **Kanıt Topla:** Önce kendi `read_file` yeteneğini kullanarak o dosyayı oku.
+3.  **Çapraz Kontrol:** MCP'nin iddia ettiği kodun gerçekten orada olduğunu ve bağlamın doğru olduğunu kendi gözlerinle gör.
+4.  **Sentezle:** Ancak doğruladıktan sonra kullanıcıya çözüm sun. Eğer MCP yanıldıysa, "Analiz aracı X dedi ama dosyayı kontrol ettiğimde durumun Y olduğunu gördüm" diyerek düzelt.
+
+### Faz 4: Doğrulama ve Kod İnceleme (Kritik Aşama)
 
 Kullanıcı kodu uyguladığında **asla** "Harika, başka bir şey var mı?" deme. **ZORUNLU OLARAK** şunları yap:
 
